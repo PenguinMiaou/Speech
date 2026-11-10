@@ -140,6 +140,16 @@ export function HotkeyRecorder({
       if (event.shiftKey) parts.push('Shift')
       if (!isMac && event.metaKey) parts.push('Meta')
 
+      // On Windows the right Alt key works as a hotkey by itself, the way Fn does on a Mac.
+      // AltGr arrives as right Alt together with Ctrl and stays a modifier.
+      if (!isMac && event.code === 'AltRight' && !event.ctrlKey && !event.shiftKey) {
+        setModifierHint(null)
+        setPending('RightAlt')
+        if (autoConfirmTimer.current) clearTimeout(autoConfirmTimer.current)
+        autoConfirmTimer.current = setTimeout(() => confirmHotkey('RightAlt'), 1500)
+        return
+      }
+
       if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) {
         setModifierHint(parts.length > 0 ? `${parts.join('+')}+...` : null)
         return

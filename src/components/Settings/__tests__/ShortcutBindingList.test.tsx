@@ -195,4 +195,61 @@ describe('ShortcutBindingList', () => {
 
     expect(tauri.resumeHotkey).toHaveBeenCalled()
   })
+
+  describe('a single key on Windows', () => {
+    const platform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform')
+    function onPlatform(name: string) {
+      Object.defineProperty(navigator, 'platform', { value: name, configurable: true })
+    }
+    afterEach(() => {
+      if (platform) Object.defineProperty(Navigator.prototype, 'platform', platform)
+      Reflect.deleteProperty(navigator, 'platform')
+    })
+
+    function capture(onChange = vi.fn()) {
+      render(
+        <ShortcutBindingList
+          role="dictation"
+          label="Dictate"
+          bindings={[ctrlSlash]}
+          otherBindings={[]}
+          required
+          specialOptions={[]}
+          onChange={onChange}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Ctrl+/' }))
+      return onChange
+    }
+
+    it('takes the right Alt key pressed on its own', () => {
+      onPlatform('Win32')
+      const onChange = capture()
+
+      fireEvent.keyDown(window, { key: 'Alt', code: 'AltRight', altKey: true })
+      fireEvent.click(screen.getByRole('button', { name: 'RightAlt' }))
+
+      expect(onChange).toHaveBeenCalledWith([{ primary: 'RightAlt', modifiers: [] }])
+    })
+
+    it('leaves the left Alt key and AltGr as modifiers', () => {
+      onPlatform('Win32')
+      const onChange = capture()
+
+      fireEvent.keyDown(window, { key: 'Alt', code: 'AltLeft', altKey: true })
+      expect(screen.queryByRole('button', { name: 'RightAlt' })).not.toBeInTheDocument()
+      fireEvent.keyDown(window, { key: 'AltGraph', code: 'AltRight', altKey: true, ctrlKey: true })
+      expect(screen.queryByRole('button', { name: 'RightAlt' })).not.toBeInTheDocument()
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('does not take the right Option key on macOS', () => {
+      onPlatform('MacIntel')
+      capture()
+
+      fireEvent.keyDown(window, { key: 'Alt', code: 'AltRight', altKey: true })
+
+      expect(screen.queryByRole('button', { name: 'RightAlt' })).not.toBeInTheDocument()
+    })
+  })
 })

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, MessageCircle } from 'lucide-react'
-import { isMacPlatform, useAppStore } from '../../stores/appStore'
+import { isMacPlatform, isWindowsPlatform, useAppStore } from '../../stores/appStore'
 import type { HotkeyMode, OutputMode, ShortcutBinding } from '../../stores/appStore'
 import {
   getPlatformCapabilities,
@@ -97,9 +97,16 @@ export function GeneralPane() {
     !accessibilityTrusted &&
     hotkeyRegistrationError?.includes('Accessibility permission may be denied'),
   )
-  const dictationSpecialOptions = isMac ? [{ value: 'Fn', label: 'Fn' }] : []
-  const askSpecialOptions = isMac ? [{ value: 'Fn+Space', label: 'Fn + Space' }] : []
-  const translateSpecialOptions = isMac ? [{ value: 'Fn+LeftShift', label: 'Fn + Left Shift' }] : []
+  // The keys that work without a second key: Fn on a Mac, the right Alt key on Windows.
+  const single = isMac ? 'Fn' : isWindowsPlatform() ? 'RightAlt' : null
+  const singleLabel = isMac ? 'Fn' : 'Right Alt'
+  const dictationSpecialOptions = single ? [{ value: single, label: singleLabel }] : []
+  const askSpecialOptions = single
+    ? [{ value: `${single}+Space`, label: `${singleLabel} + Space` }]
+    : []
+  const translateSpecialOptions = single
+    ? [{ value: `${single}+LeftShift`, label: `${singleLabel} + Left Shift` }]
+    : []
   const dictationBindings = config.hotkeys.dictationBindings?.length
     ? config.hotkeys.dictationBindings
     : [config.hotkeys.dictation]
