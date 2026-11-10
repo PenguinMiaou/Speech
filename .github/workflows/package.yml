@@ -1,6 +1,6 @@
 name: Packages
 
-# Builds the Windows installer and no-install archive and the macOS app. A version tag also
+# Builds the Windows installer and no-install archive and the macOS disk image. A version tag also
 # publishes them as a release, with the list of program files the in-app update reads.
 on:
   workflow_dispatch:
@@ -118,23 +118,30 @@ jobs:
           fi
 
       - name: Build the app
-        run: npm run tauri build -- --bundles app
+        run: npm run tauri build -- --bundles app,dmg
 
-      - name: Make the archive
+      # The disk image opens to a window where the app is dragged onto Applications.
+      - name: Check the app and notarize the disk image
         run: |
           codesign --verify --deep --strict src-tauri/target/release/bundle/macos/OpenTypeless.app
           codesign -dvv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'Signature=|TeamIdentifier=|flags='
           # Says whether this Mac would open the app as downloaded. Not a failure for ad hoc builds.
           spctl -a -t exec -vv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'accepted|rejected|source=' || true
-          ditto -c -k --keepParent src-tauri/target/release/bundle/macos/OpenTypeless.app OpenTypeless-macos-arm64.zip
-          ls -l OpenTypeless-macos-arm64.zip
+          cp src-tauri/target/release/bundle/dmg/*.dmg OpenTypeless-macos-arm64.dmg
+          if [ -n "$APPLE_API_KEY_PATH" ]; then
+            xcrun notarytool submit OpenTypeless-macos-arm64.dmg --key "$APPLE_API_KEY_PATH" \
+              --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait --timeout 30m
+            xcrun stapler staple OpenTypeless-macos-arm64.dmg
+            spctl -a -t open --context context:primary-signature -vv OpenTypeless-macos-arm64.dmg 2>&1 | grep -E 'accepted|rejected|source=' || true
+          fi
+          ls -l OpenTypeless-macos-arm64.dmg
 
       - uses: actions/upload-artifact@v4
         with:
           name: opentypeless-macos-arm64
           retention-days: 14
           if-no-files-found: error
-          path: OpenTypeless-macos-arm64.zip
+          path: OpenTypeless-macos-arm64.dmg
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

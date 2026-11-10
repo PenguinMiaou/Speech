@@ -104,10 +104,11 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib
 
 ## First run
 
-1. Open the app and follow the guide: grant Microphone and Accessibility, then download a local model.
-2. Enter the base URL and key of a polish model under Settings, AI Polish, and press Test.
-3. Read the sample sentence in the last step of the guide. With local recognition this reading is kept as your voice sample.
-4. Hold the hotkey in any app and speak.
+1. Install it. On macOS open the `.dmg` and drag the app onto Applications; a newer version is installed the same way and keeps its permissions. On Windows run the installer.
+2. Open the app and follow the guide: grant Microphone and Accessibility, then download a local model.
+3. Enter the base URL and key of a polish model under Settings, AI Polish, and press Test.
+4. Read the sample sentence in the last step of the guide. With local recognition this reading is kept as your voice sample.
+5. Hold the hotkey in any app and speak.
 
 ## License
 
