@@ -40,7 +40,7 @@ jobs:
           Compress-Archive -Path portable/* -DestinationPath OpenTypeless-windows-x64-portable.zip
           Get-ChildItem portable, src-tauri/target/release/bundle/nsis | Format-Table Name, Length
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: opentypeless-windows-x64
           retention-days: 14
