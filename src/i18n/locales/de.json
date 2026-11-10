@@ -436,7 +436,9 @@
       "failed": "Das hat nicht geklappt. Später erneut versuchen",
       "auto": "Beim Start nach Updates suchen",
       "ready": "{{version}} ist heruntergeladen und wird nach einem Neustart aktiv",
-      "restart": "Jetzt neu starten"
+      "restart": "Jetzt neu starten",
+      "banner": "Version {{version}} ist verfügbar",
+      "bannerAction": "Aktualisieren"
     }
   },
   "contextFamilies": {

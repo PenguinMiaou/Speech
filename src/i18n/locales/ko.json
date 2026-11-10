@@ -436,7 +436,9 @@
       "failed": "실패했습니다. 나중에 다시 시도하세요",
       "auto": "시작할 때 업데이트 확인",
       "ready": "{{version}} 다운로드를 마쳤습니다. 다시 시작하면 적용됩니다",
-      "restart": "지금 다시 시작"
+      "restart": "지금 다시 시작",
+      "banner": "버전 {{version}}을 사용할 수 있습니다",
+      "bannerAction": "업데이트"
     }
   },
   "contextFamilies": {

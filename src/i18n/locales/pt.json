@@ -436,7 +436,9 @@
       "failed": "Não funcionou. Tente mais tarde",
       "auto": "Procurar atualizações ao iniciar",
       "ready": "{{version}} foi baixada e passa a valer após reiniciar",
-      "restart": "Reiniciar agora"
+      "restart": "Reiniciar agora",
+      "banner": "A versão {{version}} está disponível",
+      "bannerAction": "Atualizar"
     }
   },
   "contextFamilies": {

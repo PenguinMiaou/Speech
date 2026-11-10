@@ -436,7 +436,9 @@
       "failed": "うまくいきませんでした。後でもう一度お試しください",
       "auto": "起動時にアップデートを確認",
       "ready": "{{version}} をダウンロードしました。再起動後に有効になります",
-      "restart": "今すぐ再起動"
+      "restart": "今すぐ再起動",
+      "banner": "バージョン {{version}} が利用できます",
+      "bannerAction": "アップデート"
     }
   },
   "contextFamilies": {

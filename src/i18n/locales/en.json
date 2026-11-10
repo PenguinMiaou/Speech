@@ -436,7 +436,9 @@
       "failed": "That did not work. Try again later",
       "auto": "Check for updates at launch",
       "ready": "{{version}} is downloaded and takes effect after a restart",
-      "restart": "Restart now"
+      "restart": "Restart now",
+      "banner": "Version {{version}} is available",
+      "bannerAction": "Update"
     }
   },
   "contextFamilies": {

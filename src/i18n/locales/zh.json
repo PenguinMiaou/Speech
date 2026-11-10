@@ -436,7 +436,9 @@
       "failed": "没有成功，请稍后再试",
       "auto": "启动时检查更新",
       "ready": "{{version}} 已下载好，重启后生效",
-      "restart": "立即重启"
+      "restart": "立即重启",
+      "banner": "新版本 {{version}} 可以更新了",
+      "bannerAction": "去更新"
     }
   },
   "contextFamilies": {
