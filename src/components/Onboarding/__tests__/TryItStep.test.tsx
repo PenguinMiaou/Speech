@@ -211,6 +211,29 @@ describe('TryItStep', () => {
     expect(sink.value).toBe('')
   })
 
+  describe('a name to call it by', () => {
+    it('saves the name, which switches on spoken instructions', () => {
+      vi.mocked(tauri.updateConfig).mockResolvedValue()
+      render(<TryItStep />)
+      fireEvent.click(screen.getByRole('tab', { name: 'onboarding.tryIt.demos.name' }))
+
+      const field = screen.getByLabelText('settings.assistantName')
+      fireEvent.change(field, { target: { value: 'Momo' } })
+      fireEvent.blur(field)
+
+      expect(useAppStore.getState().config.assistant_name).toBe('Momo')
+      expect(vi.mocked(tauri.updateConfig).mock.lastCall?.[0].assistant_name).toBe('Momo')
+    })
+
+    it('takes no voice sample while a name is being chosen', () => {
+      vi.mocked(tauri.voiceIsolationEnrollNext).mockClear()
+      render(<TryItStep />)
+      fireEvent.click(screen.getByRole('tab', { name: 'onboarding.tryIt.demos.name' }))
+
+      expect(tauri.voiceIsolationEnrollNext).toHaveBeenLastCalledWith(false)
+    })
+  })
+
   describe('three demonstrations', () => {
     const tab = (name: string) => screen.getByRole('tab', { name })
 
@@ -219,9 +242,9 @@ describe('TryItStep', () => {
       useAppStore.setState({ config: { ...config, selected_text_enabled: allowed } })
     }
 
-    it('starts on the first of three and shows the passage of the chosen one', () => {
+    it('starts on the first and shows the passage of the chosen one', () => {
       render(<TryItStep />)
-      expect(screen.getAllByRole('tab')).toHaveLength(3)
+      expect(screen.getAllByRole('tab')).toHaveLength(4)
       expect(tab('onboarding.tryIt.demos.cleanup').getAttribute('aria-selected')).toBe('true')
 
       fireEvent.click(tab('onboarding.tryIt.demos.long'))

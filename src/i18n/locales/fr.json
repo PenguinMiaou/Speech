@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Nettoyer",
         "long": "Long discours",
-        "rewrite": "Réécrire à la voix"
+        "rewrite": "Réécrire à la voix",
+        "name": "Donnez-lui un nom"
       },
       "longPassage": "Alors, euh, pour le déménagement, en fait, on emménage dans le nouveau logement le mois prochain, et j'ai demandé à deux déménageurs, l'un propose trois mille et l'autre deux mille cinq cents, mais le moins cher n'est pas libre avant la fin du mois, euh, donc je voulais demander à tout le monde, vous préférez payer cinq cents de plus et déménager plus tôt, ou attendre la fin du mois, ah, et aussi il faut mettre les livres en cartons avant samedi, ça c'est urgent.",
       "rewriteDraft": "je peux pas venir au dîner demain, un truc à la maison, allez-y sans moi, la prochaine fois c'est moi qui invite",
       "rewriteHint": "La phrase ci-dessus est sélectionnée. Avec {{hotkey}}, dites « rends-la plus polie » ou « traduis-la en anglais »",
       "rewriteSwitch": "Autoriser la lecture du texte sélectionné",
       "next": "Démonstration suivante",
-      "again": "Réessayer"
+      "again": "Réessayer",
+      "nameExample": "Momo",
+      "nameHint": "Dites d’abord « {{name}} », la suite est une instruction. « {{name}}, traduis ça en anglais » modifie le texte qui vient d’être saisi. Laissez vide pour ne pas l’utiliser"
     }
   },
   "capsule": {

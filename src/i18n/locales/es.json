@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Limpiar",
         "long": "Discurso largo",
-        "rewrite": "Reescribir con la voz"
+        "rewrite": "Reescribir con la voz",
+        "name": "Ponle un nombre"
       },
       "longPassage": "Bueno, eh, sobre la mudanza, o sea, nos mudamos a la casa nueva el mes que viene, y pregunté a dos empresas de mudanzas, una pide tres mil y la otra dos mil quinientos, pero la más barata no está libre hasta fin de mes, eh, así que quería preguntarles a todos, prefieren pagar quinientos más y mudarnos antes, o esperar hasta fin de mes, ah, y además hay que meter los libros en cajas antes del sábado, eso es urgente.",
       "rewriteDraft": "mañana no puedo ir a la cena, surgió algo en casa, vayan ustedes, la próxima invito yo",
       "rewriteHint": "La frase de arriba está seleccionada. Con {{hotkey}}, di «hazlo más cortés» o «tradúcelo al inglés»",
       "rewriteSwitch": "Permitir leer el texto seleccionado",
       "next": "Siguiente demostración",
-      "again": "Intentar de nuevo"
+      "again": "Intentar de nuevo",
+      "nameExample": "Momo",
+      "nameHint": "Di primero «{{name}}» y lo demás es una instrucción. «{{name}}, traduce eso al inglés» cambia el texto recién escrito. Déjalo vacío para no usarlo"
     }
   },
   "capsule": {

@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Limpar",
         "long": "Fala longa",
-        "rewrite": "Reescrever por voz"
+        "rewrite": "Reescrever por voz",
+        "name": "Dê um nome"
       },
       "longPassage": "Então, hum, sobre a mudança, tipo, vamos nos mudar para a casa nova no mês que vem, e eu perguntei para duas empresas de mudança, uma cobra três mil e a outra dois mil e quinhentos, mas a mais barata só está livre no fim do mês, hum, então eu queria perguntar a todos, vocês preferem pagar quinhentos a mais e mudar antes, ou esperar até o fim do mês, ah, e também os livros precisam estar encaixotados antes de sábado, isso é urgente.",
       "rewriteDraft": "não vou conseguir ir ao jantar amanhã, surgiu uma coisa em casa, podem ir sem mim, a próxima é por minha conta",
       "rewriteHint": "A frase acima está selecionada. Com {{hotkey}}, diga \"deixe mais educado\" ou \"traduza para o inglês\"",
       "rewriteSwitch": "Permitir ler o texto selecionado",
       "next": "Próxima demonstração",
-      "again": "Tentar de novo"
+      "again": "Tentar de novo",
+      "nameExample": "Momo",
+      "nameHint": "Diga primeiro “{{name}}” e o resto é uma instrução. “{{name}}, traduza isso para o inglês” altera o texto recém-inserido. Deixe vazio para não usar"
     }
   },
   "capsule": {

@@ -8,6 +8,7 @@ import { voiceIsolationEnrollNext, voiceIsolationStatus } from '../../lib/tauri'
 import { diffText, type DiffPart } from '../../lib/text-diff'
 import { useAppStore } from '../../stores/appStore'
 import { Waveform } from '../Capsule/Waveform'
+import { NameDemo } from './NameDemo'
 import { RewriteDemo } from './RewriteDemo'
 
 type Stage = 'raw' | 'strike' | 'collapse' | 'final'
@@ -89,15 +90,15 @@ function WithoutAdditions({ parts, stagger }: { parts: DiffPart[]; stagger: numb
   )
 }
 
-const DEMOS = ['cleanup', 'long', 'rewrite'] as const
+const DEMOS = ['cleanup', 'long', 'rewrite', 'name'] as const
 type Demo = (typeof DEMOS)[number]
 
-const PASSAGE: Record<Exclude<Demo, 'rewrite'>, string> = {
+const PASSAGE: Record<'cleanup' | 'long', string> = {
   cleanup: 'onboarding.tryIt.sentence',
   long: 'onboarding.tryIt.longPassage',
 }
 
-/** Three things to try, each showing something plain speech recognition does not do. */
+/** Things to try, each showing something plain speech recognition does not do. */
 export function TryItStep() {
   const { t } = useTranslation()
   const [demo, setDemo] = useState<Demo>('cleanup')
@@ -136,7 +137,13 @@ export function TryItStep() {
         ))}
       </div>
 
-      {demo === 'rewrite' ? <RewriteDemo /> : <ReadAloudDemo key={demo} passage={PASSAGE[demo]} />}
+      {demo === 'rewrite' ? (
+        <RewriteDemo />
+      ) : demo === 'name' ? (
+        <NameDemo />
+      ) : (
+        <ReadAloudDemo key={demo} passage={PASSAGE[demo]} />
+      )}
 
       {hasResult && next && (
         <div className="flex justify-center">

@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Aufräumen",
         "long": "Lange Rede",
-        "rewrite": "Per Stimme umschreiben"
+        "rewrite": "Per Stimme umschreiben",
+        "name": "Einen Namen geben"
       },
       "longPassage": "Also, ähm, wegen des Umzugs, also, wir ziehen nächsten Monat in die neue Wohnung, und ich habe zwei Umzugsfirmen gefragt, die eine will dreitausend und die andere zweitausendfünfhundert, aber die günstigere hat erst Ende des Monats Zeit, ähm, deshalb wollte ich alle fragen, wollt ihr lieber fünfhundert mehr zahlen und früher umziehen oder bis Ende des Monats warten, ach ja, und die Bücher müssen vor Samstag in Kartons, das ist dringend.",
       "rewriteDraft": "kann morgen nicht zum Essen kommen, zu Hause ist was dazwischengekommen, geht ruhig ohne mich, nächstes Mal lade ich ein",
       "rewriteHint": "Der Satz oben ist markiert. Sagen Sie mit {{hotkey}} „mach es höflicher“ oder „übersetze es ins Englische“",
       "rewriteSwitch": "Lesen des markierten Textes erlauben",
       "next": "Nächste Demo",
-      "again": "Noch einmal"
+      "again": "Noch einmal",
+      "nameExample": "Momo",
+      "nameHint": "Sagen Sie zuerst „{{name}}“, der Rest ist eine Anweisung. „{{name}}, übersetze das ins Englische“ ändert den gerade eingegebenen Text. Leer lassen, um dies auszuschalten"
     }
   },
   "capsule": {

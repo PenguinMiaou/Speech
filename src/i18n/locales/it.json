@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Ripulire",
         "long": "Discorso lungo",
-        "rewrite": "Riscrivere a voce"
+        "rewrite": "Riscrivere a voce",
+        "name": "Dagli un nome"
       },
       "longPassage": "Allora, ehm, per il trasloco, cioè, il mese prossimo ci trasferiamo nella casa nuova, e ho chiesto a due ditte di traslochi, una chiede tremila e l'altra duemilacinquecento, ma quella più economica non è libera fino a fine mese, ehm, quindi volevo chiedere a tutti, preferite pagare cinquecento in più e traslocare prima, o aspettare fine mese, ah, e poi i libri vanno messi negli scatoloni prima di sabato, questo è urgente.",
       "rewriteDraft": "domani non riesco a venire a cena, è successa una cosa a casa, andate pure, la prossima offro io",
       "rewriteHint": "La frase qui sopra è selezionata. Con {{hotkey}}, di' «rendila più cortese» o «traducila in inglese»",
       "rewriteSwitch": "Consenti la lettura del testo selezionato",
       "next": "Prossima dimostrazione",
-      "again": "Riprova"
+      "again": "Riprova",
+      "nameExample": "Momo",
+      "nameHint": "Di’ prima «{{name}}» e il resto è un’istruzione. «{{name}}, traduci in inglese» cambia il testo appena inserito. Lascia vuoto per non usarlo"
     }
   },
   "capsule": {

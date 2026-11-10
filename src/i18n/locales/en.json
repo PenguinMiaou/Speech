@@ -143,14 +143,17 @@
       "demos": {
         "cleanup": "Clean up",
         "long": "Long speech",
-        "rewrite": "Rewrite by voice"
+        "rewrite": "Rewrite by voice",
+        "name": "Give it a name"
       },
       "longPassage": "So, um, about the move, like, we're moving to the new place next month, and I asked two movers, one quoted three thousand and the other twenty-five hundred, but the cheaper one isn't free until the end of the month, um, so I wanted to ask everyone, would you rather pay five hundred more and move early, or wait until the end of the month, oh, and also the books need to be boxed up before Saturday, that one is urgent.",
       "rewriteDraft": "can't make dinner tomorrow, something came up at home, you guys go ahead, next one's on me",
       "rewriteHint": "The sentence above is selected. With {{hotkey}}, say \"make it more polite\" or \"translate it into Spanish\"",
       "rewriteSwitch": "Allow reading the selected text",
       "next": "Next demo",
-      "again": "Try again"
+      "again": "Try again",
+      "nameExample": "Momo",
+      "nameHint": "Say “{{name}}” first and the rest is an instruction. “{{name}}, translate that into French” changes the text just entered. Leave it empty to keep this off"
     }
   },
   "capsule": {
