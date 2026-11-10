@@ -1,0 +1,64 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+
+# Environment & secrets
+*.local
+.env
+.env.*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+nul
+
+# Test & debug artifacts
+test_api.*
+capsule-debug*.png
+jelly-reference*.png
+*.zip
+.playwright-mcp/
+.playwright-cli/
+.codex-target-clippy/
+/output/
+
+# Local release artifacts
+.release-assets/
+
+# Database files
+*.db
+*.sqlite
+
+# Internal design docs (not for public distribution)
+docs/superpowers/
+
+# Local isolated worktrees
+.worktrees/
+
+stt-worker/target
+stt-protocol/target
+src-tauri/binaries/
+tools/eval/data/
+.superpowers/

@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      production:
+        patterns: ["*"]
+        exclude-patterns: ["@types/*", "eslint*", "prettier*", "vitest*"]
+      dev:
+        patterns: ["@types/*", "eslint*", "prettier*", "vitest*"]
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

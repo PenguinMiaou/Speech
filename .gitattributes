@@ -1,0 +1,44 @@
+# Auto detect text files and ensure LF line endings
+* text=auto eol=lf
+
+# Frontend
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.json text
+*.css text
+*.html text
+*.svg text
+
+# Rust
+*.rs text
+*.toml text
+
+# Config
+*.yml text
+*.yaml text
+*.md text
+*.txt text
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Archives
+*.zip binary
+*.tar.gz binary
+
+# Tauri build artifacts
+*.exe binary
+*.msi binary
+*.dmg binary
+*.deb binary
+*.AppImage binary

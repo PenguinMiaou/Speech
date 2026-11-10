@@ -1,0 +1,96 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "OpenTypeless",
+  "version": "1.1.64",
+  "identifier": "com.opentypeless.app",
+  "build": {
+    "beforeDevCommand": "node scripts/build-stt-worker.mjs && npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "node scripts/build-stt-worker.mjs && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenTypeless",
+        "width": 900,
+        "height": 700,
+        "minWidth": 720,
+        "minHeight": 480,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "center": true,
+        "visible": false
+      },
+      {
+        "label": "capsule",
+        "title": "OpenTypeless Capsule",
+        "width": 80,
+        "height": 80,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "focusable": false,
+        "visible": false,
+        "visibleOnAllWorkspaces": true,
+        "url": "index.html#capsule"
+      },
+      {
+        "label": "ask",
+        "title": "OpenTypeless Ask",
+        "width": 400,
+        "height": 220,
+        "minWidth": 360,
+        "minHeight": 180,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "center": true,
+        "visible": false,
+        "url": "index.html#ask"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+    }
+  },
+  "plugins": {},
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "entitlements": "./Entitlements.plist",
+      "infoPlist": "./Info.plist"
+    },
+    "linux": {
+      "appimage": {
+        "files": {
+          ".DirIcon": "icons/icon.png"
+        }
+      }
+    },
+    "externalBin": [
+      "binaries/ot-stt-worker"
+    ]
+  }
+}
