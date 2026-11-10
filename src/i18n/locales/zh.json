@@ -778,7 +778,7 @@
     "description": "录一段会议，或者把录音、录屏拖进来，用本机模型转成文字。",
     "record": "开始录音",
     "chooseFile": "选择文件",
-    "stop": "结束并转写",
+    "stop": "结束",
     "discard": "放弃",
     "speakers": "区分说话人",
     "speakerLabel": "说话人",
@@ -800,7 +800,29 @@
       "busy": "上一段还没转完",
       "failed": "没有转写成功",
       "speakerDownload": "说话人模型没有下载成功",
-      "microphone": "麦克风打不开"
-    }
+      "microphone": "麦克风打不开",
+      "minutes": "纪要没有生成成功",
+      "llm_not_configured": "先在设置里配置好润色模型",
+      "template_too_large": "模板文件太大",
+      "template_empty": "模板文件是空的",
+      "template_unreadable": "模板文件打不开，需要是文本文件"
+    },
+    "live": "实时文字",
+    "listening": "正在听，文字大约每半分钟出一段",
+    "finishing": "正在识别最后 {{seconds}} 秒",
+    "saveAudio": "存录音",
+    "again": "整段重新转写",
+    "deleteAudio": "删除录音",
+    "audioFileName": "会议录音.wav",
+    "minutes": "生成纪要",
+    "minutesWorking": "正在写纪要…",
+    "minutesResult": "会议纪要",
+    "minutesNote": "纪要由设置里的润色模型生成，会议文字会发送给它。",
+    "template": "纪要模板",
+    "defaultTemplateName": "通用",
+    "importTemplate": "导入模板",
+    "removeTemplate": "删除模板",
+    "minutesFileName": "会议纪要.md",
+    "defaultTemplate": "# 会议纪要\n\n## 议题\n\n## 结论\n\n## 讨论要点\n\n## 待办事项\n每条写明负责人和期限\n\n## 未决问题"
   }
 }

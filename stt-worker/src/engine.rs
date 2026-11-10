@@ -11,6 +11,8 @@ pub struct RealEngine {
     /// The isolation model kept between recordings, with the files it was opened from.
     voice_model: Option<(String, VoxLock)>,
     isolating: Option<(String, Isolator<VoxLock>)>,
+    /// The voices heard so far in a recording still running, with the model files.
+    live_speakers: Option<(String, crate::diarize::LiveSpeakers)>,
 }
 
 /// Which optional hints the loaded model can use.
@@ -64,6 +66,30 @@ impl Engine for RealEngine {
         let (_, isolator) = self.isolating.as_mut().ok_or_else(not_isolating)?;
         isolator.feed(pcm);
         Ok(())
+    }
+
+    fn speakers_window(
+        &mut self,
+        segmentation_model: &str,
+        embedding_model: &str,
+        pcm: &[f32],
+        first: bool,
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
+        let failed = |message| EngineError {
+            code: "diarize_failed".into(),
+            message,
+        };
+        let wanted = [segmentation_model, embedding_model].join("\n");
+        let keep = !first && matches!(&self.live_speakers, Some((opened, _)) if *opened == wanted);
+        if !keep {
+            let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
+            let live =
+                crate::diarize::LiveSpeakers::open(segmentation_model, embedding_model, threads)
+                    .map_err(failed)?;
+            self.live_speakers = Some((wanted, live));
+        }
+        let (_, live) = self.live_speakers.as_mut().expect("opened above");
+        live.window(pcm).map_err(failed)
     }
 
     fn diarize(

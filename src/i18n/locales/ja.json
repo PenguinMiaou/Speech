@@ -778,7 +778,7 @@
     "description": "会議を録音するか、録音や画面収録のファイルをドロップすると、このコンピュータのモデルが文字にします。",
     "record": "録音を開始",
     "chooseFile": "ファイルを選ぶ",
-    "stop": "終了して文字起こし",
+    "stop": "終了",
     "discard": "破棄",
     "speakers": "話者を区別する",
     "speakerLabel": "話者",
@@ -800,7 +800,29 @@
       "busy": "前の録音をまだ文字起こし中です",
       "failed": "文字起こしできませんでした",
       "speakerDownload": "話者モデルをダウンロードできませんでした",
-      "microphone": "マイクを開けません"
-    }
+      "microphone": "マイクを開けません",
+      "minutes": "議事録を作成できませんでした",
+      "llm_not_configured": "先に設定で整形モデルを設定してください",
+      "template_too_large": "テンプレートファイルが大きすぎます",
+      "template_empty": "テンプレートファイルが空です",
+      "template_unreadable": "テンプレートを開けません。テキストファイルが必要です"
+    },
+    "live": "リアルタイムの文字",
+    "listening": "聞き取り中。文字は約30秒ごとに出ます",
+    "finishing": "最後の {{seconds}} 秒を認識しています",
+    "saveAudio": "録音を保存",
+    "again": "録音全体をもう一度文字起こし",
+    "deleteAudio": "録音を削除",
+    "audioFileName": "会議の録音.wav",
+    "minutes": "議事録を作成",
+    "minutesWorking": "議事録を作成中…",
+    "minutesResult": "議事録",
+    "minutesNote": "議事録は設定で選んだ整形モデルが作成します。会議の文字はそのモデルに送信されます。",
+    "template": "議事録テンプレート",
+    "defaultTemplateName": "標準",
+    "importTemplate": "テンプレートを読み込む",
+    "removeTemplate": "テンプレートを削除",
+    "minutesFileName": "議事録.md",
+    "defaultTemplate": "# 議事録\n\n## 議題\n\n## 決定事項\n\n## 議論の要点\n\n## 対応事項\nそれぞれ担当者と期限を書く\n\n## 未解決の課題"
   }
 }

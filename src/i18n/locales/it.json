@@ -778,7 +778,7 @@
     "description": "Registra una riunione o trascina qui una registrazione. Il modello su questo computer la mette per iscritto.",
     "record": "Avvia registrazione",
     "chooseFile": "Scegli un file",
-    "stop": "Ferma e trascrivi",
+    "stop": "Termina",
     "discard": "Scarta",
     "speakers": "Distingui chi parla",
     "speakerLabel": "Persona",
@@ -800,7 +800,29 @@
       "busy": "La registrazione precedente è ancora in trascrizione",
       "failed": "La trascrizione non è riuscita",
       "speakerDownload": "Impossibile scaricare i modelli per chi parla",
-      "microphone": "Impossibile aprire il microfono"
-    }
+      "microphone": "Impossibile aprire il microfono",
+      "minutes": "Non è stato possibile scrivere il verbale",
+      "llm_not_configured": "Configura prima un modello di rifinitura nelle impostazioni",
+      "template_too_large": "Il file del modello è troppo grande",
+      "template_empty": "Il file del modello è vuoto",
+      "template_unreadable": "Impossibile aprire il modello. Deve essere un file di testo"
+    },
+    "live": "Testo in diretta",
+    "listening": "In ascolto. Il testo arriva circa ogni mezzo minuto",
+    "finishing": "Riconoscimento degli ultimi {{seconds}} secondi",
+    "saveAudio": "Salva audio",
+    "again": "Trascrivi di nuovo tutta la registrazione",
+    "deleteAudio": "Elimina audio",
+    "audioFileName": "Registrazione riunione.wav",
+    "minutes": "Scrivi il verbale",
+    "minutesWorking": "Scrittura del verbale…",
+    "minutesResult": "Verbale",
+    "minutesNote": "Il verbale è scritto dal modello di rifinitura scelto nelle impostazioni. Il testo della riunione gli viene inviato.",
+    "template": "Modello di verbale",
+    "defaultTemplateName": "Generale",
+    "importTemplate": "Importa modello",
+    "removeTemplate": "Rimuovi modello",
+    "minutesFileName": "Verbale della riunione.md",
+    "defaultTemplate": "# Verbale della riunione\n\n## Argomenti\n\n## Decisioni\n\n## Punti discussi\n\n## Azioni\nIndica responsabile e scadenza di ciascuna\n\n## Questioni aperte"
   }
 }

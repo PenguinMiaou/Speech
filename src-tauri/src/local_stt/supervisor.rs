@@ -309,6 +309,36 @@ impl WorkerSupervisor {
         pcm: &[f32],
         scratch_dir: &Path,
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+        self.speakers(segmentation_model, embedding_model, pcm, scratch_dir, None)
+    }
+
+    /// The same for the next window of a recording still running: speakers keep their
+    /// numbers from window to window, and `first` starts a new recording.
+    pub fn speakers_window(
+        &self,
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+        first: bool,
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+        self.speakers(
+            segmentation_model,
+            embedding_model,
+            pcm,
+            scratch_dir,
+            Some(first),
+        )
+    }
+
+    fn speakers(
+        &self,
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+        window: Option<bool>,
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let pcm_path = scratch_dir.join(format!(
             "speakers-{}-{}.pcm",
@@ -321,11 +351,20 @@ impl WorkerSupervisor {
         }
         std::fs::write(&pcm_path, raw).map_err(|error| LocalSttError::Io(error.to_string()))?;
         let text = |path: &Path| path.to_string_lossy().into_owned();
-        let payload = encode(&Request::Diarize {
-            segmentation_model: text(segmentation_model),
-            embedding_model: text(embedding_model),
-            pcm_path: text(&pcm_path),
-        });
+        let request = match window {
+            Some(first) => Request::SpeakersWindow {
+                segmentation_model: text(segmentation_model),
+                embedding_model: text(embedding_model),
+                pcm_path: text(&pcm_path),
+                first,
+            },
+            None => Request::Diarize {
+                segmentation_model: text(segmentation_model),
+                embedding_model: text(embedding_model),
+                pcm_path: text(&pcm_path),
+            },
+        };
+        let payload = encode(&request);
         let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
         let answer = payload.and_then(|payload| {
             let mut state = self.lock();

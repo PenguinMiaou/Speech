@@ -843,18 +843,89 @@ export async function transcribeFile(path: string, options: TranscribeOptions): 
   return invoke('transcribe_file', { path, ...options })
 }
 
-export function meetingRecordStart(inputDevice: string): Promise<void> {
-  return invoke('meeting_record_start', { inputDevice })
+/** One paragraph of a meeting being recorded. `speaker` is null when speakers are not
+ * told apart and 0 for a voice too short to tell. */
+export interface MeetingSegment {
+  speaker: number | null
+  start_ms: number
+  text: string
 }
 
-export function meetingRecordLevel(): Promise<{ seconds: number; volume: number } | null> {
+export function meetingRecordStart(
+  inputDevice: string,
+  bySpeaker: boolean,
+  modelId: string | null,
+): Promise<void> {
+  return invoke('meeting_record_start', { inputDevice, bySpeaker, modelId })
+}
+
+/** `waiting` is the seconds recorded and not yet recognized. */
+export function meetingRecordLevel(): Promise<{
+  seconds: number
+  volume: number
+  waiting: number
+} | null> {
   return invoke('meeting_record_level')
 }
 
-export function meetingRecordStop(
-  options: TranscribeOptions & { discard: boolean },
-): Promise<string> {
-  return invoke('meeting_record_stop', { ...options })
+/** Resolves once the rest of the recording has been recognized, or dropped, with the
+ * path of the audio kept on disk. */
+export function meetingRecordStop(discard: boolean): Promise<string | null> {
+  return invoke('meeting_record_stop', { discard })
+}
+
+/** Asks where to put a copy of the latest meeting's audio. False when the dialog is closed. */
+export async function saveMeetingRecording(suggestedName: string): Promise<boolean> {
+  const { save } = await import('@tauri-apps/plugin-dialog')
+  const path = await save({
+    defaultPath: suggestedName,
+    filters: [{ name: 'WAV', extensions: ['wav'] }],
+  })
+  if (!path) return false
+  await invoke('meeting_recording_save', { path })
+  return true
+}
+
+export function deleteMeetingRecording(): Promise<void> {
+  return invoke('meeting_recording_delete')
+}
+
+export function onMeetingSegment(handler: (segment: MeetingSegment) => void): Promise<UnlistenFn> {
+  return listen<MeetingSegment>('meeting:segment', (event) => handler(event.payload))
+}
+
+export function onMeetingError(handler: (error: string) => void): Promise<UnlistenFn> {
+  return listen<string>('meeting:error', (event) => handler(event.payload))
+}
+
+export interface MinutesTemplate {
+  name: string
+  text: string
+}
+
+/** Writes minutes after `template` with the language model chosen in the settings. */
+export function meetingMinutes(transcript: string, template: string): Promise<string> {
+  return invoke('meeting_minutes', { transcript, template })
+}
+
+export function minutesTemplates(): Promise<MinutesTemplate[]> {
+  return invoke('minutes_templates')
+}
+
+/** Asks for a text file and adds it as a template. Null when the dialog is closed. */
+export async function importMinutesTemplate(): Promise<MinutesTemplate[] | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const picked = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: 'Markdown / Text', extensions: ['md', 'markdown', 'txt'] }],
+  })
+  if (typeof picked !== 'string') return null
+  return invoke('minutes_template_import', { path: picked })
+}
+
+export function removeMinutesTemplate(name: string): Promise<MinutesTemplate[]> {
+  return invoke('minutes_template_remove', { name })
 }
 
 export interface SpeakerModelsStatus {

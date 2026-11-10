@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FolderOpen, Mic, Square } from 'lucide-react'
 import {
   copyText,
+  deleteMeetingRecording,
   installSpeakerModels,
   listLocalModels,
   meetingRecordLevel,
@@ -10,8 +11,11 @@ import {
   meetingRecordStop,
   onFileDropped,
   onFileTranscribeProgress,
+  onMeetingError,
+  onMeetingSegment,
   onSpeakerModelsProgress,
   pickMediaFile,
+  saveMeetingRecording,
   saveTextFile,
   speakerModelsStatus,
   transcribeFile,
@@ -22,6 +26,8 @@ import { useAppStore } from '../../stores/appStore'
 import { localModelName } from '../../lib/local-model-names'
 import { Toggle } from '../Settings/shared/Toggle'
 import { LogoSelect } from '../Settings/shared/LogoSelect'
+import { addSegment, clock, heading, meetingText, type Paragraph } from '../../lib/meeting-text'
+import { MeetingMinutes } from './MeetingMinutes'
 
 const KNOWN_ERRORS = [
   'file_not_audio',
@@ -33,7 +39,7 @@ const KNOWN_ERRORS = [
 ]
 const SPEAKERS_KEY = 'meeting.speakers'
 
-type Phase = 'idle' | 'recording' | 'working'
+type Phase = 'idle' | 'recording' | 'finishing' | 'working'
 
 function remembered(): boolean {
   try {
@@ -51,13 +57,6 @@ function remember(on: boolean) {
   }
 }
 
-function clock(seconds: number): string {
-  const two = (value: number) => String(value).padStart(2, '0')
-  const hours = Math.floor(seconds / 3600)
-  const rest = `${two(Math.floor(seconds / 60) % 60)}:${two(seconds % 60)}`
-  return hours > 0 ? `${hours}:${rest}` : rest
-}
-
 /** Record a meeting or hand over a recording, and the local model writes it out. */
 export function MeetingCard() {
   const { t } = useTranslation()
@@ -67,7 +66,11 @@ export function MeetingCard() {
   const [progress, setProgress] = useState<FileTranscribeProgress | null>(null)
   const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [level, setLevel] = useState({ seconds: 0, volume: 0 })
+  const [level, setLevel] = useState({ seconds: 0, volume: 0, waiting: 0 })
+  const [paragraphs, setParagraphs] = useState<Paragraph[]>([])
+  const [recorded, setRecorded] = useState(false)
+  const [kept, setKept] = useState<string | null>(null)
+  const liveRef = useRef<HTMLDivElement>(null)
   const [speakers, setSpeakers] = useState(false)
   const [speakersInstalled, setSpeakersInstalled] = useState(false)
   const [download, setDownload] = useState<number | null>(null)
@@ -90,6 +93,7 @@ export function MeetingCard() {
     enter('working')
     setProgress(null)
     setText(null)
+    setRecorded(false)
     setError(null)
     work
       .then((result) => setText(result ?? ''))
@@ -114,6 +118,10 @@ export function MeetingCard() {
       }),
     )
     const reported = Promise.resolve(onFileTranscribeProgress(setProgress))
+    const heard = Promise.resolve(
+      onMeetingSegment((segment) => setParagraphs((before) => addSegment(before, segment))),
+    )
+    const failed = Promise.resolve(onMeetingError(() => setError('meeting.error.failed')))
     const downloading = Promise.resolve(
       onSpeakerModelsProgress(({ downloaded, total }) =>
         setDownload(total > 0 ? Math.round((downloaded / total) * 100) : 0),
@@ -134,12 +142,14 @@ export function MeetingCard() {
     return () => {
       void dropped.then((stop) => stop?.())
       void reported.then((stop) => stop?.())
+      void heard.then((stop) => stop?.())
+      void failed.then((stop) => stop?.())
       void downloading.then((stop) => stop?.())
     }
   }, [])
 
   useEffect(() => {
-    if (phase !== 'recording') return
+    if (phase !== 'recording' && phase !== 'finishing') return
     const read = () =>
       void Promise.resolve(meetingRecordLevel())
         .then((now) => now && setLevel(now))
@@ -148,6 +158,11 @@ export function MeetingCard() {
     const timer = window.setInterval(read, 500)
     return () => window.clearInterval(timer)
   }, [phase])
+
+  useEffect(() => {
+    const live = liveRef.current
+    if (live) live.scrollTop = live.scrollHeight
+  }, [paragraphs])
 
   const toggleSpeakers = (on: boolean) => {
     if (!on || speakersInstalled) {
@@ -168,27 +183,44 @@ export function MeetingCard() {
       .finally(() => setDownload(null))
   }
 
+  const bySpeaker = speakers && speakersInstalled
+
   const record = () => {
     if (phaseRef.current !== 'idle') return
     setError(null)
     setText(null)
-    setLevel({ seconds: 0, volume: 0 })
+    setRecorded(false)
+    setKept(null)
+    setParagraphs([])
+    setLevel({ seconds: 0, volume: 0, waiting: 0 })
     enter('recording')
-    Promise.resolve(meetingRecordStart(inputDevice)).catch(() => {
-      setError('meeting.error.microphone')
+    Promise.resolve(meetingRecordStart(inputDevice, bySpeaker, model)).catch((reason) => {
+      const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
+      setError(`meeting.error.${code ?? 'microphone'}`)
       enter('idle')
     })
   }
 
   const stop = (discard: boolean) => {
     if (phaseRef.current !== 'recording') return
-    const done = Promise.resolve(meetingRecordStop({ ...optionsRef.current, discard }))
-    if (discard) {
-      void done.catch(() => {}).finally(() => enter('idle'))
-    } else {
-      finish(done)
-    }
+    enter('finishing')
+    Promise.resolve(meetingRecordStop(discard))
+      .then((path) => {
+        setKept(path ?? null)
+        setRecorded(!discard)
+      })
+      .catch(() => setError('meeting.error.failed'))
+      .finally(() => enter('idle'))
   }
+
+  const again = () => {
+    if (kept) transcribe(kept)
+  }
+
+  const forget = () =>
+    void Promise.resolve(deleteMeetingRecording())
+      .catch(() => {})
+      .finally(() => setKept(null))
 
   const choose = () =>
     void Promise.resolve(pickMediaFile())
@@ -199,6 +231,7 @@ export function MeetingCard() {
     progress && progress.stage === 'text' && progress.total > 0
       ? Math.round((progress.done / progress.total) * 100)
       : null
+  const result = recorded ? meetingText(paragraphs, t('meeting.speakerLabel')) : text
   const chosenModel = model ?? (models.includes(dictationModel) ? dictationModel : models[0])
 
   return (
@@ -210,7 +243,7 @@ export function MeetingCard() {
             {t('meeting.description')}
           </p>
         </div>
-        {phase === 'recording' && (
+        {(phase === 'recording' || phase === 'finishing') && (
           <span className="flex items-center gap-2 text-[20px] font-semibold tabular-nums">
             <span
               className="h-2.5 w-2.5 rounded-full bg-error transition-transform"
@@ -246,6 +279,34 @@ export function MeetingCard() {
         </div>
       )}
 
+      {(phase === 'recording' || phase === 'finishing') && (
+        <div
+          ref={liveRef}
+          role="log"
+          aria-label={t('meeting.live')}
+          className="mt-4 max-h-[240px] space-y-3 overflow-y-auto rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed"
+        >
+          {paragraphs.length === 0 && (
+            <p className="text-text-tertiary">{t('meeting.listening')}</p>
+          )}
+          {paragraphs.map((paragraph, index) => {
+            const above = heading(paragraph, t('meeting.speakerLabel'))
+            return (
+              <div key={index}>
+                {above && <p className="text-[12px] font-medium text-accent">{above}</p>}
+                <p>{paragraph.text}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {phase === 'finishing' && (
+        <p className="mt-3 text-[13px] text-text-secondary">
+          {t('meeting.finishing', { seconds: level.waiting })}
+        </p>
+      )}
+
       {phase === 'working' && (
         <div className="mt-4">
           <p className="text-[13px] text-text-secondary">
@@ -272,14 +333,9 @@ export function MeetingCard() {
         </div>
       )}
 
-      {phase !== 'working' && (
+      {phase === 'idle' && (
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border pt-4">
-          <Toggle
-            checked={speakers}
-            onChange={toggleSpeakers}
-            label={t('meeting.speakers')}
-            disabled={phase === 'recording' && !speakersInstalled}
-          />
+          <Toggle checked={speakers} onChange={toggleSpeakers} label={t('meeting.speakers')} />
           {download !== null && (
             <span className="text-[12px] text-text-secondary">
               {t('meeting.downloadingSpeakers', { percent: download })}
@@ -301,27 +357,45 @@ export function MeetingCard() {
 
       {error && <p className="mt-3 text-[12px] text-error">{t(error)}</p>}
 
-      {text !== null && phase === 'idle' && (
+      {result !== null && phase === 'idle' && (
         <div className="mt-4 space-y-2">
           <textarea
             readOnly
-            value={text}
+            value={result}
             rows={8}
             aria-label={t('meeting.result')}
-            className="w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none select-text"
+            className="w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none"
           />
-          <div className="flex gap-2">
-            <button type="button" onClick={() => void copyText(text)} className="btn-quiet">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => void copyText(result)} className="btn-quiet">
               {t('meeting.copy')}
             </button>
             <button
               type="button"
-              onClick={() => void saveTextFile(text, t('meeting.fileName'))}
+              onClick={() => void saveTextFile(result, t('meeting.fileName'))}
               className="btn-quiet"
             >
               {t('meeting.save')}
             </button>
+            {kept && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void saveMeetingRecording(t('meeting.audioFileName'))}
+                  className="btn-quiet"
+                >
+                  {t('meeting.saveAudio')}
+                </button>
+                <button type="button" onClick={again} className="btn-quiet">
+                  {t('meeting.again')}
+                </button>
+                <button type="button" onClick={forget} className="btn-quiet">
+                  {t('meeting.deleteAudio')}
+                </button>
+              </>
+            )}
           </div>
+          {result.trim() !== '' && <MeetingMinutes transcript={result} />}
         </div>
       )}
     </section>

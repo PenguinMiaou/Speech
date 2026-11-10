@@ -13,6 +13,7 @@ vi.mock('react-i18next', () => ({
 
 let drop: (paths: string[]) => void = () => {}
 let report: (progress: tauri.FileTranscribeProgress) => void = () => {}
+let hear: (segment: tauri.MeetingSegment) => void = () => {}
 
 function installed(speakers: boolean) {
   vi.mocked(tauri.speakerModelsStatus).mockResolvedValue({
@@ -40,6 +41,12 @@ describe('MeetingCard', () => {
       report = handler
       return () => {}
     })
+    vi.mocked(tauri.onMeetingSegment).mockImplementation(async (handler) => {
+      hear = handler
+      return () => {}
+    })
+    vi.mocked(tauri.onMeetingError).mockResolvedValue(() => {})
+    vi.mocked(tauri.minutesTemplates).mockResolvedValue([])
     vi.mocked(tauri.onSpeakerModelsProgress).mockResolvedValue(() => {})
     vi.mocked(tauri.listLocalModels).mockResolvedValue([])
     installed(false)
@@ -104,32 +111,88 @@ describe('MeetingCard', () => {
     expect(toggle.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('records a meeting and writes it out when stopped', async () => {
+  it('shows what is said while the meeting is recorded, by speaker', async () => {
+    installed(true)
+    window.localStorage.setItem('meeting.speakers', '1')
     vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
-    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 75, volume: 0.2 })
-    vi.mocked(tauri.meetingRecordStop).mockResolvedValue('what was said')
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 75, volume: 0.2, waiting: 0 })
     await ready()
+    await waitFor(() =>
+      expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true'),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
     await screen.findByText('01:15')
+    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', true, null)
+    expect(screen.getByRole('log').textContent).toBe('meeting.listening')
+    act(() => hear({ speaker: 1, start_ms: 0, text: 'good morning' }))
+    act(() => hear({ speaker: 2, start_ms: 31_000, text: 'morning' }))
+    const live = screen.getByRole('log').textContent
+    expect(live).toContain('meeting.speakerLabel 1  00:00good morning')
+    expect(live).toContain('meeting.speakerLabel 2  00:31morning')
+  })
+
+  it('keeps the text and the audio when the recording is stopped', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 40, volume: 0, waiting: 8 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue('/data/meeting-recording.wav')
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('the whole meeting again')
+    vi.mocked(tauri.saveMeetingRecording).mockResolvedValue(true)
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
     await screen.findByDisplayValue('what was said')
-    expect(tauri.meetingRecordStop).toHaveBeenCalledWith({
-      discard: false,
-      speakerLabel: null,
-      modelId: null,
-    })
+    expect(tauri.meetingRecordStop).toHaveBeenCalledWith(false)
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.saveAudio' }))
+    expect(tauri.saveMeetingRecording).toHaveBeenCalledWith('meeting.audioFileName')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.again' }))
+    await screen.findByDisplayValue('the whole meeting again')
+    expect(vi.mocked(tauri.transcribeFile).mock.calls[0][0]).toBe('/data/meeting-recording.wav')
+  })
+
+  it('says how much is left to recognize after stopping', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 40, volume: 0, waiting: 8 })
+    vi.mocked(tauri.meetingRecordStop).mockReturnValue(new Promise(() => {}))
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.stop' }))
+    await screen.findByText('meeting.finishing 8')
+  })
+
+  it('deletes the kept audio when asked', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 5, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue('/data/meeting-recording.wav')
+    vi.mocked(tauri.deleteMeetingRecording).mockResolvedValue()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.stop' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.deleteAudio' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'meeting.deleteAudio' })).toBeNull(),
+    )
+    expect(tauri.deleteMeetingRecording).toHaveBeenCalled()
   })
 
   it('drops a recording that is discarded', async () => {
     vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
-    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 2, volume: 0 })
-    vi.mocked(tauri.meetingRecordStop).mockResolvedValue('')
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 2, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
     await ready()
     fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
     fireEvent.click(await screen.findByRole('button', { name: 'meeting.discard' }))
     await screen.findByRole('button', { name: 'meeting.record' })
-    expect(vi.mocked(tauri.meetingRecordStop).mock.calls[0][0].discard).toBe(true)
+    expect(tauri.meetingRecordStop).toHaveBeenCalledWith(true)
     expect(screen.queryByLabelText('meeting.result')).toBeNull()
+  })
+
+  it('offers minutes once there is text', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('hello')
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByRole('button', { name: 'meeting.minutes' })
   })
 
   it('copies and saves the text', async () => {

@@ -778,7 +778,7 @@
     "description": "Enregistrez une réunion ou déposez un enregistrement. Le modèle de cet ordinateur le met par écrit.",
     "record": "Démarrer l’enregistrement",
     "chooseFile": "Choisir un fichier",
-    "stop": "Arrêter et transcrire",
+    "stop": "Terminer",
     "discard": "Abandonner",
     "speakers": "Distinguer les intervenants",
     "speakerLabel": "Intervenant",
@@ -800,7 +800,29 @@
       "busy": "L’enregistrement précédent est encore en cours de transcription",
       "failed": "La transcription n’a pas abouti",
       "speakerDownload": "Les modèles d’intervenants n’ont pas pu être téléchargés",
-      "microphone": "Le micro n’a pas pu être ouvert"
-    }
+      "microphone": "Le micro n’a pas pu être ouvert",
+      "minutes": "Le compte rendu n’a pas pu être rédigé",
+      "llm_not_configured": "Configurez d’abord un modèle de mise en forme dans les réglages",
+      "template_too_large": "Le fichier de modèle est trop volumineux",
+      "template_empty": "Le fichier de modèle est vide",
+      "template_unreadable": "Impossible d’ouvrir le modèle. Il doit s’agir d’un fichier texte"
+    },
+    "live": "Texte en direct",
+    "listening": "À l’écoute. Le texte arrive environ toutes les trente secondes",
+    "finishing": "Reconnaissance des {{seconds}} dernières secondes",
+    "saveAudio": "Enregistrer l’audio",
+    "again": "Retranscrire tout l’enregistrement",
+    "deleteAudio": "Supprimer l’audio",
+    "audioFileName": "Enregistrement de réunion.wav",
+    "minutes": "Rédiger le compte rendu",
+    "minutesWorking": "Rédaction du compte rendu…",
+    "minutesResult": "Compte rendu",
+    "minutesNote": "Le compte rendu est rédigé par le modèle de mise en forme choisi dans les réglages. Le texte de la réunion lui est envoyé.",
+    "template": "Modèle de compte rendu",
+    "defaultTemplateName": "Général",
+    "importTemplate": "Importer un modèle",
+    "removeTemplate": "Retirer le modèle",
+    "minutesFileName": "Compte rendu de réunion.md",
+    "defaultTemplate": "# Compte rendu de réunion\n\n## Sujets\n\n## Décisions\n\n## Points discutés\n\n## Actions\nIndiquer le responsable et l’échéance de chacune\n\n## Questions ouvertes"
   }
 }

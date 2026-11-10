@@ -778,7 +778,7 @@
     "description": "Nimm eine Besprechung auf oder zieh eine Aufnahme hierher. Das Modell auf diesem Computer schreibt sie nieder.",
     "record": "Aufnahme starten",
     "chooseFile": "Datei wählen",
-    "stop": "Beenden und transkribieren",
+    "stop": "Beenden",
     "discard": "Verwerfen",
     "speakers": "Sprecher unterscheiden",
     "speakerLabel": "Sprecher",
@@ -800,7 +800,29 @@
       "busy": "Die vorige Aufnahme wird noch transkribiert",
       "failed": "Die Transkription ist nicht gelungen",
       "speakerDownload": "Die Sprechermodelle ließen sich nicht laden",
-      "microphone": "Das Mikrofon ließ sich nicht öffnen"
-    }
+      "microphone": "Das Mikrofon ließ sich nicht öffnen",
+      "minutes": "Das Protokoll konnte nicht geschrieben werden",
+      "llm_not_configured": "Richte zuerst in den Einstellungen ein Sprachmodell ein",
+      "template_too_large": "Die Vorlagendatei ist zu groß",
+      "template_empty": "Die Vorlagendatei ist leer",
+      "template_unreadable": "Die Vorlage ließ sich nicht öffnen. Sie muss eine Textdatei sein"
+    },
+    "live": "Live-Text",
+    "listening": "Hört zu. Text erscheint etwa jede halbe Minute",
+    "finishing": "Die letzten {{seconds}} Sekunden werden erkannt",
+    "saveAudio": "Aufnahme speichern",
+    "again": "Ganze Aufnahme neu transkribieren",
+    "deleteAudio": "Aufnahme löschen",
+    "audioFileName": "Besprechungsaufnahme.wav",
+    "minutes": "Protokoll schreiben",
+    "minutesWorking": "Protokoll wird geschrieben…",
+    "minutesResult": "Protokoll",
+    "minutesNote": "Das Protokoll schreibt das in den Einstellungen gewählte Sprachmodell. Der Besprechungstext wird an es gesendet.",
+    "template": "Protokollvorlage",
+    "defaultTemplateName": "Allgemein",
+    "importTemplate": "Vorlage importieren",
+    "removeTemplate": "Vorlage entfernen",
+    "minutesFileName": "Besprechungsprotokoll.md",
+    "defaultTemplate": "# Besprechungsprotokoll\n\n## Themen\n\n## Beschlüsse\n\n## Diskussionspunkte\n\n## Aufgaben\nJeweils mit Verantwortlichem und Termin\n\n## Offene Fragen"
   }
 }

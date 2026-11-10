@@ -778,7 +778,7 @@
     "description": "회의를 녹음하거나 녹음 파일을 끌어다 놓으면 이 컴퓨터의 모델이 글로 옮깁니다.",
     "record": "녹음 시작",
     "chooseFile": "파일 선택",
-    "stop": "끝내고 받아쓰기",
+    "stop": "종료",
     "discard": "버리기",
     "speakers": "말하는 사람 구분",
     "speakerLabel": "화자",
@@ -800,7 +800,29 @@
       "busy": "앞의 녹음을 아직 받아쓰는 중입니다",
       "failed": "받아쓰지 못했습니다",
       "speakerDownload": "화자 모델을 내려받지 못했습니다",
-      "microphone": "마이크를 열 수 없습니다"
-    }
+      "microphone": "마이크를 열 수 없습니다",
+      "minutes": "회의록을 작성하지 못했습니다",
+      "llm_not_configured": "먼저 설정에서 다듬기 모델을 설정하세요",
+      "template_too_large": "템플릿 파일이 너무 큽니다",
+      "template_empty": "템플릿 파일이 비어 있습니다",
+      "template_unreadable": "템플릿을 열 수 없습니다. 텍스트 파일이어야 합니다"
+    },
+    "live": "실시간 텍스트",
+    "listening": "듣는 중입니다. 텍스트는 약 30초마다 나옵니다",
+    "finishing": "마지막 {{seconds}}초를 인식하는 중",
+    "saveAudio": "녹음 저장",
+    "again": "녹음 전체 다시 받아쓰기",
+    "deleteAudio": "녹음 삭제",
+    "audioFileName": "회의 녹음.wav",
+    "minutes": "회의록 작성",
+    "minutesWorking": "회의록 작성 중…",
+    "minutesResult": "회의록",
+    "minutesNote": "회의록은 설정에서 고른 다듬기 모델이 작성합니다. 회의 텍스트가 그 모델로 전송됩니다.",
+    "template": "회의록 템플릿",
+    "defaultTemplateName": "기본",
+    "importTemplate": "템플릿 가져오기",
+    "removeTemplate": "템플릿 삭제",
+    "minutesFileName": "회의록.md",
+    "defaultTemplate": "# 회의록\n\n## 안건\n\n## 결정 사항\n\n## 논의 요점\n\n## 할 일\n각 항목에 담당자와 기한을 적기\n\n## 미결 사항"
   }
 }

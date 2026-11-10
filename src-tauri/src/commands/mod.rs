@@ -6,6 +6,7 @@ pub mod dictionary;
 pub mod history;
 pub mod llm;
 pub mod local_stt;
+pub mod minutes;
 pub mod misc;
 pub mod stt;
 pub mod translation;

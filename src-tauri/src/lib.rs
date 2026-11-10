@@ -11,6 +11,7 @@ mod linux_x11;
 pub mod llm;
 pub mod local_stt;
 mod meeting_record;
+pub mod minutes;
 pub mod native_hotkey;
 pub mod output;
 pub mod pipeline;
@@ -869,6 +870,8 @@ pub fn run() {
             local_stt::init(&data_dir);
             voice_isolation::init(&data_dir);
             speakers::init(&data_dir);
+            minutes::init(&data_dir);
+            meeting_record::init(&data_dir);
             llm::usage::init(&data_dir);
             if let Some(dir) = std::env::current_exe()
                 .ok()
@@ -1199,6 +1202,12 @@ pub fn run() {
             commands::local_stt::meeting_record_stop,
             commands::local_stt::speaker_models_status,
             commands::local_stt::speaker_models_install,
+            commands::local_stt::meeting_recording_save,
+            commands::local_stt::meeting_recording_delete,
+            commands::minutes::meeting_minutes,
+            commands::minutes::minutes_templates,
+            commands::minutes::minutes_template_import,
+            commands::minutes::minutes_template_remove,
             commands::local_stt::save_text_file,
             commands::dictionary::list_snippets,
             commands::dictionary::add_snippet,

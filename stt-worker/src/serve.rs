@@ -43,6 +43,14 @@ pub trait Engine {
         embedding_model: &str,
         pcm: &[f32],
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
+    /// Tells who spoke when in the next window of a running recording.
+    fn speakers_window(
+        &mut self,
+        segmentation_model: &str,
+        embedding_model: &str,
+        pcm: &[f32],
+        first: bool,
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
 }
 
 pub fn not_isolating() -> EngineError {
@@ -56,6 +64,13 @@ fn read_pcm<R: Read>(reader: &mut R, bytes: u32) -> io::Result<Vec<f32>> {
     let mut raw = vec![0u8; bytes as usize];
     reader.read_exact(&mut raw)?;
     Ok(raw
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect())
+}
+
+fn read_pcm_file(path: &str) -> io::Result<Vec<f32>> {
+    Ok(std::fs::read(path)?
         .chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect())
@@ -77,6 +92,21 @@ pub fn serve<R: Read, W: Write, E: Engine>(
     while let Some(request) = read_frame::<_, Request>(reader)? {
         let response = match request {
             Request::Shutdown => return Ok(()),
+            Request::SpeakersWindow {
+                segmentation_model,
+                embedding_model,
+                pcm_path,
+                first,
+            } => match read_pcm_file(&pcm_path) {
+                Ok(pcm) => {
+                    match engine.speakers_window(&segmentation_model, &embedding_model, &pcm, first)
+                    {
+                        Ok(turns) => Response::Speakers { turns },
+                        Err(e) => error(&e.code, e.message),
+                    }
+                }
+                Err(e) => error("audio_unreadable", e.to_string()),
+            },
             Request::Diarize {
                 segmentation_model,
                 embedding_model,
@@ -192,6 +222,20 @@ mod tests {
     }
 
     impl Engine for FakeEngine {
+        fn speakers_window(
+            &mut self,
+            _segmentation_model: &str,
+            _embedding_model: &str,
+            pcm: &[f32],
+            first: bool,
+        ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
+            Ok(vec![ot_stt_protocol::SpeakerTurn {
+                start_ms: 0,
+                end_ms: pcm.len() as u64,
+                speaker: if first { 1 } else { 2 },
+            }])
+        }
+
         fn diarize(
             &mut self,
             _segmentation_model: &str,
@@ -251,6 +295,40 @@ mod tests {
             },
             samples.to_vec(),
         )
+    }
+
+    #[test]
+    fn a_window_of_a_running_recording_comes_back_as_speaker_turns() {
+        let path = std::env::temp_dir().join(format!("ot-window-{}.pcm", std::process::id()));
+        let raw: Vec<u8> = [0.5f32, 0.25]
+            .iter()
+            .flat_map(|s| s.to_le_bytes())
+            .collect();
+        std::fs::write(&path, raw).unwrap();
+        let request = |first| Request::SpeakersWindow {
+            segmentation_model: "seg.onnx".into(),
+            embedding_model: "emb.onnx".into(),
+            pcm_path: path.to_string_lossy().into_owned(),
+            first,
+        };
+        let frames = [(request(true), vec![]), (request(false), vec![])];
+        let mut output = Vec::new();
+        serve(&mut input(&frames), &mut output, &mut FakeEngine::default()).unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        let mut reader = Cursor::new(output);
+        let speaker = |response| match response {
+            Some(Response::Speakers { turns }) => (turns[0].speaker, turns[0].end_ms),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            speaker(read_frame::<_, Response>(&mut reader).unwrap()),
+            (1, 2)
+        );
+        assert_eq!(
+            speaker(read_frame::<_, Response>(&mut reader).unwrap()),
+            (2, 2)
+        );
     }
 
     #[test]

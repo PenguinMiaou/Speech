@@ -778,7 +778,7 @@
     "description": "Grave uma reunião ou arraste uma gravação para cá. O modelo deste computador passa para texto.",
     "record": "Começar a gravar",
     "chooseFile": "Escolher arquivo",
-    "stop": "Parar e transcrever",
+    "stop": "Terminar",
     "discard": "Descartar",
     "speakers": "Distinguir quem fala",
     "speakerLabel": "Pessoa",
@@ -800,7 +800,29 @@
       "busy": "A gravação anterior ainda está sendo transcrita",
       "failed": "A transcrição não deu certo",
       "speakerDownload": "Não foi possível baixar os modelos de vozes",
-      "microphone": "Não foi possível abrir o microfone"
-    }
+      "microphone": "Não foi possível abrir o microfone",
+      "minutes": "Não foi possível escrever a ata",
+      "llm_not_configured": "Configure primeiro um modelo de revisão nas definições",
+      "template_too_large": "O ficheiro do modelo é demasiado grande",
+      "template_empty": "O ficheiro do modelo está vazio",
+      "template_unreadable": "Não foi possível abrir o modelo. Tem de ser um ficheiro de texto"
+    },
+    "live": "Texto ao vivo",
+    "listening": "A ouvir. O texto chega a cada meio minuto, aproximadamente",
+    "finishing": "A reconhecer os últimos {{seconds}} segundos",
+    "saveAudio": "Guardar áudio",
+    "again": "Transcrever de novo toda a gravação",
+    "deleteAudio": "Eliminar áudio",
+    "audioFileName": "Gravação da reunião.wav",
+    "minutes": "Escrever ata",
+    "minutesWorking": "A escrever a ata…",
+    "minutesResult": "Ata",
+    "minutesNote": "A ata é escrita pelo modelo de revisão escolhido nas definições. O texto da reunião é enviado para ele.",
+    "template": "Modelo de ata",
+    "defaultTemplateName": "Geral",
+    "importTemplate": "Importar modelo",
+    "removeTemplate": "Remover modelo",
+    "minutesFileName": "Ata da reunião.md",
+    "defaultTemplate": "# Ata da reunião\n\n## Temas\n\n## Decisões\n\n## Pontos discutidos\n\n## Tarefas\nIndicar o responsável e o prazo de cada uma\n\n## Questões em aberto"
   }
 }

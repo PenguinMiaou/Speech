@@ -295,54 +295,68 @@ pub async fn transcribe_file(
     result
 }
 
-/// Starts recording a meeting from the microphone.
+/// Starts recording a meeting from the microphone. Each paragraph arrives as a
+/// `meeting:segment` event while the recording runs, an error as `meeting:error`.
 #[tauri::command]
-pub async fn meeting_record_start(input_device: String) -> Result<(), String> {
+pub async fn meeting_record_start(
+    app: tauri::AppHandle,
+    input_device: String,
+    by_speaker: bool,
+    model_id: Option<String>,
+) -> Result<(), String> {
     if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
         return Err("busy".to_string());
     }
-    crate::meeting_record::start(input_device).await
+    crate::meeting_record::start(input_device, by_speaker, model_id, move |outcome| {
+        let _ = match outcome {
+            Ok(segment) => app.emit("meeting:segment", segment),
+            Err(error) => app.emit("meeting:error", error),
+        };
+    })
+    .await
 }
 
 #[derive(Serialize)]
 pub struct MeetingLevel {
     pub seconds: u64,
     pub volume: f32,
+    /// Seconds recorded and not yet recognized.
+    pub waiting: u64,
 }
 
 /// The running meeting recording's length and microphone level, if one runs.
 #[tauri::command]
 pub fn meeting_record_level() -> Option<MeetingLevel> {
-    crate::meeting_record::level().map(|(seconds, volume)| MeetingLevel { seconds, volume })
+    crate::meeting_record::level().map(|(seconds, volume, waiting)| MeetingLevel {
+        seconds,
+        volume,
+        waiting,
+    })
 }
 
-/// Ends the meeting recording and turns it into text. With `discard` the audio is dropped.
+/// Ends the meeting recording once the rest of it has been recognized. With `discard`
+/// the audio still waiting is dropped.
+/// The latest meeting's audio stays on disk; its path comes back unless it was discarded.
 #[tauri::command]
-pub async fn meeting_record_stop(
-    app: tauri::AppHandle,
-    discard: bool,
-    speaker_label: Option<String>,
-    model_id: Option<String>,
-) -> Result<String, String> {
-    let pcm = crate::meeting_record::stop().await?;
-    if discard {
-        return Ok(String::new());
+pub async fn meeting_record_stop(discard: bool) -> Result<Option<String>, String> {
+    crate::meeting_record::stop(discard).await?;
+    Ok(crate::meeting_record::kept_recording().map(|path| path.to_string_lossy().into_owned()))
+}
+
+/// Copies the latest meeting's audio to where the user asked.
+#[tauri::command]
+pub fn meeting_recording_save(path: String) -> Result<(), String> {
+    let kept = crate::meeting_record::kept_recording().ok_or("no_recording")?;
+    std::fs::copy(kept, path)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn meeting_recording_delete() {
+    if !crate::meeting_record::is_recording() {
+        crate::meeting_record::delete_recording();
     }
-    if pcm.len() < 16_000 {
-        return Err("file_not_audio".to_string());
-    }
-    if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
-        return Err("busy".to_string());
-    }
-    let options = file_options(speaker_label, model_id);
-    let result = tokio::task::spawn_blocking(move || {
-        crate::file_transcribe::transcribe_pcm(&pcm, &options, |stage| report_stage(&app, stage))
-    })
-    .await
-    .map_err(|error| error.to_string())
-    .and_then(|result| result);
-    TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
-    result
 }
 
 #[derive(Serialize)]

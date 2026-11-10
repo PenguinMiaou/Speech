@@ -778,7 +778,7 @@
     "description": "Graba una reunión o arrastra aquí una grabación. El modelo de este ordenador la pasa a texto.",
     "record": "Empezar a grabar",
     "chooseFile": "Elegir archivo",
-    "stop": "Detener y transcribir",
+    "stop": "Terminar",
     "discard": "Descartar",
     "speakers": "Distinguir hablantes",
     "speakerLabel": "Hablante",
@@ -800,7 +800,29 @@
       "busy": "La grabación anterior todavía se está transcribiendo",
       "failed": "La transcripción no salió bien",
       "speakerDownload": "No se pudieron descargar los modelos de hablantes",
-      "microphone": "No se pudo abrir el micrófono"
-    }
+      "microphone": "No se pudo abrir el micrófono",
+      "minutes": "No se pudo redactar el acta",
+      "llm_not_configured": "Configura antes un modelo de pulido en Ajustes",
+      "template_too_large": "El archivo de plantilla es demasiado grande",
+      "template_empty": "El archivo de plantilla está vacío",
+      "template_unreadable": "No se pudo abrir la plantilla. Debe ser un archivo de texto"
+    },
+    "live": "Texto en directo",
+    "listening": "Escuchando. El texto llega cada medio minuto aproximadamente",
+    "finishing": "Reconociendo los últimos {{seconds}} segundos",
+    "saveAudio": "Guardar audio",
+    "again": "Transcribir de nuevo toda la grabación",
+    "deleteAudio": "Eliminar audio",
+    "audioFileName": "Grabación de la reunión.wav",
+    "minutes": "Redactar acta",
+    "minutesWorking": "Redactando el acta…",
+    "minutesResult": "Acta",
+    "minutesNote": "El acta la redacta el modelo de pulido elegido en Ajustes. El texto de la reunión se le envía.",
+    "template": "Plantilla del acta",
+    "defaultTemplateName": "General",
+    "importTemplate": "Importar plantilla",
+    "removeTemplate": "Quitar plantilla",
+    "minutesFileName": "Acta de la reunión.md",
+    "defaultTemplate": "# Acta de la reunión\n\n## Temas\n\n## Decisiones\n\n## Puntos tratados\n\n## Tareas\nIndica el responsable y el plazo de cada una\n\n## Cuestiones pendientes"
   }
 }

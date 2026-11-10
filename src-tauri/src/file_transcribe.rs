@@ -169,7 +169,7 @@ pub fn plan(
         .collect()
 }
 
-fn joined(parts: &[&str]) -> String {
+pub(crate) fn joined(parts: &[&str]) -> String {
     let mut text = String::new();
     for part in parts {
         let latin = |c: Option<char>| c.is_some_and(|c| c.is_ascii() && !c.is_ascii_whitespace());
@@ -209,7 +209,7 @@ pub fn assemble(
     crate::speakers::transcript(&by_turn, speaker_label)
 }
 
-fn model_path(wanted: Option<&str>) -> Option<std::path::PathBuf> {
+pub(crate) fn model_path(wanted: Option<&str>) -> Option<std::path::PathBuf> {
     use crate::local_stt::catalog;
     wanted
         .and_then(catalog::installed_path)

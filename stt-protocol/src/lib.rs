@@ -37,6 +37,14 @@ pub enum Request {
         embedding_model: String,
         pcm_path: String,
     },
+    /// The same for the next window of a recording still running. Speakers keep their
+    /// numbers from window to window; `first` starts a new recording.
+    SpeakersWindow {
+        segmentation_model: String,
+        embedding_model: String,
+        pcm_path: String,
+        first: bool,
+    },
     Shutdown,
 }
 
