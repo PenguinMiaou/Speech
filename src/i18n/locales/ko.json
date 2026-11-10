@@ -754,5 +754,20 @@
     "remove": "삭제",
     "duplicate": "이미 저장된 문구입니다",
     "failed": "저장하지 못했습니다"
+  },
+  "fileTranscribe": {
+    "drop": "오디오나 동영상 파일을 이 창에 놓으면 이 기기의 모델로 글로 바꿉니다",
+    "reading": "파일을 읽는 중…",
+    "working": "받아쓰는 중: {{done}} / {{total}}",
+    "result": "받아쓴 글",
+    "copy": "복사",
+    "error": {
+      "file_not_audio": "이 파일에는 인식할 수 있는 소리가 없습니다",
+      "file_unreadable": "파일을 열 수 없습니다",
+      "file_too_long": "파일이 3시간을 넘습니다",
+      "local_model_not_installed": "로컬 음성 모델이 아직 설치되지 않았습니다",
+      "busy": "이전 파일을 아직 처리하고 있습니다",
+      "failed": "받아쓰지 못했습니다"
+    }
   }
 }

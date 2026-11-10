@@ -754,5 +754,20 @@
     "remove": "Supprimer",
     "duplicate": "Cette phrase est déjà enregistrée",
     "failed": "Enregistrement impossible"
+  },
+  "fileTranscribe": {
+    "drop": "Déposez un fichier audio ou vidéo sur cette fenêtre pour le transcrire avec le modèle de cet appareil",
+    "reading": "Lecture du fichier…",
+    "working": "Transcription, partie {{done}} sur {{total}}",
+    "result": "Transcription",
+    "copy": "Copier",
+    "error": {
+      "file_not_audio": "Ce fichier ne contient pas d’audio reconnaissable",
+      "file_unreadable": "Impossible d’ouvrir le fichier",
+      "file_too_long": "Le fichier dépasse 3 heures",
+      "local_model_not_installed": "Aucun modèle vocal local n’est encore installé",
+      "busy": "Le fichier précédent est encore en cours",
+      "failed": "Le fichier n’a pas pu être transcrit"
+    }
   }
 }

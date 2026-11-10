@@ -822,3 +822,33 @@ export async function addSnippet(phrase: string, text: string): Promise<void> {
 export async function removeSnippet(id: number): Promise<void> {
   return invoke('remove_snippet', { id })
 }
+
+export interface FileTranscribeProgress {
+  done: number
+  total: number
+}
+
+/** Turns an audio or video file into text with the speech model on this machine. */
+export async function transcribeFile(path: string): Promise<string> {
+  return invoke('transcribe_file', { path })
+}
+
+export function onFileTranscribeProgress(
+  handler: (progress: FileTranscribeProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<FileTranscribeProgress>('file-transcribe:progress', (event) =>
+    handler(event.payload),
+  )
+}
+
+/** Files dropped on this window, as paths on disk. */
+export async function onFileDropped(handler: (paths: string[]) => void): Promise<UnlistenFn> {
+  const { getCurrentWebview } = await import('@tauri-apps/api/webview')
+  return getCurrentWebview().onDragDropEvent((event) => {
+    if (event.payload.type === 'drop') handler(event.payload.paths)
+  })
+}
+
+export async function copyText(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text)
+}

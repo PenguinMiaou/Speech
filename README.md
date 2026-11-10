@@ -70,6 +70,10 @@ The app checks for a newer release when it starts and says so in a bar at the to
 
 The home page shows the tokens the polish model reports using: today, the last 30 days and in all. The counts are kept on this machine and stay hidden when the provider reports none.
 
+Drop an audio or video file on the main window and the model on this machine turns it into text (mp3, m4a, wav, flac, ogg, mp4, mov, mkv, up to 3 hours).
+
+Dictionary, Snippets holds phrases and their text: say a phrase by itself and its text is entered exactly as written, without going to the polish model.
+
 ## Platforms
 
 | Platform               | State                                                                                                                                                         |

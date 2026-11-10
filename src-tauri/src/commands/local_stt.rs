@@ -232,3 +232,28 @@ mod tests {
         assert!(refuse_if_installing(&state, "idle").is_ok());
     }
 }
+
+static TRANSCRIBING_FILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turns an audio or video file into text with the local model, one file at a time.
+/// Progress goes out as `file-transcribe:progress`.
+#[tauri::command]
+pub async fn transcribe_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
+    use std::sync::atomic::Ordering;
+    if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
+        return Err("busy".to_string());
+    }
+    let result = tokio::task::spawn_blocking(move || {
+        crate::file_transcribe::transcribe(std::path::Path::new(&path), |done, total| {
+            let _ = app.emit(
+                "file-transcribe:progress",
+                serde_json::json!({ "done": done, "total": total }),
+            );
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())
+    .and_then(|result| result);
+    TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
+    result
+}

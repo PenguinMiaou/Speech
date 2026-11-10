@@ -754,5 +754,20 @@
     "remove": "Quitar",
     "duplicate": "Esta frase ya está guardada",
     "failed": "No se pudo guardar"
+  },
+  "fileTranscribe": {
+    "drop": "Suelta un archivo de audio o vídeo en esta ventana para pasarlo a texto con el modelo de este equipo",
+    "reading": "Leyendo el archivo…",
+    "working": "Transcribiendo, parte {{done}} de {{total}}",
+    "result": "Transcripción",
+    "copy": "Copiar",
+    "error": {
+      "file_not_audio": "Este archivo no contiene audio reconocible",
+      "file_unreadable": "No se pudo abrir el archivo",
+      "file_too_long": "El archivo dura más de 3 horas",
+      "local_model_not_installed": "Aún no hay un modelo de voz local instalado",
+      "busy": "El archivo anterior aún no ha terminado",
+      "failed": "No se pudo transcribir el archivo"
+    }
   }
 }

@@ -754,5 +754,20 @@
     "remove": "删除",
     "duplicate": "这个短语已经有了",
     "failed": "没有保存成功"
+  },
+  "fileTranscribe": {
+    "drop": "把音频或视频文件拖到这个窗口，用本机模型转成文字",
+    "reading": "正在读取文件…",
+    "working": "正在转写，第 {{done}} 段，共 {{total}} 段",
+    "result": "转写结果",
+    "copy": "复制",
+    "error": {
+      "file_not_audio": "这个文件里没有能识别的音频",
+      "file_unreadable": "文件打不开",
+      "file_too_long": "文件超过 3 小时，太长了",
+      "local_model_not_installed": "还没有安装本地识别模型",
+      "busy": "上一个文件还没转完",
+      "failed": "没有转写成功"
+    }
   }
 }

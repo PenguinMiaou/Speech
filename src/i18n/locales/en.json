@@ -754,5 +754,20 @@
     "remove": "Remove",
     "duplicate": "This phrase is already saved",
     "failed": "Could not save"
+  },
+  "fileTranscribe": {
+    "drop": "Drop an audio or video file on this window to turn it into text with the model on this machine",
+    "reading": "Reading the file…",
+    "working": "Transcribing, part {{done}} of {{total}}",
+    "result": "Transcript",
+    "copy": "Copy",
+    "error": {
+      "file_not_audio": "This file holds no audio that can be recognized",
+      "file_unreadable": "The file could not be opened",
+      "file_too_long": "The file is longer than 3 hours",
+      "local_model_not_installed": "No local speech model is installed yet",
+      "busy": "The previous file is still being worked on",
+      "failed": "The file could not be transcribed"
+    }
   }
 }

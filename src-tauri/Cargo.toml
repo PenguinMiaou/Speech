@@ -53,6 +53,7 @@ url = "2"
 flate2 = "1"
 pinyin = { version = "0.11.0", default-features = false, features = ["plain", "heteronym"] }
 unicode-segmentation = "1.12.0"
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "aac", "isomp4", "wav", "flac", "ogg", "vorbis", "pcm", "mkv"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }

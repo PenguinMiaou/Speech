@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
 import { useAppStore } from '../../stores/appStore'
 import { useRoute } from '../../lib/router'
+import { FileTranscribeCard } from './FileTranscribeCard'
 import { TokenUsageCard } from './TokenUsageCard'
 
 export function HomePage() {
@@ -51,6 +52,8 @@ export function HomePage() {
           <p className="text-[22px] font-semibold">{todayCount}</p>
         </div>
       </div>
+
+      <FileTranscribeCard />
 
       <TokenUsageCard />
 

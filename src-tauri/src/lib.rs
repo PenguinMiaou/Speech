@@ -4,6 +4,7 @@ pub mod commands;
 pub mod credentials;
 pub mod dictionary_io;
 pub mod error;
+pub mod file_transcribe;
 pub mod hotkey;
 #[cfg(target_os = "linux")]
 mod linux_x11;
@@ -1188,6 +1189,7 @@ pub fn run() {
             commands::dictionary::add_dictionary_entry,
             commands::dictionary::update_dictionary_entry,
             commands::dictionary::remove_dictionary_entry,
+            commands::local_stt::transcribe_file,
             commands::dictionary::list_snippets,
             commands::dictionary::add_snippet,
             commands::dictionary::remove_snippet,

@@ -754,5 +754,20 @@
     "remove": "Entfernen",
     "duplicate": "Diese Phrase ist schon gespeichert",
     "failed": "Speichern fehlgeschlagen"
+  },
+  "fileTranscribe": {
+    "drop": "Audio- oder Videodatei auf dieses Fenster ziehen, um sie mit dem Modell auf diesem Gerät in Text umzuwandeln",
+    "reading": "Datei wird gelesen…",
+    "working": "Transkription, Teil {{done}} von {{total}}",
+    "result": "Transkript",
+    "copy": "Kopieren",
+    "error": {
+      "file_not_audio": "Diese Datei enthält kein erkennbares Audio",
+      "file_unreadable": "Die Datei konnte nicht geöffnet werden",
+      "file_too_long": "Die Datei ist länger als 3 Stunden",
+      "local_model_not_installed": "Es ist noch kein lokales Sprachmodell installiert",
+      "busy": "Die vorige Datei ist noch in Arbeit",
+      "failed": "Die Datei konnte nicht transkribiert werden"
+    }
   }
 }
