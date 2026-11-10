@@ -507,11 +507,16 @@
     "learned": "自动",
     "learnedFrom": "从你的修改里学到，原来听成“{{heard}}”",
     "learnFromEdits": "从我的修改里学习新词",
-    "layoutHabits": "学到的排版习惯",
+    "layoutHabits": "学到的书写习惯",
     "forgetHabit": "忘掉",
     "habit": {
       "no_final_period": "句末不加句号",
-      "one_paragraph": "不分行"
+      "one_paragraph": "不分行",
+      "plain_you": "用“你”不用“您”",
+      "polite_you": "用“您”不用“你”",
+      "no_exclamation": "不用感叹号",
+      "no_cjk_latin_space": "中英文之间不加空格",
+      "cjk_latin_space": "中英文之间加空格"
     }
   },
   "scenes": {

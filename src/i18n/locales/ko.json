@@ -507,11 +507,16 @@
     "learned": "Learned",
     "learnedFrom": "Learned from your correction; it was heard as \"{{heard}}\"",
     "learnFromEdits": "Learn new words from my corrections",
-    "layoutHabits": "Learned layout habits",
+    "layoutHabits": "학습한 글쓰기 습관",
     "forgetHabit": "Forget",
     "habit": {
       "no_final_period": "No final period",
-      "one_paragraph": "One paragraph"
+      "one_paragraph": "One paragraph",
+      "plain_you": "“您” 대신 “你”",
+      "polite_you": "“你” 대신 “您”",
+      "no_exclamation": "느낌표를 쓰지 않음",
+      "no_cjk_latin_space": "중국어와 영문 사이에 공백 없음",
+      "cjk_latin_space": "중국어와 영문 사이에 공백"
     }
   },
   "scenes": {

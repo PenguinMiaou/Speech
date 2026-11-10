@@ -507,11 +507,16 @@
     "learned": "Learned",
     "learnedFrom": "Learned from your correction; it was heard as \"{{heard}}\"",
     "learnFromEdits": "Learn new words from my corrections",
-    "layoutHabits": "Learned layout habits",
+    "layoutHabits": "Hábitos de escritura aprendidos",
     "forgetHabit": "Forget",
     "habit": {
       "no_final_period": "No final period",
-      "one_paragraph": "One paragraph"
+      "one_paragraph": "One paragraph",
+      "plain_you": "你 informal, no 您",
+      "polite_you": "您 formal, no 你",
+      "no_exclamation": "Sin signos de exclamación",
+      "no_cjk_latin_space": "Sin espacio entre texto chino y latino",
+      "cjk_latin_space": "Un espacio entre texto chino y latino"
     }
   },
   "scenes": {

@@ -507,11 +507,16 @@
     "learned": "Learned",
     "learnedFrom": "Learned from your correction; it was heard as \"{{heard}}\"",
     "learnFromEdits": "Learn new words from my corrections",
-    "layoutHabits": "Learned layout habits",
+    "layoutHabits": "Усвоенные привычки письма",
     "forgetHabit": "Forget",
     "habit": {
       "no_final_period": "No final period",
-      "one_paragraph": "One paragraph"
+      "one_paragraph": "One paragraph",
+      "plain_you": "Простое 你, а не 您",
+      "polite_you": "Вежливое 您, а не 你",
+      "no_exclamation": "Без восклицательных знаков",
+      "no_cjk_latin_space": "Без пробела между китайским и латинским текстом",
+      "cjk_latin_space": "Пробел между китайским и латинским текстом"
     }
   },
   "scenes": {

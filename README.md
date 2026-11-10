@@ -74,6 +74,8 @@ Drop an audio or video file on the main window and the model on this machine tur
 
 Dictionary, Snippets holds phrases and their text: say a phrase by itself and its text is entered exactly as written, without going to the polish model.
 
+On macOS the app watches how you edit what you dictated: swapping the polite and plain Chinese "you", removing exclamation marks, opening or closing the space between Chinese and Latin text, dropping the final period, joining lines. Once the same edit has been made five times in one app, polish follows it there. Only counts are stored, never text, and each habit can be forgotten on the Dictionary page.
+
 ## Platforms
 
 | Platform               | State                                                                                                                                                         |
