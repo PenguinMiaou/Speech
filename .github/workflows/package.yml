@@ -68,6 +68,8 @@ jobs:
   macos:
     runs-on: macos-latest
     timeout-minutes: 90
+    # The signing certificate lives in an environment that only version tags may use.
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || '' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -86,15 +88,30 @@ jobs:
             src-tauri -> target
             stt-worker -> target
 
-      # Signed ad hoc: no developer identity is involved.
-      - name: Build the app
+      # A release is signed with the Developer ID certificate. Any other build is signed ad hoc.
+      - name: Choose the signature
         env:
-          APPLE_SIGNING_IDENTITY: '-'
+          CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -n "$CERTIFICATE" ]; then
+            {
+              echo "APPLE_CERTIFICATE=$CERTIFICATE"
+              echo "APPLE_CERTIFICATE_PASSWORD=$CERTIFICATE_PASSWORD"
+              echo "APPLE_SIGNING_IDENTITY=$IDENTITY"
+            } >> "$GITHUB_ENV"
+          else
+            echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the app
         run: npm run tauri build -- --bundles app
 
       - name: Make the archive
         run: |
-          codesign --verify --deep src-tauri/target/release/bundle/macos/OpenTypeless.app
+          codesign --verify --deep --strict src-tauri/target/release/bundle/macos/OpenTypeless.app
+          codesign -dvv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'Signature=|TeamIdentifier=|flags='
           ditto -c -k --keepParent src-tauri/target/release/bundle/macos/OpenTypeless.app OpenTypeless-macos-arm64.zip
           ls -l OpenTypeless-macos-arm64.zip
 

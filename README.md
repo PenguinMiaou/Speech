@@ -66,7 +66,7 @@ There is no account and no telemetry. At launch the app asks GitHub whether a ne
 
 ## Updates
 
-Settings, About has a button that checks for a newer release. On Windows the app downloads only the program files that changed, checks each against the SHA-256 the release lists, replaces them and restarts. Models, settings and history are not touched. On macOS the button opens the release page, because a changed program file loses the permissions granted to the app.
+Settings, About has a button that checks for a newer release. On Windows the app downloads only the program files that changed, checks each against the SHA-256 the release lists, replaces them and restarts. Models, settings and history are not touched. On macOS the button opens the release page; the app is replaced as a whole there.
 
 ## Platforms
 
