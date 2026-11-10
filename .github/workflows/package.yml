@@ -134,8 +134,25 @@ jobs:
           "$RUNNER_TEMP/dmgbuild/bin/dmgbuild" -s src-tauri/dmg/settings.py \
             -D app=src-tauri/target/release/bundle/macos/OpenTypeless.app \
             OpenTypeless OpenTypeless-macos-arm64.dmg
+          # The app build removes the keychain it signed with, so the certificate is
+          # imported again for the image, into a keychain that is deleted right after.
           if [ "$APPLE_SIGNING_IDENTITY" != "-" ]; then
-            codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" OpenTypeless-macos-arm64.dmg
+            KEYCHAIN="$RUNNER_TEMP/disk-image.keychain-db"
+            KEYCHAIN_PASSWORD=$(uuidgen)
+            echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+            security set-keychain-settings -lut 3600 "$KEYCHAIN"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+            security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" \
+              -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
+            rm "$RUNNER_TEMP/certificate.p12"
+            security set-key-partition-list -S apple-tool:,apple: -s \
+              -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+            security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+            codesign --force --timestamp --keychain "$KEYCHAIN" \
+              --sign "$APPLE_SIGNING_IDENTITY" OpenTypeless-macos-arm64.dmg
+            security list-keychains -d user -s login.keychain-db
+            security delete-keychain "$KEYCHAIN"
           fi
 
       - name: Check the app and notarize the disk image
