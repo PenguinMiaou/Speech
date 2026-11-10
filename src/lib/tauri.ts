@@ -803,3 +803,22 @@ export interface TokenUsageSummary {
 export async function tokenUsageSummary(): Promise<TokenUsageSummary> {
   return invoke('token_usage_summary')
 }
+
+export interface Snippet {
+  id: number
+  phrase: string
+  text: string
+}
+
+export async function listSnippets(): Promise<Snippet[]> {
+  return invoke('list_snippets')
+}
+
+/** Saves a phrase that, said by itself, enters `text` as written. */
+export async function addSnippet(phrase: string, text: string): Promise<void> {
+  return invoke('add_snippet', { phrase, text })
+}
+
+export async function removeSnippet(id: number): Promise<void> {
+  return invoke('remove_snippet', { id })
+}

@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "스니펫",
+    "hint": "문구만 말하면 저장한 글이 그대로 입력됩니다. 다듬기 모델로 보내지 않습니다",
+    "phrase": "말할 문구(예: “내 이메일”)",
+    "text": "입력할 글",
+    "add": "추가",
+    "remove": "삭제",
+    "duplicate": "이미 저장된 문구입니다",
+    "failed": "저장하지 못했습니다"
   }
 }

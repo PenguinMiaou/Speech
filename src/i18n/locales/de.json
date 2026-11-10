@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "Bausteine",
+    "hint": "Sagen Sie nur die Phrase, und ihr Text wird unverändert eingegeben, ohne das Überarbeitungsmodell",
+    "phrase": "Gesprochene Phrase, etwa „meine E-Mail“",
+    "text": "Einzugebender Text",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "duplicate": "Diese Phrase ist schon gespeichert",
+    "failed": "Speichern fehlgeschlagen"
   }
 }

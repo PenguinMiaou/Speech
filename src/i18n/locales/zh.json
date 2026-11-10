@@ -744,5 +744,15 @@
     "errorEngine": "模型无法在这台机器上运行。",
     "errorUnknown": "安装失败。",
     "errorSave": "设置保存失败，请重试。"
+  },
+  "snippets": {
+    "title": "片段",
+    "hint": "单独说出短语，就原样输入对应的文字，不经过润色模型",
+    "phrase": "说的短语，例如“我的邮箱”",
+    "text": "要输入的文字",
+    "add": "添加",
+    "remove": "删除",
+    "duplicate": "这个短语已经有了",
+    "failed": "没有保存成功"
   }
 }

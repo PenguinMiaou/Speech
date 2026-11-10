@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "Заготовки",
+    "hint": "Произнесите только фразу, и её текст будет введён как есть, без модели обработки",
+    "phrase": "Фраза, например «моя почта»",
+    "text": "Вводимый текст",
+    "add": "Добавить",
+    "remove": "Удалить",
+    "duplicate": "Эта фраза уже сохранена",
+    "failed": "Не удалось сохранить"
   }
 }

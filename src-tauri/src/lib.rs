@@ -17,6 +17,7 @@ pub mod readback;
 pub mod recent;
 pub mod recording_deadline;
 pub mod selection;
+pub mod snippets;
 pub mod storage;
 pub mod stt;
 pub mod stt_finalize;
@@ -1187,6 +1188,9 @@ pub fn run() {
             commands::dictionary::add_dictionary_entry,
             commands::dictionary::update_dictionary_entry,
             commands::dictionary::remove_dictionary_entry,
+            commands::dictionary::list_snippets,
+            commands::dictionary::add_snippet,
+            commands::dictionary::remove_snippet,
             commands::dictionary::get_correction_rules,
             commands::dictionary::add_correction_rule,
             commands::dictionary::update_correction_rule,

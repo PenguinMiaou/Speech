@@ -1919,6 +1919,11 @@ impl DictionaryStore {
                 word TEXT NOT NULL,
                 pronunciation TEXT
             );
+            CREATE TABLE IF NOT EXISTS snippets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phrase TEXT NOT NULL,
+                text TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS correction_rules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pattern TEXT NOT NULL,
@@ -2089,6 +2094,56 @@ impl DictionaryStore {
             rusqlite::params![id],
         )?;
         Ok(())
+    }
+
+    /// Saves a phrase and the text that saying it enters. One phrase has one text.
+    pub async fn add_snippet(&self, phrase: &str, text: &str) -> Result<()> {
+        let phrase = validate_dictionary_text(phrase, 60, "snippet_phrase")?;
+        if text.trim().is_empty() || text.chars().count() > 4000 {
+            anyhow::bail!("snippet_text");
+        }
+        let key = crate::snippets::normalized(&phrase);
+        if key.is_empty() {
+            anyhow::bail!("snippet_phrase");
+        }
+        if self
+            .snippets()
+            .await
+            .iter()
+            .any(|saved| crate::snippets::normalized(&saved.phrase) == key)
+        {
+            anyhow::bail!("snippet_duplicate");
+        }
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        conn.execute(
+            "INSERT INTO snippets (phrase, text) VALUES (?1, ?2)",
+            rusqlite::params![phrase, text.trim()],
+        )?;
+        Ok(())
+    }
+
+    pub async fn remove_snippet(&self, id: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        conn.execute("DELETE FROM snippets WHERE id = ?1", rusqlite::params![id])?;
+        Ok(())
+    }
+
+    pub async fn snippets(&self) -> Vec<crate::snippets::Snippet> {
+        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
+        let Ok(mut stmt) = conn.prepare("SELECT id, phrase, text FROM snippets ORDER BY id ASC")
+        else {
+            return Vec::new();
+        };
+        let Ok(rows) = stmt.query_map([], |row| {
+            Ok(crate::snippets::Snippet {
+                id: row.get(0)?,
+                phrase: row.get(1)?,
+                text: row.get(2)?,
+            })
+        }) else {
+            return Vec::new();
+        };
+        rows.flatten().collect()
     }
 
     pub async fn set_correction_enabled(&self, id: i64, enabled: bool) -> Result<()> {
@@ -4072,5 +4127,30 @@ mod tests {
         assert_eq!(updated[0].pattern, "open type less");
         assert_eq!(updated[0].replacement, "OpenTypeless");
         assert!(!updated[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn snippets_are_saved_listed_and_removed() {
+        let path = std::env::temp_dir().join(format!("ot-snippets-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = DictionaryStore::new(path.clone()).unwrap();
+
+        store
+            .add_snippet(" 我的邮箱 ", "someone@example.com")
+            .await
+            .unwrap();
+        let saved = store.snippets().await;
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].phrase, "我的邮箱");
+        assert_eq!(saved[0].text, "someone@example.com");
+
+        // The same phrase again would make two answers to one thing said.
+        assert!(store.add_snippet("我的邮箱。", "other").await.is_err());
+        assert!(store.add_snippet("", "text").await.is_err());
+        assert!(store.add_snippet("phrase", "  ").await.is_err());
+
+        store.remove_snippet(saved[0].id).await.unwrap();
+        assert!(store.snippets().await.is_empty());
+        let _ = std::fs::remove_file(&path);
     }
 }

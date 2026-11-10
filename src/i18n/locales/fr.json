@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "Extraits",
+    "hint": "Dites la phrase seule et son texte est saisi tel quel, sans passer par le modèle de mise en forme",
+    "phrase": "Phrase à dire, par exemple « mon e-mail »",
+    "text": "Texte à saisir",
+    "add": "Ajouter",
+    "remove": "Supprimer",
+    "duplicate": "Cette phrase est déjà enregistrée",
+    "failed": "Enregistrement impossible"
   }
 }

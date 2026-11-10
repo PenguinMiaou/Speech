@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "スニペット",
+    "hint": "フレーズだけを言うと、登録した文章がそのまま入力されます。整形モデルには送られません",
+    "phrase": "言うフレーズ（例：「私のメール」）",
+    "text": "入力する文章",
+    "add": "追加",
+    "remove": "削除",
+    "duplicate": "このフレーズは登録済みです",
+    "failed": "保存できませんでした"
   }
 }

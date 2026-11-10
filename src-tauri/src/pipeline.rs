@@ -2415,6 +2415,45 @@ impl PipelineHandle {
                 message,
             );
         };
+        // A saved phrase said by itself enters its text as written; nothing goes to the model.
+        if voice_mode == crate::voice_intent::VoiceMode::Dictate
+            && !selected_text_has_content(selected_text.as_deref())
+        {
+            let snippets = self
+                .app_handle
+                .state::<storage::DictionaryStore>()
+                .snippets()
+                .await;
+            if let Some(text) = crate::snippets::matching(raw_text, &snippets) {
+                let output_result = self
+                    .output_text(
+                        text,
+                        &app_ctx.profile.app_label,
+                        &app_ctx.target_guard,
+                        config,
+                    )
+                    .await;
+                if let Err(error) = &output_result {
+                    tracing::error!("Output failed: {}", error);
+                    let _ = self
+                        .app_handle
+                        .emit("pipeline:error", output_user_error(error));
+                }
+                let output_metadata = history_output_metadata_for_output_result(
+                    output_result.as_ref(),
+                    output::InsertionStrategy::from_config_value(&config.insertion_strategy)
+                        == output::InsertionStrategy::ClipboardCopyOnly,
+                );
+                return PolishTextOutcome {
+                    final_text: text.to_string(),
+                    llm_elapsed: std::time::Duration::ZERO,
+                    history_output_status: output_metadata.status,
+                    history_output_error: output_metadata.error,
+                    voice_execution: None,
+                };
+            }
+        }
+
         let llm_api_key = match resolve_llm_config_secret(config, &SystemCredentialVault) {
             Ok(secret) => secret,
             Err(error) => {

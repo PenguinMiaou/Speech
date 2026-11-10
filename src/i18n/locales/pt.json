@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "Trechos",
+    "hint": "Diga só a frase e o texto dela é inserido como está, sem passar pelo modelo de polimento",
+    "phrase": "Frase a dizer, como “meu e-mail”",
+    "text": "Texto a inserir",
+    "add": "Adicionar",
+    "remove": "Remover",
+    "duplicate": "Esta frase já está salva",
+    "failed": "Não foi possível salvar"
   }
 }

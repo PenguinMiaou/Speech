@@ -257,3 +257,30 @@ mod tests {
         assert!(validate_correction_inputs("拓肯".to_string(), too_long).is_err());
     }
 }
+
+#[tauri::command]
+pub async fn list_snippets(
+    state: tauri::State<'_, storage::DictionaryStore>,
+) -> Result<Vec<crate::snippets::Snippet>, String> {
+    Ok(state.snippets().await)
+}
+
+#[tauri::command]
+pub async fn add_snippet(
+    state: tauri::State<'_, storage::DictionaryStore>,
+    phrase: String,
+    text: String,
+) -> Result<(), String> {
+    state
+        .add_snippet(&phrase, &text)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn remove_snippet(
+    state: tauri::State<'_, storage::DictionaryStore>,
+    id: i64,
+) -> Result<(), String> {
+    state.remove_snippet(id).await.map_err(|e| e.to_string())
+}

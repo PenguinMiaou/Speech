@@ -744,5 +744,15 @@
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
     "errorSave": "Could not save the setting. Please try again."
+  },
+  "snippets": {
+    "title": "Snippets",
+    "hint": "Say a phrase by itself and its text is entered exactly as written, without going to the polish model",
+    "phrase": "Phrase to say, such as “my email”",
+    "text": "Text to enter",
+    "add": "Add",
+    "remove": "Remove",
+    "duplicate": "This phrase is already saved",
+    "failed": "Could not save"
   }
 }

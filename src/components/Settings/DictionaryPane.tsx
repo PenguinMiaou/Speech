@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutHabits } from './LayoutHabits'
+import { SnippetsSection } from './SnippetsSection'
 import { useTranslation } from 'react-i18next'
 import {
   Check,
@@ -80,7 +81,7 @@ export function DictionaryPane() {
   const correctionRules = useAppStore((state) => state.correctionRules)
   const setCorrectionRules = useAppStore((state) => state.setCorrectionRules)
   const { t } = useTranslation()
-  const [activeSection, setActiveSection] = useState<'words' | 'corrections'>('words')
+  const [activeSection, setActiveSection] = useState<'words' | 'corrections' | 'snippets'>('words')
   const [word, setWord] = useState('')
   const [pronunciation, setPronunciation] = useState('')
   const [pattern, setPattern] = useState('')
@@ -352,14 +353,15 @@ export function DictionaryPane() {
         </div>
       </div>
 
-      <div className="max-w-[240px]">
+      <div className="max-w-[340px]">
         <SegmentedControl
           options={[
             { value: 'words', label: t('dictionary.words') },
             { value: 'corrections', label: t('dictionary.corrections') },
+            { value: 'snippets', label: t('snippets.title') },
           ]}
           value={activeSection}
-          onChange={(value) => setActiveSection(value as 'words' | 'corrections')}
+          onChange={(value) => setActiveSection(value as 'words' | 'corrections' | 'snippets')}
         />
       </div>
 
@@ -372,6 +374,7 @@ export function DictionaryPane() {
       )}
 
       {activeSection === 'words' && <LayoutHabits />}
+      {activeSection === 'snippets' && <SnippetsSection />}
 
       {activeSection === 'words' && (
         <>
