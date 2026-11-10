@@ -16,7 +16,7 @@ interface Props {
 export function LlmLogo({ id, fallback: Fallback = Box }: Props) {
   const src = id ? LOGO_URLS[`../../assets/llm-logos/${id}.svg`] : undefined
   return (
-    <span className="inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[6px] border border-border bg-white">
+    <span className="inline-flex h-[22px] w-[22px] flex-shrink-0 items-center justify-center rounded-[8px] border border-border bg-white">
       {src ? (
         <img src={src} alt="" className="h-[15px] w-[15px]" />
       ) : (

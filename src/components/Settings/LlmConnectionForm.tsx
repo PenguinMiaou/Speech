@@ -205,7 +205,7 @@ export function LlmConnectionForm() {
               aria-label={label}
               title={label}
               onClick={() => chooseFormat(value)}
-              className={`flex items-center gap-2 rounded-[10px] border px-2.5 py-1.5 text-[12px] cursor-pointer ${
+              className={`flex items-center gap-2 rounded-[8px] border px-2.5 py-1.5 text-[12px] cursor-pointer ${
                 value === apiFormat
                   ? 'border-accent bg-accent/10 text-text-primary'
                   : 'border-border bg-bg-secondary text-text-secondary'
@@ -239,7 +239,7 @@ export function LlmConnectionForm() {
             type="button"
             onClick={handleTest}
             disabled={!canReachService || testStatus === 'testing'}
-            className="flex items-center gap-1.5 rounded-[10px] border-none bg-accent px-4 py-2.5 text-[13px] text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
           >
             {testStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
             {t('settings.test')}
@@ -288,7 +288,7 @@ export function LlmConnectionForm() {
             onClick={refreshModels}
             disabled={fetching || !canReachService}
             title={t('settings.fetchModels')}
-            className="rounded-[10px] border border-border bg-bg-secondary px-3 py-2.5 text-text-secondary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-text-secondary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
           </button>

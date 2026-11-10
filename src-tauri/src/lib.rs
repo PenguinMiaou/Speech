@@ -10,6 +10,7 @@ pub mod hotkey;
 mod linux_x11;
 pub mod llm;
 pub mod local_stt;
+mod meeting_record;
 pub mod native_hotkey;
 pub mod output;
 pub mod pipeline;
@@ -19,6 +20,7 @@ pub mod recent;
 pub mod recording_deadline;
 pub mod selection;
 pub mod snippets;
+pub mod speakers;
 pub mod storage;
 pub mod stt;
 pub mod stt_finalize;
@@ -836,6 +838,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if let Some(action) = parse_cli_action(&args) {
                 dispatch_cli_action(app, action);
@@ -865,6 +868,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             local_stt::init(&data_dir);
             voice_isolation::init(&data_dir);
+            speakers::init(&data_dir);
             llm::usage::init(&data_dir);
             if let Some(dir) = std::env::current_exe()
                 .ok()
@@ -1190,6 +1194,12 @@ pub fn run() {
             commands::dictionary::update_dictionary_entry,
             commands::dictionary::remove_dictionary_entry,
             commands::local_stt::transcribe_file,
+            commands::local_stt::meeting_record_start,
+            commands::local_stt::meeting_record_level,
+            commands::local_stt::meeting_record_stop,
+            commands::local_stt::speaker_models_status,
+            commands::local_stt::speaker_models_install,
+            commands::local_stt::save_text_file,
             commands::dictionary::list_snippets,
             commands::dictionary::add_snippet,
             commands::dictionary::remove_snippet,

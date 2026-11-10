@@ -51,17 +51,10 @@
     "audio_microphone_switched": "The microphone heard nothing, so dictation now uses {{details}}"
   },
   "home": {
-    "welcome": "Welcome to OpenTypeless",
-    "description": "Use {{hotkey}} to start voice recording. Your speech will be transcribed and optionally polished by AI.",
     "totalRecordings": "Total Recordings",
     "today": "Today",
-    "wordsRemaining": "Words remaining",
-    "wordsReset": "Resets {{date}}",
-    "currentConfig": "Current Configuration",
     "sttProvider": "STT Provider",
-    "llmProvider": "LLM Provider",
     "aiPolish": "AI Polish",
-    "enabled": "Enabled",
     "disabled": "Disabled",
     "outputMode": "Text output",
     "tokens": {
@@ -71,7 +64,9 @@
       "total": "All time"
     },
     "wordsDictated": "Words dictated",
-    "timeSaved": "Saved over typing"
+    "timeSaved": "Saved over typing",
+    "speakWith": "Press {{hotkey}} and speak",
+    "figures": "Your numbers"
   },
   "onboarding": {
     "speakToWrite": "Speak to write — turn your voice into polished text in real time",
@@ -763,7 +758,10 @@
     "errorChecksum": "The file failed verification. Please download it again.",
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
-    "errorSave": "Could not save the setting. Please try again."
+    "errorSave": "Could not save the setting. Please try again.",
+    "errorEngineCpu": "This computer's processor lacks the AVX2 instructions local recognition needs, so local models cannot run here. Use Cloud API instead.",
+    "errorEngineSlow": "The model took too long to load. This computer may be too slow or short of memory. Try again or pick a smaller model.",
+    "errorEngineBlocked": "The recognition program could not be started. Security software may have blocked or removed it. Reinstall the app and try again."
   },
   "snippets": {
     "title": "Snippets",
@@ -775,19 +773,34 @@
     "duplicate": "This phrase is already saved",
     "failed": "Could not save"
   },
-  "fileTranscribe": {
-    "drop": "Drop an audio or video file on this window to turn it into text with the model on this machine",
-    "reading": "Reading the file…",
+  "meeting": {
+    "title": "Meeting transcription",
+    "description": "Record a meeting, or drop in a recording or screen capture. The model on this computer writes it out.",
+    "record": "Start recording",
+    "chooseFile": "Choose a file",
+    "stop": "Stop and transcribe",
+    "discard": "Discard",
+    "speakers": "Tell speakers apart",
+    "speakerLabel": "Speaker",
+    "downloadingSpeakers": "Downloading the speaker models {{percent}}%",
+    "model": "Model",
+    "reading": "Reading…",
+    "findingSpeakers": "Finding who spoke when…",
     "working": "Transcribing, part {{done}} of {{total}}",
     "result": "Transcript",
     "copy": "Copy",
+    "save": "Save as file",
+    "fileName": "Meeting notes.txt",
     "error": {
-      "file_not_audio": "This file holds no audio that can be recognized",
+      "file_not_audio": "This file has no audio that can be recognized",
       "file_unreadable": "The file could not be opened",
-      "file_too_long": "The file is longer than 3 hours",
-      "local_model_not_installed": "No local speech model is installed yet",
-      "busy": "The previous file is still being worked on",
-      "failed": "The file could not be transcribed"
+      "file_too_long": "Longer than 3 hours, which is too long",
+      "local_model_not_installed": "No local speech model is installed",
+      "speaker_models_not_installed": "The speaker models are not downloaded yet",
+      "busy": "The previous recording is still being transcribed",
+      "failed": "Transcription did not succeed",
+      "speakerDownload": "The speaker models could not be downloaded",
+      "microphone": "The microphone could not be opened"
     }
   }
 }

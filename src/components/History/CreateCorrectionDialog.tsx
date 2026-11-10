@@ -58,7 +58,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
         role="dialog"
         aria-modal="true"
         aria-label={t('history.createCorrection')}
-        className="relative z-10 w-full max-w-[420px] rounded-[10px] border border-border bg-bg-primary shadow-float"
+        className="relative z-10 w-full max-w-[420px] rounded-[8px] border border-border bg-bg-primary shadow-float"
       >
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-[14px] font-medium text-text-primary">

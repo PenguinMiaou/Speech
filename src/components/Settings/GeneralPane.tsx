@@ -171,7 +171,7 @@ export function GeneralPane() {
                 aria-label={t('settings.tryAsk')}
                 title={t('settings.tryAsk')}
                 onClick={handleOpenAsk}
-                className="grid h-7 w-7 place-items-center rounded-[6px] border border-transparent bg-bg-secondary text-text-tertiary hover:border-border hover:text-text-primary"
+                className="grid h-7 w-7 place-items-center rounded-[8px] border border-transparent bg-bg-secondary text-text-tertiary hover:border-border hover:text-text-primary"
               >
                 <MessageCircle size={13} />
               </button>
@@ -248,7 +248,7 @@ export function GeneralPane() {
           type="button"
           aria-expanded={advancedOpen}
           onClick={() => setAdvancedOpen((open) => !open)}
-          className="flex w-full items-center justify-between rounded-[10px] border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
+          className="flex w-full items-center justify-between rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
         >
           <span>{t('settings.advancedGeneral')}</span>
           <ChevronDown
@@ -318,9 +318,7 @@ export function GeneralPane() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider mb-2.5">
-        {title}
-      </h3>
+      <h3 className="section-label mb-2.5">{title}</h3>
       {children}
     </div>
   )

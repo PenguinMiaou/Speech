@@ -116,14 +116,14 @@ export function DirtyBar() {
           <button
             onClick={handleReset}
             disabled={saving}
-            className="px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer rounded-[10px] hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer rounded-[8px] hover:bg-bg-tertiary transition-colors disabled:opacity-50"
           >
             {t('common.reset')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-white bg-accent rounded-[10px] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-70"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-white bg-accent rounded-[8px] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-70"
           >
             {saving && (
               <motion.div

@@ -120,7 +120,7 @@ export function AccessibilityBanner() {
               }}
               aria-label={t('common.close')}
               title={t('common.close')}
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
             >
               <X size={13} />
             </button>

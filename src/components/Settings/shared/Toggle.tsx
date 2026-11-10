@@ -20,7 +20,7 @@ export function Toggle({ checked, onChange, label, disabled = false }: Props) {
         onClick={() => onChange(!checked)}
         className={`relative h-[26px] w-[44px] shrink-0 rounded-full border-none transition-colors duration-200 ${
           disabled ? 'cursor-not-allowed' : 'cursor-pointer'
-        } ${checked ? 'bg-text-secondary' : 'bg-bg-tertiary'}`}
+        } ${checked ? 'bg-accent' : 'bg-bg-tertiary'}`}
       >
         <motion.div
           className="absolute top-[2px] w-[22px] h-[22px] rounded-full bg-white shadow-sm"

@@ -338,7 +338,7 @@ export function SttPane() {
       ) : isAppleSpeech ? (
         <FormField label={t('providers.stt.appleSpeech')}>
           <div className="flex gap-2">
-            <div className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary">
+            <div className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary">
               <p
                 className={`flex items-center gap-1.5 ${
                   appleSpeechReady
@@ -367,7 +367,7 @@ export function SttPane() {
             <button
               onClick={handleTest}
               disabled={!canTest || sttTestStatus === 'testing'}
-              className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-accent text-white rounded-[8px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
             >
               {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
               {t('settings.test')}
@@ -428,7 +428,7 @@ export function SttPane() {
                     setTestErrorMessage(null)
                   }}
                   placeholder={t('settings.customSttBaseUrlPlaceholder')}
-                  className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+                  className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
                 />
               </FormField>
 
@@ -442,7 +442,7 @@ export function SttPane() {
                     setTestErrorMessage(null)
                   }}
                   placeholder={t('settings.customSttModelPlaceholder')}
-                  className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+                  className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
                 />
                 <p className="text-[11px] text-text-tertiary mt-1.5">
                   {t('settings.customSttSetupHint')}
@@ -538,12 +538,12 @@ export function SttPane() {
                 }}
                 onBlur={() => persistSttCredential(apiKeyDraft, 0)}
                 placeholder={t('settings.enterApiKey')}
-                className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+                className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
               />
               <button
                 onClick={handleTest}
                 disabled={!canTest || sttTestStatus === 'testing'}
-                className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-accent text-white rounded-[8px] text-[13px] border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
               >
                 {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
                 {t('settings.test')}
@@ -624,7 +624,7 @@ export function SttPane() {
                 >
                   {t('recordingLimits.customDuration')}
                 </label>
-                <div className="flex items-center rounded-[10px] border border-border bg-bg-secondary transition-colors focus-within:border-border-focus">
+                <div className="flex items-center rounded-[8px] border border-border bg-bg-secondary transition-colors focus-within:border-border-focus">
                   <input
                     id="custom-recording-duration"
                     aria-label={t('recordingLimits.customDuration')}

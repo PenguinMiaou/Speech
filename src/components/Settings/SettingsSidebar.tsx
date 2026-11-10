@@ -37,8 +37,6 @@ export function SettingsSidebar({ activePane, onSelect }: Props) {
           <motion.button
             key={pane.id}
             onClick={() => onSelect(pane.id)}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scaleX: 1.05, scaleY: 0.95 }}
             transition={spring.jellyGentle}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-[8px] text-[13px] border-none cursor-pointer transition-colors text-left relative ${
               isActive

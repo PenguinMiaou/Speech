@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { addSnippet, listSnippets, removeSnippet, type Snippet } from '../../lib/tauri'
 
 const FIELD =
-  'w-full rounded-[10px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus'
+  'w-full rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus'
 
 /** Phrases that, said by themselves, enter a saved text exactly as written. */
 export function SnippetsSection() {
@@ -71,14 +71,14 @@ export function SnippetsSection() {
           type="button"
           onClick={add}
           disabled={!phrase.trim() || !text.trim()}
-          className="rounded-[10px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t('snippets.add')}
         </button>
         {error && <p className="text-[12px] text-error">{t(error)}</p>}
       </div>
       {snippets.length > 0 && (
-        <ul className="divide-y divide-border rounded-[10px] border border-border">
+        <ul className="divide-y divide-border rounded-[8px] border border-border">
           {snippets.map((snippet) => (
             <li key={snippet.id} className="flex items-start gap-3 px-3 py-2 text-[13px]">
               <span className="w-[30%] shrink-0 break-words font-medium text-text-primary">
@@ -92,7 +92,7 @@ export function SnippetsSection() {
                 onClick={() => remove(snippet.id)}
                 aria-label={t('snippets.remove')}
                 title={t('snippets.remove')}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
               >
                 <X size={13} />
               </button>

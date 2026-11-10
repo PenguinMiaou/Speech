@@ -38,12 +38,12 @@ export function TokenUsageCard() {
   ] as const
 
   return (
-    <div className="rounded-[18px] p-5 jelly-card">
-      <h3 className="mb-3 text-[13px] font-medium">{t('home.tokens.title')}</h3>
+    <div className="surface px-5 py-4">
+      <h3 className="mb-3 text-[13px] font-medium text-text-secondary">{t('home.tokens.title')}</h3>
       <div className="grid grid-cols-3 gap-3">
         {spans.map(([label, span]) => (
           <div key={label}>
-            <p className="mb-1 text-[11px] text-text-tertiary">{t(label)}</p>
+            <p className="mb-1 text-[12px] text-text-tertiary">{t(label)}</p>
             <p
               className="text-[18px] font-semibold tabular-nums"
               title={`${span.input.toLocaleString('en-US')} + ${span.output.toLocaleString('en-US')}`}

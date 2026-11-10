@@ -150,7 +150,7 @@ export function TryItStep() {
           <button
             type="button"
             onClick={() => show(next)}
-            className="rounded-[10px] border border-border bg-bg-secondary px-3 py-1.5 text-[12px] text-text-primary transition-colors hover:bg-bg-tertiary"
+            className="rounded-[8px] border border-border bg-bg-secondary px-3 py-1.5 text-[12px] text-text-primary transition-colors hover:bg-bg-tertiary"
           >
             {t('onboarding.tryIt.next')}
           </button>

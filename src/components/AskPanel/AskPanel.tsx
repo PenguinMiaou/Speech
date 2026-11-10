@@ -344,7 +344,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
         aria-label={t('ask.copyAnswer')}
         title={t('ask.copyAnswer')}
         onClick={copyAnswer}
-        className="flex h-7 w-7 items-center justify-center rounded-[6px] border border-border bg-bg-secondary text-text-tertiary transition-colors hover:border-border-focus hover:text-accent cursor-pointer"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-border bg-bg-secondary text-text-tertiary transition-colors hover:border-border-focus hover:text-accent cursor-pointer"
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
@@ -413,7 +413,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
         <section
           data-testid="ask-floating-note"
           onMouseDown={startStandaloneDrag}
-          className="flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-[18px] border border-border/80 bg-bg-primary/95 shadow-[0_4px_14px_rgba(15,23,42,0.08)] backdrop-blur"
+          className="flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-[12px] border border-border/80 bg-bg-primary/95 shadow-[0_4px_14px_rgba(15,23,42,0.08)] backdrop-blur"
         >
           <div className="flex min-h-0 flex-col gap-2.5 p-3">
             {!resultText && (

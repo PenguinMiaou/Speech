@@ -232,7 +232,7 @@ export function HotkeyRecorder({
             onClick={cancelRecording}
             aria-label={t('common.cancel')}
             title={t('common.cancel')}
-            className="grid h-9 w-8 flex-none place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+            className="grid h-9 w-8 flex-none place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
           >
             <X size={14} />
           </button>
@@ -355,7 +355,7 @@ export function ShortcutBindingList({
           title={t('settings.shortcutAdd')}
           disabled={disabled || atLimit || adding}
           onClick={() => setAdding(true)}
-          className="grid h-7 w-7 place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
+          className="grid h-7 w-7 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
         >
           <Plus size={14} />
         </button>
@@ -393,7 +393,7 @@ export function ShortcutBindingList({
                   aria-expanded={menuIndex === index}
                   onClick={() => setMenuIndex((current) => (current === index ? null : index))}
                   disabled={disabled}
-                  className="grid h-9 w-8 place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
+                  className="grid h-9 w-8 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
                 >
                   <MoreHorizontal size={14} />
                 </button>

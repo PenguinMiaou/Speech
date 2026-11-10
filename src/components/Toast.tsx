@@ -49,7 +49,7 @@ export function ToastContainer() {
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 40, scale: 0.95 }}
               transition={spring.jellyGentle}
-              className="pointer-events-auto flex items-center gap-2 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] shadow-lg text-[13px] text-text-primary max-w-[300px]"
+              className="pointer-events-auto flex items-center gap-2 px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] shadow-lg text-[13px] text-text-primary max-w-[300px]"
               role="alert"
             >
               <Icon size={14} className={`flex-shrink-0 ${colors[t.type]}`} />

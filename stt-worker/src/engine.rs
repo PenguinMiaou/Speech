@@ -66,6 +66,21 @@ impl Engine for RealEngine {
         Ok(())
     }
 
+    fn diarize(
+        &mut self,
+        segmentation_model: &str,
+        embedding_model: &str,
+        pcm: &[f32],
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
+        let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
+        crate::diarize::diarize(segmentation_model, embedding_model, pcm, threads).map_err(
+            |message| EngineError {
+                code: "diarize_failed".into(),
+                message,
+            },
+        )
+    }
+
     fn isolate_end(&mut self) -> Result<Vec<f32>, EngineError> {
         let (opened, isolator) = self.isolating.take().ok_or_else(not_isolating)?;
         let (isolated, model) = isolator.finish();

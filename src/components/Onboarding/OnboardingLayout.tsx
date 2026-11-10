@@ -46,7 +46,7 @@ export function OnboardingLayout({
       <div className="flex items-center justify-end px-3 pt-3 pb-0" data-tauri-drag-region>
         <button
           onClick={handleClose}
-          className="p-1.5 rounded-[6px] hover:bg-bg-tertiary transition-colors bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary"
+          className="p-1.5 rounded-[8px] hover:bg-bg-tertiary transition-colors bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary"
           aria-label={t('onboarding.layout.close')}
         >
           <X size={14} />

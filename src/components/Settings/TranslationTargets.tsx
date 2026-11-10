@@ -97,7 +97,7 @@ export function TranslationTargets({ value, onChange }: TranslationTargetsProps)
             aria-expanded={managing}
             aria-label={t('settings.manageTranslationTargets')}
             title={t('settings.manageTranslationTargets')}
-            className="flex h-8 flex-none items-center gap-1 rounded-[6px] border border-border bg-transparent px-2 text-[11px] text-text-secondary hover:border-border-focus hover:text-text-primary"
+            className="flex h-8 flex-none items-center gap-1 rounded-[8px] border border-border bg-transparent px-2 text-[11px] text-text-secondary hover:border-border-focus hover:text-text-primary"
           >
             {t('settings.manageTranslationTargets')}
             <ChevronDown
@@ -112,7 +112,7 @@ export function TranslationTargets({ value, onChange }: TranslationTargetsProps)
           disabled={value.targets.length >= MAX_TRANSLATION_TARGETS}
           aria-label={t('settings.addTranslationTarget')}
           title={t('settings.addTranslationTarget')}
-          className="flex h-8 w-8 flex-none items-center justify-center rounded-[6px] border border-border bg-bg-secondary text-text-secondary transition-colors hover:border-border-focus hover:text-text-primary disabled:cursor-default disabled:opacity-40"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-border bg-bg-secondary text-text-secondary transition-colors hover:border-border-focus hover:text-text-primary disabled:cursor-default disabled:opacity-40"
         >
           <Plus size={13} />
         </button>
@@ -146,7 +146,7 @@ export function TranslationTargets({ value, onChange }: TranslationTargetsProps)
                 disabled={index === 0}
                 aria-label={`${t('settings.moveTranslationTargetUp')} ${code}`}
                 title={t('settings.moveTranslationTargetUp')}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary disabled:cursor-default disabled:opacity-30"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary disabled:cursor-default disabled:opacity-30"
               >
                 <ArrowUp size={13} />
               </button>
@@ -156,7 +156,7 @@ export function TranslationTargets({ value, onChange }: TranslationTargetsProps)
                 disabled={index === value.targets.length - 1}
                 aria-label={`${t('settings.moveTranslationTargetDown')} ${code}`}
                 title={t('settings.moveTranslationTargetDown')}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary disabled:cursor-default disabled:opacity-30"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary disabled:cursor-default disabled:opacity-30"
               >
                 <ArrowDown size={13} />
               </button>
@@ -165,7 +165,7 @@ export function TranslationTargets({ value, onChange }: TranslationTargetsProps)
                 onClick={() => removeTarget(index)}
                 aria-label={`${t('settings.removeTranslationTarget')} ${code}`}
                 title={t('settings.removeTranslationTarget')}
-                className="flex h-7 w-7 flex-none items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-red-500/10 hover:text-red-500"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px] border-none bg-transparent text-text-tertiary transition-colors hover:bg-red-500/10 hover:text-red-500"
               >
                 <Trash2 size={13} />
               </button>

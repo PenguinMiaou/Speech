@@ -65,15 +65,15 @@ export function Settings() {
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Title bar */}
-          <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-border bg-bg-primary/50">
-            <h2 className="text-[15px] font-medium">{t(paneTitleKeys[activePane])}</h2>
+          <div className="page-header">
+            <h2 className="page-title">{t(paneTitleKeys[activePane])}</h2>
           </div>
 
           {/* Pane content */}
-          <div ref={contentRef} className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+          <div ref={contentRef} className="flex-1 overflow-y-auto overflow-x-hidden px-8 pb-8">
             <motion.div
               key={activePane}
-              className="w-full"
+              className="w-full max-w-[720px]"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.1, ease: 'easeOut' }}

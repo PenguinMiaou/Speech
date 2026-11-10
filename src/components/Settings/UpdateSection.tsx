@@ -14,7 +14,7 @@ import { autoCheckEnabled, setAutoCheckEnabled } from '../../lib/update'
 import { Toggle } from './shared/Toggle'
 
 const BUTTON =
-  'rounded-[10px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50'
+  'rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Asks for a newer release and installs it: only changed files where that is possible. */
 export function UpdateSection() {

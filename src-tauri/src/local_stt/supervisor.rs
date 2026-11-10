@@ -134,6 +134,45 @@ fn spawn_worker(command: &WorkerCommand) -> Result<Running, LocalSttError> {
 /// worker stops draining the pipe, and a blocked write must not outlive the timeout.
 const SAMPLE_RATE_HZ: f64 = 16_000.0;
 
+/// How the worker ended, in the form [`failure_code`] reads: Windows reports a crash as an
+/// exit code such as 0xc000001d, other systems as a signal.
+fn exit_note(status: std::process::ExitStatus) -> String {
+    match status.code() {
+        Some(code) if !(0..=255).contains(&code) => format!("exit code: {:#010x}", code as u32),
+        _ => status.to_string(),
+    }
+}
+
+/// The error for a worker that stopped answering, with its exit status when it has ended.
+fn stopped(running: &mut Running, what: &str) -> LocalSttError {
+    let deadline = Instant::now() + Duration::from_millis(500);
+    loop {
+        match running.child.try_wait() {
+            Ok(Some(status)) => {
+                return LocalSttError::WorkerCrashed(format!("{what} ({})", exit_note(status)))
+            }
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            _ => return LocalSttError::WorkerCrashed(what.to_string()),
+        }
+    }
+}
+
+/// Names why a model could not be run, for the message the user sees.
+pub fn failure_code(error: &LocalSttError) -> &'static str {
+    match error {
+        // An instruction the processor does not have: STATUS_ILLEGAL_INSTRUCTION or SIGILL.
+        LocalSttError::WorkerCrashed(detail)
+            if detail.contains("0xc000001d") || detail.contains("signal: 4") =>
+        {
+            "engine_cpu"
+        }
+        LocalSttError::Timeout => "engine_slow",
+        // The worker program could not be started at all.
+        LocalSttError::Io(_) => "engine_blocked",
+        _ => "engine",
+    }
+}
+
 fn exchange(
     running: &mut Running,
     payload: Vec<u8>,
@@ -160,11 +199,9 @@ fn exchange(
     let remaining = deadline.saturating_duration_since(Instant::now());
     let response = match running.responses.recv_timeout(remaining) {
         Ok(Ok(response)) => response,
-        Ok(Err(error)) => return Err(LocalSttError::WorkerCrashed(error.to_string())),
+        Ok(Err(error)) => return Err(stopped(running, &error.to_string())),
         Err(RecvTimeoutError::Timeout) => return Err(LocalSttError::Timeout),
-        Err(RecvTimeoutError::Disconnected) => {
-            return Err(LocalSttError::WorkerCrashed("worker exited".into()))
-        }
+        Err(RecvTimeoutError::Disconnected) => return Err(stopped(running, "worker exited")),
     };
     running.last_used = Instant::now();
     Ok(response)
@@ -261,6 +298,60 @@ impl WorkerSupervisor {
         })?;
         self.isolation_exchange(&mut self.lock(), payload)
             .map(|_| ())
+    }
+
+    /// Tells who spoke when in a whole recording. The audio goes to the worker as a file
+    /// in `scratch_dir`, removed again before this returns.
+    pub fn diarize(
+        &self,
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let pcm_path = scratch_dir.join(format!(
+            "speakers-{}-{}.pcm",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let mut raw = Vec::with_capacity(pcm.len() * 4);
+        for sample in pcm {
+            raw.extend_from_slice(&sample.to_le_bytes());
+        }
+        std::fs::write(&pcm_path, raw).map_err(|error| LocalSttError::Io(error.to_string()))?;
+        let text = |path: &Path| path.to_string_lossy().into_owned();
+        let payload = encode(&Request::Diarize {
+            segmentation_model: text(segmentation_model),
+            embedding_model: text(embedding_model),
+            pcm_path: text(&pcm_path),
+        });
+        let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
+        let answer = payload.and_then(|payload| {
+            let mut state = self.lock();
+            if state.is_none() {
+                *state = Some(spawn_worker(&self.command)?);
+            }
+            let running = state.as_mut().expect("worker was just started");
+            match exchange(running, payload, self.request_timeout + audio_time) {
+                Ok(Response::Speakers { turns }) => Ok(turns),
+                Ok(Response::Error { code, message }) => {
+                    Err(LocalSttError::Engine { code, message })
+                }
+                Ok(other) => {
+                    *state = None;
+                    Err(LocalSttError::WorkerCrashed(format!(
+                        "unexpected reply {other:?}"
+                    )))
+                }
+                Err(error) => {
+                    *state = None;
+                    Err(error)
+                }
+            }
+        });
+        let _ = std::fs::remove_file(&pcm_path);
+        answer
     }
 
     /// Sends the next piece of the recording.
@@ -414,6 +505,10 @@ while True:
         else:
             reply({'Ready': {'backend': 'fake', 'load_ms': 0}})
         continue
+    if 'Diarize' in request:
+        samples = os.path.getsize(request['Diarize']['pcm_path']) // 4
+        reply({'Speakers': {'turns': [{'start_ms': 0, 'end_ms': samples, 'speaker': 1}]}})
+        continue
     if request == 'IsolateEnd':
         body = b''.join(struct.pack('<f', sample / 2) for sample in fed)
         reply({'Isolated': {'pcm_bytes': len(body)}})
@@ -498,6 +593,59 @@ while True:
     }
 
     #[test]
+    fn a_recording_comes_back_as_speaker_turns_and_its_copy_on_disk_is_removed() {
+        let dir = unique_path("diarize");
+        std::fs::create_dir_all(&dir).unwrap();
+        let supervisor = supervisor("ok", "", 5_000, 60_000);
+        let turns = supervisor
+            .diarize(
+                Path::new("seg.onnx"),
+                Path::new("emb.onnx"),
+                &[0.0; 7],
+                &dir,
+            )
+            .unwrap();
+        assert_eq!(turns.len(), 1);
+        assert_eq!((turns[0].end_ms, turns[0].speaker), (7, 1));
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".pcm"))
+            .collect();
+        assert!(left.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failure_is_named_by_its_cause() {
+        let crashed = |detail: &str| LocalSttError::WorkerCrashed(detail.to_string());
+        assert_eq!(
+            failure_code(&crashed("worker exited (exit code: 0xc000001d)")),
+            "engine_cpu"
+        );
+        assert_eq!(
+            failure_code(&crashed("worker exited (signal: 4 (SIGILL))")),
+            "engine_cpu"
+        );
+        assert_eq!(
+            failure_code(&crashed("worker exited (exit code: 0xc0000005)")),
+            "engine"
+        );
+        assert_eq!(failure_code(&LocalSttError::Timeout), "engine_slow");
+        assert_eq!(
+            failure_code(&LocalSttError::Io("program not found".to_string())),
+            "engine_blocked"
+        );
+        assert_eq!(
+            failure_code(&LocalSttError::Engine {
+                code: "load_failed".into(),
+                message: "bad file".into()
+            }),
+            "engine"
+        );
+    }
+
+    #[test]
     fn missing_model_returns_model_missing() {
         let worker = supervisor("ok", "", 5_000, 60_000);
         let error = worker
@@ -546,7 +694,10 @@ while True:
         let first = worker
             .transcribe(&model, &[0.0; 8], vec![], None)
             .unwrap_err();
-        assert!(matches!(first, LocalSttError::WorkerCrashed(_)));
+        assert!(
+            matches!(&first, LocalSttError::WorkerCrashed(detail) if detail.contains("exit") && detail.contains('3')),
+            "{first:?}"
+        );
         assert!(!worker.is_running());
         assert_eq!(
             worker.transcribe(&model, &[0.0; 8], vec![], None).unwrap(),

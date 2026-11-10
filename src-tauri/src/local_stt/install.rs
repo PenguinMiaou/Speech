@@ -32,6 +32,9 @@ pub struct Progress {
     pub total: u64,
     pub bytes_per_sec: u64,
     pub error_code: Option<String>,
+    /// What exactly went wrong, as the program reported it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_detail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,6 +152,7 @@ async fn download<F: FnMut(Progress)>(
                 total: job.size_bytes,
                 bytes_per_sec: ((written - reported_bytes) as f64 / elapsed.as_secs_f64()) as u64,
                 error_code: None,
+                error_detail: None,
             });
             reported_at = Instant::now();
             reported_bytes = written;
@@ -190,6 +194,7 @@ pub async fn download_and_verify<F: FnMut(Progress)>(
         total: job.size_bytes,
         bytes_per_sec: 0,
         error_code: None,
+        error_detail: None,
     });
     if have < job.size_bytes {
         download(job, &part, have, &mut on_progress).await?;
@@ -202,6 +207,7 @@ pub async fn download_and_verify<F: FnMut(Progress)>(
         total: job.size_bytes,
         bytes_per_sec: 0,
         error_code: None,
+        error_detail: None,
     });
     let to_hash = part.clone();
     let digest = tokio::task::spawn_blocking(move || sha256_of(&to_hash))

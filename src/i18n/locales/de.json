@@ -51,19 +51,12 @@
     "audio_microphone_switched": "The microphone heard nothing, so dictation now uses {{details}}"
   },
   "home": {
-    "welcome": "Willkommen bei OpenTypeless",
-    "description": "Halten Sie {{hotkey}} gedrückt, um die Sprachaufnahme zu starten. Ihre Sprache wird transkribiert und optional durch KI geglättet.",
     "totalRecordings": "Gesamtaufnahmen",
     "today": "Heute",
-    "currentConfig": "Aktuelle Konfiguration",
     "sttProvider": "STT-Anbieter",
-    "llmProvider": "LLM-Anbieter",
     "aiPolish": "KI-Glättung",
-    "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "outputMode": "Ausgabemodus",
-    "wordsRemaining": "Verbleibende Wörter",
-    "wordsReset": "Wird am {{date}} zurückgesetzt",
     "tokens": {
       "title": "Für die Überarbeitung verbrauchte Tokens",
       "today": "Heute",
@@ -71,7 +64,9 @@
       "total": "Insgesamt"
     },
     "wordsDictated": "Diktierte Wörter",
-    "timeSaved": "Gegenüber Tippen gespart"
+    "timeSaved": "Gegenüber Tippen gespart",
+    "speakWith": "{{hotkey}} drücken und sprechen",
+    "figures": "Deine Zahlen"
   },
   "onboarding": {
     "speakToWrite": "Sprechen Sie, um zu schreiben — verwandeln Sie Ihre Stimme in Echtzeit in geglätteten Text",
@@ -763,7 +758,10 @@
     "errorChecksum": "The file failed verification. Please download it again.",
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
-    "errorSave": "Could not save the setting. Please try again."
+    "errorSave": "Could not save the setting. Please try again.",
+    "errorEngineCpu": "Dem Prozessor dieses Computers fehlen die AVX2-Befehle, die die lokale Erkennung braucht. Lokale Modelle laufen hier nicht, nutze stattdessen die Cloud-API.",
+    "errorEngineSlow": "Das Laden des Modells hat zu lange gedauert. Der Computer ist womöglich zu langsam oder hat zu wenig Speicher. Versuch es erneut oder wähle ein kleineres Modell.",
+    "errorEngineBlocked": "Das Erkennungsprogramm ließ sich nicht starten. Womöglich hat Sicherheitssoftware es blockiert oder entfernt. Installiere die App neu und versuch es noch einmal."
   },
   "snippets": {
     "title": "Bausteine",
@@ -775,19 +773,34 @@
     "duplicate": "Diese Phrase ist schon gespeichert",
     "failed": "Speichern fehlgeschlagen"
   },
-  "fileTranscribe": {
-    "drop": "Audio- oder Videodatei auf dieses Fenster ziehen, um sie mit dem Modell auf diesem Gerät in Text umzuwandeln",
-    "reading": "Datei wird gelesen…",
+  "meeting": {
+    "title": "Besprechung transkribieren",
+    "description": "Nimm eine Besprechung auf oder zieh eine Aufnahme hierher. Das Modell auf diesem Computer schreibt sie nieder.",
+    "record": "Aufnahme starten",
+    "chooseFile": "Datei wählen",
+    "stop": "Beenden und transkribieren",
+    "discard": "Verwerfen",
+    "speakers": "Sprecher unterscheiden",
+    "speakerLabel": "Sprecher",
+    "downloadingSpeakers": "Sprechermodelle werden geladen {{percent}}%",
+    "model": "Modell",
+    "reading": "Wird gelesen…",
+    "findingSpeakers": "Sprecher werden ermittelt…",
     "working": "Transkription, Teil {{done}} von {{total}}",
     "result": "Transkript",
     "copy": "Kopieren",
+    "save": "Als Datei speichern",
+    "fileName": "Besprechungsnotizen.txt",
     "error": {
       "file_not_audio": "Diese Datei enthält kein erkennbares Audio",
-      "file_unreadable": "Die Datei konnte nicht geöffnet werden",
-      "file_too_long": "Die Datei ist länger als 3 Stunden",
-      "local_model_not_installed": "Es ist noch kein lokales Sprachmodell installiert",
-      "busy": "Die vorige Datei ist noch in Arbeit",
-      "failed": "Die Datei konnte nicht transkribiert werden"
+      "file_unreadable": "Die Datei ließ sich nicht öffnen",
+      "file_too_long": "Länger als 3 Stunden, das ist zu lang",
+      "local_model_not_installed": "Kein lokales Sprachmodell installiert",
+      "speaker_models_not_installed": "Die Sprechermodelle sind noch nicht geladen",
+      "busy": "Die vorige Aufnahme wird noch transkribiert",
+      "failed": "Die Transkription ist nicht gelungen",
+      "speakerDownload": "Die Sprechermodelle ließen sich nicht laden",
+      "microphone": "Das Mikrofon ließ sich nicht öffnen"
     }
   }
 }

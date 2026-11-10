@@ -51,19 +51,12 @@
     "audio_microphone_switched": "The microphone heard nothing, so dictation now uses {{details}}"
   },
   "home": {
-    "welcome": "Добро пожаловать в OpenTypeless",
-    "description": "Удерживайте {{hotkey}}, чтобы начать запись голоса. Ваша речь будет распознана и при необходимости обработана ИИ.",
     "totalRecordings": "Всего записей",
     "today": "Сегодня",
-    "currentConfig": "Текущая конфигурация",
     "sttProvider": "Провайдер распознавания речи",
-    "llmProvider": "Провайдер LLM",
     "aiPolish": "Обработка ИИ",
-    "enabled": "Включено",
     "disabled": "Отключено",
     "outputMode": "Режим вывода",
-    "wordsRemaining": "Осталось слов",
-    "wordsReset": "Сброс {{date}}",
     "tokens": {
       "title": "Токены, потраченные на обработку",
       "today": "Сегодня",
@@ -71,7 +64,9 @@
       "total": "Всего"
     },
     "wordsDictated": "Надиктовано слов",
-    "timeSaved": "Сэкономлено против набора"
+    "timeSaved": "Сэкономлено против набора",
+    "speakWith": "Нажмите {{hotkey}} и говорите",
+    "figures": "Ваши цифры"
   },
   "onboarding": {
     "speakToWrite": "Говорите, чтобы писать — превращайте голос в обработанный текст в реальном времени",
@@ -763,7 +758,10 @@
     "errorChecksum": "The file failed verification. Please download it again.",
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
-    "errorSave": "Could not save the setting. Please try again."
+    "errorSave": "Could not save the setting. Please try again.",
+    "errorEngineCpu": "У процессора этого компьютера нет инструкций AVX2, которые нужны локальному распознаванию, поэтому локальные модели здесь не работают. Используйте облачный API.",
+    "errorEngineSlow": "Модель загружалась слишком долго. Возможно, компьютер слишком медленный или не хватает памяти. Попробуйте ещё раз или выберите модель поменьше.",
+    "errorEngineBlocked": "Не удалось запустить программу распознавания. Возможно, её заблокировала или удалила защитная программа. Переустановите приложение и попробуйте снова."
   },
   "snippets": {
     "title": "Заготовки",
@@ -775,19 +773,34 @@
     "duplicate": "Эта фраза уже сохранена",
     "failed": "Не удалось сохранить"
   },
-  "fileTranscribe": {
-    "drop": "Перетащите аудио- или видеофайл в это окно, и модель на этом устройстве превратит его в текст",
-    "reading": "Чтение файла…",
-    "working": "Расшифровка: часть {{done}} из {{total}}",
+  "meeting": {
+    "title": "Расшифровка встреч",
+    "description": "Запишите встречу или перетащите сюда запись. Модель на этом компьютере превратит её в текст.",
+    "record": "Начать запись",
+    "chooseFile": "Выбрать файл",
+    "stop": "Остановить и расшифровать",
+    "discard": "Отменить",
+    "speakers": "Различать говорящих",
+    "speakerLabel": "Говорящий",
+    "downloadingSpeakers": "Загрузка моделей говорящих {{percent}}%",
+    "model": "Модель",
+    "reading": "Чтение…",
+    "findingSpeakers": "Определяем, кто когда говорил…",
+    "working": "Расшифровка, часть {{done}} из {{total}}",
     "result": "Расшифровка",
     "copy": "Копировать",
+    "save": "Сохранить в файл",
+    "fileName": "Заметки встречи.txt",
     "error": {
       "file_not_audio": "В этом файле нет распознаваемого звука",
       "file_unreadable": "Не удалось открыть файл",
-      "file_too_long": "Файл длиннее 3 часов",
-      "local_model_not_installed": "Локальная модель речи ещё не установлена",
-      "busy": "Предыдущий файл ещё обрабатывается",
-      "failed": "Не удалось расшифровать файл"
+      "file_too_long": "Дольше 3 часов, это слишком долго",
+      "local_model_not_installed": "Локальная модель речи не установлена",
+      "speaker_models_not_installed": "Модели говорящих ещё не загружены",
+      "busy": "Предыдущая запись ещё расшифровывается",
+      "failed": "Расшифровать не удалось",
+      "speakerDownload": "Не удалось загрузить модели говорящих",
+      "microphone": "Не удалось открыть микрофон"
     }
   }
 }

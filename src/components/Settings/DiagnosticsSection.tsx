@@ -41,13 +41,13 @@ export function DiagnosticsSection() {
         type="button"
         onClick={check}
         disabled={busy}
-        className="rounded-[10px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
       >
         {t(busy ? 'settings.diagnosticStatusChecking' : 'settings.refreshDiagnostics')}
       </button>
       {failed && <p className="text-[12px] text-error">{t('settings.diagnosticsUnavailable')}</p>}
       {rows && rows.length > 0 && (
-        <ul className="divide-y divide-border rounded-[10px] border border-border">
+        <ul className="divide-y divide-border rounded-[8px] border border-border">
           {rows.map((row) => {
             const [label, colour] = STATE[row.status] ?? STATE.checking
             const fine = row.status === 'ok' || row.status === 'notApplicable'

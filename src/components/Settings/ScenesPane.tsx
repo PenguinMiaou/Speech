@@ -569,7 +569,7 @@ function AppWritingModes({
                     role="img"
                     aria-label={icon.label}
                     title={icon.label}
-                    className="grid h-6 w-6 place-items-center rounded-[6px] bg-bg-secondary"
+                    className="grid h-6 w-6 place-items-center rounded-[8px] bg-bg-secondary"
                   >
                     <AppLogo iconKey={icon.iconKey} family={mode.family} />
                   </span>
@@ -791,14 +791,14 @@ function LocalSceneCard({
                 <button
                   type="button"
                   onClick={onCancelDelete}
-                  className="rounded-[7px] border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
+                  className="rounded-[8px] border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={onConfirmDelete}
-                  className="rounded-[7px] border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
+                  className="rounded-[8px] border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
                 >
                   {t('scenes.delete')}
                 </button>

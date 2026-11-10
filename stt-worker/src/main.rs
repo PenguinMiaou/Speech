@@ -1,3 +1,4 @@
+mod diarize;
 mod engine;
 mod eval;
 mod isolate;

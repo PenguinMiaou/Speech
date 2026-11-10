@@ -51,19 +51,12 @@
     "audio_microphone_switched": "The microphone heard nothing, so dictation now uses {{details}}"
   },
   "home": {
-    "welcome": "Bienvenue dans OpenTypeless",
-    "description": "Maintenez {{hotkey}} pour démarrer l'enregistrement vocal. Votre parole sera transcrite et éventuellement améliorée par l'IA.",
     "totalRecordings": "Enregistrements totaux",
     "today": "Aujourd'hui",
-    "currentConfig": "Configuration actuelle",
     "sttProvider": "Fournisseur STT",
-    "llmProvider": "Fournisseur LLM",
     "aiPolish": "Amélioration IA",
-    "enabled": "Activé",
     "disabled": "Désactivé",
     "outputMode": "Mode de sortie",
-    "wordsRemaining": "Mots restants",
-    "wordsReset": "Réinitialisation le {{date}}",
     "tokens": {
       "title": "Tokens utilisés pour la mise en forme",
       "today": "Aujourd’hui",
@@ -71,7 +64,9 @@
       "total": "Au total"
     },
     "wordsDictated": "Mots dictés",
-    "timeSaved": "Gagné par rapport à la frappe"
+    "timeSaved": "Gagné par rapport à la frappe",
+    "speakWith": "Appuyez sur {{hotkey}} et parlez",
+    "figures": "Vos chiffres"
   },
   "onboarding": {
     "speakToWrite": "Parlez pour écrire — transformez votre voix en texte amélioré en temps réel",
@@ -763,7 +758,10 @@
     "errorChecksum": "The file failed verification. Please download it again.",
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
-    "errorSave": "Could not save the setting. Please try again."
+    "errorSave": "Could not save the setting. Please try again.",
+    "errorEngineCpu": "Le processeur de cet ordinateur n’a pas les instructions AVX2 dont la reconnaissance locale a besoin. Les modèles locaux ne peuvent pas fonctionner ici, utilisez l’API cloud.",
+    "errorEngineSlow": "Le chargement du modèle a pris trop de temps. Cet ordinateur est peut-être trop lent ou manque de mémoire. Réessayez ou choisissez un modèle plus petit.",
+    "errorEngineBlocked": "Le programme de reconnaissance n’a pas pu démarrer. Un logiciel de sécurité l’a peut-être bloqué ou supprimé. Réinstallez l’application puis réessayez."
   },
   "snippets": {
     "title": "Extraits",
@@ -775,19 +773,34 @@
     "duplicate": "Cette phrase est déjà enregistrée",
     "failed": "Enregistrement impossible"
   },
-  "fileTranscribe": {
-    "drop": "Déposez un fichier audio ou vidéo sur cette fenêtre pour le transcrire avec le modèle de cet appareil",
-    "reading": "Lecture du fichier…",
+  "meeting": {
+    "title": "Transcription de réunion",
+    "description": "Enregistrez une réunion ou déposez un enregistrement. Le modèle de cet ordinateur le met par écrit.",
+    "record": "Démarrer l’enregistrement",
+    "chooseFile": "Choisir un fichier",
+    "stop": "Arrêter et transcrire",
+    "discard": "Abandonner",
+    "speakers": "Distinguer les intervenants",
+    "speakerLabel": "Intervenant",
+    "downloadingSpeakers": "Téléchargement des modèles d’intervenants {{percent}} %",
+    "model": "Modèle",
+    "reading": "Lecture…",
+    "findingSpeakers": "Recherche de qui a parlé et quand…",
     "working": "Transcription, partie {{done}} sur {{total}}",
     "result": "Transcription",
     "copy": "Copier",
+    "save": "Enregistrer dans un fichier",
+    "fileName": "Notes de réunion.txt",
     "error": {
       "file_not_audio": "Ce fichier ne contient pas d’audio reconnaissable",
-      "file_unreadable": "Impossible d’ouvrir le fichier",
-      "file_too_long": "Le fichier dépasse 3 heures",
-      "local_model_not_installed": "Aucun modèle vocal local n’est encore installé",
-      "busy": "Le fichier précédent est encore en cours",
-      "failed": "Le fichier n’a pas pu être transcrit"
+      "file_unreadable": "Le fichier n’a pas pu être ouvert",
+      "file_too_long": "Plus de 3 heures, c’est trop long",
+      "local_model_not_installed": "Aucun modèle vocal local n’est installé",
+      "speaker_models_not_installed": "Les modèles d’intervenants ne sont pas encore téléchargés",
+      "busy": "L’enregistrement précédent est encore en cours de transcription",
+      "failed": "La transcription n’a pas abouti",
+      "speakerDownload": "Les modèles d’intervenants n’ont pas pu être téléchargés",
+      "microphone": "Le micro n’a pas pu être ouvert"
     }
   }
 }

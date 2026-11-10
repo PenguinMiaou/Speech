@@ -128,38 +128,273 @@ pub fn pieces(pcm: &[f32]) -> Vec<Range<usize>> {
     cut
 }
 
-/// Recognizes a whole file piece by piece. `progress` hears how many pieces are done.
-pub fn transcribe(path: &Path, mut progress: impl FnMut(usize, usize)) -> Result<String, String> {
+/// What the caller wants from a transcription.
+#[derive(Debug, Clone, Default)]
+pub struct Options {
+    /// Write the text out by speaker, each named with this word and a number.
+    pub speaker_label: Option<String>,
+    /// The model to recognize with. The dictation model when absent or not installed.
+    pub model_id: Option<String>,
+}
+
+/// What a caller hears while a recording is being worked on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stage {
+    /// Finding who spoke when. It has no steps to count.
+    Speakers,
+    Text {
+        done: usize,
+        total: usize,
+    },
+}
+
+/// The pieces to recognize, each with the index of the turn it belongs to.
+pub fn plan(
+    pcm: &[f32],
+    turns: Option<&[crate::speakers::SpeakerTurn]>,
+) -> Vec<(Option<usize>, Range<usize>)> {
+    let Some(turns) = turns else {
+        return pieces(pcm).into_iter().map(|piece| (None, piece)).collect();
+    };
+    turns
+        .iter()
+        .enumerate()
+        .flat_map(|(index, turn)| {
+            let span = crate::speakers::samples(turn, pcm.len());
+            let from = span.start;
+            pieces(&pcm[span])
+                .into_iter()
+                .map(move |piece| (Some(index), from + piece.start..from + piece.end))
+        })
+        .collect()
+}
+
+fn joined(parts: &[&str]) -> String {
+    let mut text = String::new();
+    for part in parts {
+        let latin = |c: Option<char>| c.is_some_and(|c| c.is_ascii() && !c.is_ascii_whitespace());
+        if latin(text.chars().last()) && latin(part.chars().next()) {
+            text.push(' ');
+        }
+        text.push_str(part);
+    }
+    text
+}
+
+/// The recognized pieces as the final text.
+pub fn assemble(
+    said: &[(Option<usize>, String)],
+    turns: Option<&[crate::speakers::SpeakerTurn]>,
+    speaker_label: &str,
+) -> String {
+    let Some(turns) = turns else {
+        return said
+            .iter()
+            .map(|(_, text)| text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+    };
+    let by_turn: Vec<_> = turns
+        .iter()
+        .enumerate()
+        .map(|(index, turn)| {
+            let parts: Vec<&str> = said
+                .iter()
+                .filter(|(of, _)| *of == Some(index))
+                .map(|(_, text)| text.as_str())
+                .collect();
+            (*turn, joined(&parts))
+        })
+        .collect();
+    crate::speakers::transcript(&by_turn, speaker_label)
+}
+
+fn model_path(wanted: Option<&str>) -> Option<std::path::PathBuf> {
     use crate::local_stt::catalog;
-    let model = catalog::installed_path(catalog::DEFAULT_LOCAL_MODEL_ID)
+    wanted
+        .and_then(catalog::installed_path)
+        .or_else(|| catalog::installed_path(catalog::DEFAULT_LOCAL_MODEL_ID))
         .or_else(|| {
             catalog::entries()
                 .iter()
                 .find_map(|entry| catalog::installed_path(entry.id))
         })
+}
+
+/// Recognizes a whole file. See [`transcribe_pcm`].
+pub fn transcribe(
+    path: &Path,
+    options: &Options,
+    progress: impl FnMut(Stage),
+) -> Result<String, String> {
+    transcribe_pcm(&decode(path)?, options, progress)
+}
+
+/// Recognizes a recording piece by piece, by speaker when asked and the speaker models
+/// are installed.
+pub fn transcribe_pcm(
+    pcm: &[f32],
+    options: &Options,
+    progress: impl FnMut(Stage),
+) -> Result<String, String> {
+    let model = model_path(options.model_id.as_deref())
         .ok_or_else(|| "local_model_not_installed".to_string())?;
     let supervisor =
         crate::local_stt::global().ok_or_else(|| "local_engine_unavailable".to_string())?;
-    let pcm = decode(path)?;
-    let cut = pieces(&pcm);
-    let mut text = Vec::new();
-    progress(0, cut.len());
-    for (index, piece) in cut.iter().enumerate() {
-        let said = supervisor
-            .transcribe(&model, &pcm[piece.clone()], Vec::new(), None)
-            .map_err(|error| error.to_string())?;
-        let said = said.trim();
-        if !said.is_empty() {
-            text.push(said.to_string());
+    let speakers = match &options.speaker_label {
+        Some(label) => {
+            let missing = || "speaker_models_not_installed".to_string();
+            let (segmentation, voice) = crate::speakers::installed_models().ok_or_else(missing)?;
+            Some(SpeakerModels {
+                segmentation,
+                voice,
+                scratch: crate::speakers::model_dir().ok_or_else(missing)?,
+                label: label.clone(),
+            })
         }
-        progress(index + 1, cut.len());
+        None => None,
+    };
+    recognize(&supervisor, &model, speakers.as_ref(), pcm, progress)
+}
+
+struct SpeakerModels {
+    segmentation: std::path::PathBuf,
+    voice: std::path::PathBuf,
+    scratch: std::path::PathBuf,
+    label: String,
+}
+
+fn recognize(
+    supervisor: &crate::local_stt::WorkerSupervisor,
+    model: &Path,
+    speakers: Option<&SpeakerModels>,
+    pcm: &[f32],
+    mut progress: impl FnMut(Stage),
+) -> Result<String, String> {
+    let turns = match speakers {
+        Some(models) => {
+            progress(Stage::Speakers);
+            let found = supervisor
+                .diarize(&models.segmentation, &models.voice, pcm, &models.scratch)
+                .map_err(|error| error.to_string())?;
+            Some(crate::speakers::merge_turns(&found))
+        }
+        None => None,
+    };
+    let planned = plan(pcm, turns.as_deref());
+    let mut said = Vec::new();
+    progress(Stage::Text {
+        done: 0,
+        total: planned.len(),
+    });
+    for (index, (turn, piece)) in planned.iter().enumerate() {
+        let text = supervisor
+            .transcribe(model, &pcm[piece.clone()], Vec::new(), None)
+            .map_err(|error| error.to_string())?;
+        let text = text.trim();
+        if !text.is_empty() {
+            said.push((*turn, text.to_string()));
+        }
+        progress(Stage::Text {
+            done: index + 1,
+            total: planned.len(),
+        });
     }
-    Ok(text.join("\n"))
+    Ok(assemble(
+        &said,
+        turns.as_deref(),
+        speakers
+            .map(|models| models.label.as_str())
+            .unwrap_or_default(),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn without_speakers_the_plan_is_the_plain_cut() {
+        let pcm = tone(70.0);
+        let planned = plan(&pcm, None);
+        assert_eq!(planned.len(), pieces(&pcm).len());
+        assert!(planned.iter().all(|(turn, _)| turn.is_none()));
+    }
+
+    #[test]
+    fn with_speakers_every_piece_belongs_to_a_turn_and_stays_inside_it() {
+        let pcm = tone(100.0);
+        let turn = |start_ms, end_ms, speaker| crate::speakers::SpeakerTurn {
+            start_ms,
+            end_ms,
+            speaker,
+        };
+        let turns = [turn(0, 10_000, 1), turn(10_000, 80_000, 2)];
+        let planned = plan(&pcm, Some(&turns));
+        assert_eq!(planned[0], (Some(0), 0..160_000));
+        let second: Vec<_> = planned
+            .iter()
+            .filter(|(turn, _)| *turn == Some(1))
+            .collect();
+        assert!(second.len() >= 3);
+        assert_eq!(second[0].1.start, 160_000);
+        assert_eq!(second.last().unwrap().1.end, 1_280_000);
+        assert!(second
+            .iter()
+            .all(|(_, piece)| piece.len() <= PIECE_SECS * RATE as usize));
+    }
+
+    #[test]
+    fn pieces_join_into_one_paragraph_per_turn() {
+        let turn = |start_ms, speaker| crate::speakers::SpeakerTurn {
+            start_ms,
+            end_ms: start_ms + 1_000,
+            speaker,
+        };
+        let turns = [turn(0, 1), turn(5_000, 2)];
+        let said = vec![
+            (Some(0), "你好。".to_string()),
+            (Some(1), "First part".to_string()),
+            (Some(1), "second part.".to_string()),
+        ];
+        assert_eq!(
+            assemble(&said, Some(&turns), "Speaker"),
+            "Speaker 1  00:00\n你好。\n\nSpeaker 2  00:05\nFirst part second part."
+        );
+        let plain = vec![(None, "one".to_string()), (None, "two".to_string())];
+        assert_eq!(assemble(&plain, None, "Speaker"), "one\ntwo");
+    }
+
+    /// Needs the built worker, a speech model, the two speaker models and a recording:
+    /// `OT_WORKER=<bin> OT_MODEL=<gguf> OT_SEG=<onnx> OT_EMB=<onnx> OT_FILE=<audio>
+    /// cargo test --lib writes_a_real_meeting -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn writes_a_real_meeting_out_by_speaker() {
+        let var = |name: &str| std::path::PathBuf::from(std::env::var(name).unwrap());
+        let supervisor = crate::local_stt::WorkerSupervisor::new(
+            crate::local_stt::WorkerCommand {
+                program: var("OT_WORKER"),
+                args: vec!["serve".to_string()],
+            },
+            std::time::Duration::from_secs(120),
+            std::time::Duration::from_secs(60),
+        );
+        let speakers = SpeakerModels {
+            segmentation: var("OT_SEG"),
+            voice: var("OT_EMB"),
+            scratch: std::env::temp_dir(),
+            label: "说话人".to_string(),
+        };
+        let pcm = decode(&var("OT_FILE")).unwrap();
+        let started = std::time::Instant::now();
+        let text = recognize(&supervisor, &var("OT_MODEL"), Some(&speakers), &pcm, |_| {}).unwrap();
+        println!(
+            "audio {:.0}s took {:.1}s\n{text}",
+            pcm.len() as f32 / RATE as f32,
+            started.elapsed().as_secs_f32()
+        );
+    }
 
     fn tone(seconds: f32) -> Vec<f32> {
         (0..(seconds * RATE as f32) as usize)

@@ -2,25 +2,25 @@
 
 @theme {
   /* Clean neutral palette */
-  --color-bg-primary: #f5f5f5;
-  --color-bg-secondary: #ebebeb;
-  --color-bg-tertiary: #e0e0e0;
-  --color-bg-elevated: #fafafa;
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f3f4f6;
+  --color-bg-tertiary: #e5e7eb;
+  --color-bg-elevated: #ffffff;
 
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-tertiary: #999999;
+  --color-text-primary: #17191c;
+  --color-text-secondary: #596068;
+  --color-text-tertiary: #8a9199;
 
-  --color-accent: #2abba7;
-  --color-accent-hover: #22a08e;
-  --color-accent-light: #e6f7f5;
+  --color-accent: #0e9384;
+  --color-accent-hover: #0b7d70;
+  --color-accent-light: #e2f4f1;
 
   --color-success: #34c759;
   --color-warning: #ff9500;
-  --color-error: #ff3b30;
+  --color-error: #e5484d;
 
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-focus: #2abba7;
+  --color-border: rgba(23, 25, 28, 0.1);
+  --color-border-focus: #0e9384;
 
   /* Jelly palette tokens */
   --color-jelly-primary: rgba(42, 187, 167, 0.2);
@@ -86,18 +86,21 @@ body,
 
 /* ─── Dark Mode ─── */
 .dark {
-  --color-bg-primary: #1a1a1a;
-  --color-bg-secondary: #242424;
-  --color-bg-tertiary: #2e2e2e;
-  --color-bg-elevated: #2a2a2a;
+  --color-bg-primary: #17181b;
+  --color-bg-secondary: #1f2124;
+  --color-bg-tertiary: #2d3035;
+  --color-bg-elevated: #232528;
 
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #707070;
+  --color-text-primary: #eceef0;
+  --color-text-secondary: #a4aab1;
+  --color-text-tertiary: #737a82;
 
-  --color-accent-light: #1a3d37;
+  --color-accent: #2cc4b0;
+  --color-accent-hover: #43d3c0;
+  --color-accent-light: #143631;
+  --color-border-focus: #2cc4b0;
 
-  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.1);
 
   --color-jelly-primary: rgba(42, 187, 167, 0.25);
   --color-jelly-glow: rgba(42, 187, 167, 0.35);
@@ -111,72 +114,6 @@ body,
 /* Drag region */
 [data-tauri-drag-region] {
   cursor: move;
-}
-
-/* ─── Dark Jelly Overrides ─── */
-.dark .jelly-surface {
-  background: linear-gradient(145deg, #2a2a2a 0%, #222222 50%, #1c1c1c 100%);
-  box-shadow:
-    inset 0 2px 8px rgba(255, 255, 255, 0.04),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.dark .jelly-card {
-  background: linear-gradient(155deg, #2e2e2e 0%, #272727 50%, #212121 100%);
-  box-shadow:
-    inset 0 1.5px 4px rgba(255, 255, 255, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.3);
-}
-.dark .jelly-card::before {
-  background: radial-gradient(
-    ellipse at 30% 20%,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.01) 40%,
-    transparent 70%
-  );
-}
-.dark .jelly-card:hover {
-  box-shadow:
-    inset 0 1.5px 4px rgba(255, 255, 255, 0.06),
-    0 6px 24px rgba(0, 0, 0, 0.35);
-}
-
-.dark .jelly-btn {
-  background: linear-gradient(155deg, #333333 0%, #2a2a2a 50%, #222222 100%);
-  box-shadow:
-    inset 0 1.5px 3px rgba(255, 255, 255, 0.05),
-    0 3px 10px rgba(0, 0, 0, 0.25);
-}
-.dark .jelly-btn::before {
-  background: radial-gradient(
-    ellipse at 30% 20%,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.01) 40%,
-    transparent 70%
-  );
-}
-.dark .jelly-btn:hover {
-  box-shadow:
-    inset 0 1.5px 3px rgba(255, 255, 255, 0.07),
-    0 6px 18px rgba(0, 0, 0, 0.3);
-}
-
-.dark .jelly-btn-accent {
-  box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.15),
-    0 3px 12px rgba(0, 0, 0, 0.3);
-}
-.dark .jelly-btn-accent:hover {
-  box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.15),
-    0 6px 20px rgba(0, 0, 0, 0.4);
-}
-
-.dark .jelly-surface-flat {
-  background: linear-gradient(180deg, #262626 0%, #202020 50%, #1c1c1c 100%);
-  box-shadow:
-    inset 2px 0 8px rgba(255, 255, 255, 0.03),
-    inset -2px 0 8px rgba(0, 0, 0, 0.2);
 }
 
 .dark .jelly-capsule {
@@ -235,116 +172,6 @@ body,
     rgba(255, 255, 255, 0.4) 50%,
     transparent 100%
   );
-}
-
-/* ─── Jelly Surface — rich gel with strong inner glow ─── */
-.jelly-surface {
-  position: relative;
-  background: linear-gradient(145deg, #f6f6f6 0%, #eeeeee 50%, #e6e6e6 100%);
-  box-shadow:
-    inset 0 2px 8px rgba(255, 255, 255, 0.9),
-    inset 0 -2px 8px rgba(0, 0, 0, 0.06),
-    0 4px 20px rgba(0, 0, 0, 0.08),
-    0 10px 40px rgba(0, 0, 0, 0.04);
-  border: none;
-  border-radius: 22px;
-  transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.3s ease;
-  overflow: hidden;
-}
-
-/* ─── Jelly Card — 3D gel panel with specular highlight ─── */
-.jelly-card {
-  position: relative;
-  background: linear-gradient(155deg, #ededed 0%, #e4e4e4 50%, #dadada 100%);
-  border: none;
-  border-radius: 20px;
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.07),
-    0 10px 40px rgba(0, 0, 0, 0.03),
-    inset 0 2px 6px rgba(255, 255, 255, 0.8),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.3s ease;
-}
-/* Card specular highlight band */
-.jelly-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.1) 60%,
-    transparent 100%
-  );
-  border-radius: 20px 20px 0 0;
-  pointer-events: none;
-  z-index: 0;
-}
-.jelly-card:hover {
-  transform: scale(1.02) translateY(-2px);
-  box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.1),
-    0 16px 50px rgba(0, 0, 0, 0.05),
-    inset 0 2px 6px rgba(255, 255, 255, 0.8),
-    inset 0 -2px 6px rgba(0, 0, 0, 0.05);
-}
-
-/* ─── Jelly Button — tactile 3D gel button ─── */
-.jelly-btn {
-  position: relative;
-  background: linear-gradient(155deg, #ececec 0%, #e2e2e2 50%, #d8d8d8 100%);
-  box-shadow:
-    0 3px 12px rgba(0, 0, 0, 0.07),
-    0 6px 24px rgba(0, 0, 0, 0.03),
-    inset 0 2px 4px rgba(255, 255, 255, 0.8),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.05);
-  border: none;
-  border-radius: 14px;
-  overflow: hidden;
-  transition:
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.25s ease;
-}
-.jelly-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.45) 0%, transparent 100%);
-  border-radius: 14px 14px 0 0;
-  pointer-events: none;
-}
-.jelly-btn:hover {
-  transform: scale(1.04);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.1),
-    0 10px 36px rgba(0, 0, 0, 0.04),
-    inset 0 2px 4px rgba(255, 255, 255, 0.8),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.06);
-}
-.jelly-btn:active {
-  transform: scaleX(1.06) scaleY(0.94);
-}
-
-/* ─── Jelly Nav Active — accent gel indicator ─── */
-.jelly-nav-active {
-  background: linear-gradient(145deg, #2abba7 0%, #22a08e 100%);
-  box-shadow:
-    inset 0 1px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -1px 4px rgba(0, 0, 0, 0.15),
-    0 2px 10px rgba(42, 187, 167, 0.3);
-  border-radius: 12px;
-  color: white !important;
 }
 
 /* ─── Jelly Capsule — minimal white/grey gel orb ─── */
@@ -478,37 +305,6 @@ body,
   z-index: 1;
 }
 
-/* ─── Jelly Surface Flat — no border-radius, for sidebars ─── */
-.jelly-surface-flat {
-  background: linear-gradient(180deg, #f0f0f0 0%, #e8e8e8 50%, #e0e0e0 100%);
-  box-shadow:
-    inset 2px 0 8px rgba(255, 255, 255, 0.5),
-    inset -2px 0 8px rgba(0, 0, 0, 0.04);
-  border: none;
-  transition: box-shadow 0.3s ease;
-}
-
-/* ─── Jelly Button Accent — for primary CTA buttons ─── */
-.jelly-btn-accent {
-  box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.3),
-    0 3px 12px rgba(0, 0, 0, 0.12);
-  border: none;
-  border-radius: 9999px;
-  transition:
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.25s ease;
-}
-.jelly-btn-accent:hover {
-  transform: scale(1.04);
-  box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.3),
-    0 6px 20px rgba(0, 0, 0, 0.18);
-}
-.jelly-btn-accent:active {
-  transform: scaleX(1.06) scaleY(0.94);
-}
-
 /* ─── Shimmer sweep — left-to-right loading bar ─── */
 @keyframes shimmer-sweep {
   0% {
@@ -632,13 +428,6 @@ body,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .jelly-card:hover,
-  .jelly-btn:hover,
-  .jelly-btn:active,
-  .jelly-btn-accent:hover,
-  .jelly-btn-accent:active {
-    transform: none !important;
-  }
 }
 
 /* macOS-style scrollbar */
@@ -702,4 +491,167 @@ body,
     animation: none;
     opacity: 0;
   }
+}
+
+/* ─── Surfaces, buttons and navigation shared by every page ─── */
+.surface,
+.jelly-card,
+.jelly-surface {
+  position: relative;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 18, 20, 0.04);
+}
+
+.jelly-surface {
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.jelly-surface-flat {
+  background: var(--color-bg-secondary);
+}
+
+.jelly-btn,
+.btn-quiet {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.jelly-btn:hover,
+.btn-quiet:hover {
+  background: var(--color-bg-secondary);
+}
+
+.jelly-btn:active,
+.btn-quiet:active {
+  background: var(--color-bg-tertiary);
+}
+
+.jelly-nav-active {
+  background: rgba(23, 25, 28, 0.07);
+  border-radius: 8px;
+}
+
+.dark .jelly-nav-active {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.jelly-btn-accent {
+  border: none;
+  border-radius: 9999px;
+  transition: filter 0.15s ease;
+}
+
+.jelly-btn-accent:hover {
+  filter: brightness(1.07);
+}
+
+.jelly-btn-accent:active {
+  filter: brightness(0.95);
+}
+
+.btn-quiet,
+.btn-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.btn-record {
+  background: var(--color-error);
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  transition: filter 0.15s ease;
+}
+
+.btn-record:hover {
+  filter: brightness(0.93);
+}
+
+.btn-quiet:focus-visible,
+.btn-record:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* A key of the hotkey, drawn as a keycap. */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-bottom-width: 2px;
+  border-radius: 8px;
+}
+
+.figure-divided {
+  border-left: 1px solid var(--color-border);
+}
+
+@media (max-width: 639px) {
+  .figure-divided:nth-child(odd) {
+    border-left: none;
+  }
+  .figure-divided:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* The top of every page: one title size, one inset. */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 32px 16px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+/* The name of a group of settings or of a day in the history. */
+.section-label {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--color-text-secondary);
+}
+
+/* The chosen option of a segmented control: a raised chip on the track. */
+.segment-active {
+  background: var(--color-bg-elevated);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px var(--color-border),
+    0 1px 2px rgba(16, 18, 20, 0.08);
+}
+
+.dark .segment-active {
+  background: var(--color-bg-tertiary);
 }

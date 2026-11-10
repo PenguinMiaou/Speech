@@ -48,3 +48,13 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS'' AN
 Copyright (c) 2019-2022 The Project Symphonia Developers
 
 Decodes audio and video files for file transcription. Used unmodified under the Mozilla Public License 2.0. The source is at https://github.com/pdeljanov/Symphonia and the licence text at https://www.mozilla.org/MPL/2.0/.
+
+## pyannote segmentation 3.0
+
+Copyright (c) 2022 CNRS
+
+Finds where speakers change in a recording. Downloaded on first use in the ONNX form published at https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0, used unmodified under the MIT License. The original model is at https://huggingface.co/pyannote/segmentation-3.0.
+
+## 3D-Speaker CAM++
+
+Tells one speaker's voice from another's. Downloaded on first use in the ONNX form published with sherpa-onnx, used unmodified under the Apache License 2.0. The source is at https://github.com/modelscope/3D-Speaker.

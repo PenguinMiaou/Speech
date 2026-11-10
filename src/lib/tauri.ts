@@ -731,6 +731,8 @@ export interface LocalSttProgress {
   total: number
   bytes_per_sec: number
   error_code: string | null
+  /** What exactly went wrong, as the program reported it. */
+  error_detail?: string | null
 }
 
 export function listLocalModels(): Promise<LocalModelStatus[]> {
@@ -824,13 +826,94 @@ export async function removeSnippet(id: number): Promise<void> {
 }
 
 export interface FileTranscribeProgress {
+  /** 'speakers' while finding who spoke when, then 'text'. */
+  stage: 'speakers' | 'text'
   done: number
   total: number
 }
 
+export interface TranscribeOptions {
+  /** The word that names a speaker. When set, the text is written out by speaker. */
+  speakerLabel: string | null
+  modelId: string | null
+}
+
 /** Turns an audio or video file into text with the speech model on this machine. */
-export async function transcribeFile(path: string): Promise<string> {
-  return invoke('transcribe_file', { path })
+export async function transcribeFile(path: string, options: TranscribeOptions): Promise<string> {
+  return invoke('transcribe_file', { path, ...options })
+}
+
+export function meetingRecordStart(inputDevice: string): Promise<void> {
+  return invoke('meeting_record_start', { inputDevice })
+}
+
+export function meetingRecordLevel(): Promise<{ seconds: number; volume: number } | null> {
+  return invoke('meeting_record_level')
+}
+
+export function meetingRecordStop(
+  options: TranscribeOptions & { discard: boolean },
+): Promise<string> {
+  return invoke('meeting_record_stop', { ...options })
+}
+
+export interface SpeakerModelsStatus {
+  installed: boolean
+  downloading: boolean
+  total_bytes: number
+}
+
+export function speakerModelsStatus(): Promise<SpeakerModelsStatus> {
+  return invoke('speaker_models_status')
+}
+
+export function installSpeakerModels(): Promise<void> {
+  return invoke('speaker_models_install')
+}
+
+export function onSpeakerModelsProgress(
+  handler: (progress: { downloaded: number; total: number }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ downloaded: number; total: number }>('speakers:download-progress', (event) =>
+    handler(event.payload),
+  )
+}
+
+const MEDIA_EXTENSIONS = [
+  'm4a',
+  'mp3',
+  'wav',
+  'flac',
+  'ogg',
+  'aac',
+  'mp4',
+  'mov',
+  'mkv',
+  'webm',
+  'm4v',
+]
+
+/** Asks for an audio or video file. Null when the dialog is closed without one. */
+export async function pickMediaFile(): Promise<string | null> {
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const picked = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: 'Audio / Video', extensions: MEDIA_EXTENSIONS }],
+  })
+  return typeof picked === 'string' ? picked : null
+}
+
+/** Asks where to save `text` and writes it there. False when the dialog is closed. */
+export async function saveTextFile(text: string, suggestedName: string): Promise<boolean> {
+  const { save } = await import('@tauri-apps/plugin-dialog')
+  const path = await save({
+    defaultPath: suggestedName,
+    filters: [{ name: 'Text', extensions: ['txt', 'md'] }],
+  })
+  if (!path) return false
+  await invoke('save_text_file', { path, text })
+  return true
 }
 
 export function onFileTranscribeProgress(

@@ -116,6 +116,22 @@ describe('LocalModelCard', () => {
     expect(tauri.installLocalModel).toHaveBeenCalledWith(LARGE)
   })
 
+  it('names the cause of a failed check and shows what the program reported', async () => {
+    vi.mocked(tauri.listLocalModels).mockResolvedValue([model(LARGE, { installed: true })])
+    render(<LocalModelCard />)
+    await screen.findByRole('button', { name: 'localStt.enable' })
+    act(() =>
+      emit(
+        event('failed', {
+          error_code: 'engine_cpu',
+          error_detail: 'local speech worker stopped: worker exited (exit code: 0xc000001d)',
+        }),
+      ),
+    )
+    expect(screen.getByText('localStt.errorEngineCpu')).toBeTruthy()
+    expect(screen.getByText(/0xc000001d/)).toBeTruthy()
+  })
+
   it('install_command_rejection_shows_retry', async () => {
     vi.mocked(tauri.installLocalModel).mockRejectedValue(new Error('unknown model'))
     render(<LocalModelCard />)

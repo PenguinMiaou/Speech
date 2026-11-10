@@ -1,126 +1,91 @@
-import { llmServiceName } from '../../lib/llm-endpoints'
-import { Mic, Settings, History } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { spring } from '../../lib/animations'
+import { llmServiceName } from '../../lib/llm-endpoints'
 import { useAppStore } from '../../stores/appStore'
-import { useRoute } from '../../lib/router'
 import { dictationStats, formatMinutes } from '../../lib/dictation-stats'
-import { FileTranscribeCard } from './FileTranscribeCard'
+import { MeetingCard } from './MeetingCard'
 import { TokenUsageCard } from './TokenUsageCard'
+
+const HOTKEY_SLOT = '\u0001'
 
 export function HomePage() {
   const config = useAppStore((s) => s.config)
   const history = useAppStore((s) => s.history)
-  const { navigate } = useRoute()
   const { t } = useTranslation()
 
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayCount = history.filter((h) => h.created_at.startsWith(today)).length
   const stats = dictationStats(history)
+
+  const sentence = t('home.speakWith', { hotkey: HOTKEY_SLOT })
+  const [before, after = ''] = sentence.includes(HOTKEY_SLOT)
+    ? sentence.split(HOTKEY_SLOT)
+    : [sentence, '']
+  const keys = config.hotkey.split('+').filter(Boolean)
+
+  const figures = [
+    ['home.today', String(todayCount)],
+    ['home.totalRecordings', history.length.toLocaleString('en-US')],
+    ['home.wordsDictated', stats.units.toLocaleString('en-US')],
+    ['home.timeSaved', formatMinutes(stats.savedMinutes)],
+  ] as const
+
+  const setup = [
+    ['home.sttProvider', config.stt_provider],
+    [
+      'home.aiPolish',
+      config.polish_enabled
+        ? llmServiceName(config.llm_provider, config.llm_base_url)
+        : t('home.disabled'),
+    ],
+    ['home.outputMode', config.output_mode],
+  ] as const
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Welcome */}
-      <div className="rounded-[18px] p-5 jelly-card">
-        <div className="flex items-center gap-3 mb-2">
-          <div
-            className="w-9 h-9 rounded-[10px] flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(145deg, rgba(42,187,167,0.15), rgba(42,187,167,0.08))',
-            }}
-          >
-            <Mic size={18} className="text-text-secondary" />
-          </div>
-          <h2 className="text-[17px] font-semibold">{t('home.welcome')}</h2>
-        </div>
-        <p className="text-[13px] text-text-secondary leading-relaxed">
-          {t('home.description', { hotkey: config.hotkey })}
-        </p>
-      </div>
+    <div className="flex max-w-[784px] flex-col gap-5 px-8 pb-8">
+      <header className="pt-7">
+        <h2 className="page-title flex flex-wrap items-center gap-x-2 gap-y-2">
+          {before}
+          <span className="inline-flex items-center gap-1.5">
+            {keys.map((key) => (
+              <kbd key={key} className="keycap">
+                {key}
+              </kbd>
+            ))}
+          </span>
+          {after}
+        </h2>
+        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+          {setup.map(([label, value]) => (
+            <div key={label} className="flex items-baseline gap-2">
+              <dt className="text-text-tertiary">{t(label)}</dt>
+              <dd className="m-0 text-text-secondary">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </header>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-[18px] p-4 jelly-card">
-          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
-            {t('home.totalRecordings')}
-          </p>
-          <p className="text-[22px] font-semibold">{history.length}</p>
-        </div>
-        <div className="rounded-[18px] p-4 jelly-card">
-          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
-            {t('home.today')}
-          </p>
-          <p className="text-[22px] font-semibold">{todayCount}</p>
-        </div>
-        <div className="rounded-[18px] p-4 jelly-card">
-          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
-            {t('home.wordsDictated')}
-          </p>
-          <p className="text-[22px] font-semibold">{stats.units.toLocaleString('en-US')}</p>
-        </div>
-        <div className="rounded-[18px] p-4 jelly-card">
-          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
-            {t('home.timeSaved')}
-          </p>
-          <p className="text-[22px] font-semibold">{formatMinutes(stats.savedMinutes)}</p>
-        </div>
-      </div>
+      <dl
+        role="group"
+        aria-label={t('home.figures')}
+        className="surface m-0 grid grid-cols-2 sm:grid-cols-4"
+      >
+        {figures.map(([label, value], index) => (
+          <Fragment key={label}>
+            <div className={`px-5 py-4 ${index > 0 ? 'figure-divided' : ''}`}>
+              <dt className="text-[12px] text-text-secondary">{t(label)}</dt>
+              <dd className="m-0 mt-1 text-[24px] font-semibold tabular-nums tracking-tight">
+                {value}
+              </dd>
+            </div>
+          </Fragment>
+        ))}
+      </dl>
 
-      <FileTranscribeCard />
+      <MeetingCard />
 
       <TokenUsageCard />
-
-      {/* Current config */}
-      <div className="rounded-[18px] p-5 jelly-card">
-        <h3 className="text-[13px] font-medium mb-3">{t('home.currentConfig')}</h3>
-        <div className="space-y-2 text-[13px]">
-          <div className="flex justify-between">
-            <span className="text-text-secondary">{t('home.sttProvider')}</span>
-            <span className="text-text-primary font-medium">{config.stt_provider}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">{t('home.llmProvider')}</span>
-            <span className="text-text-primary font-medium">
-              {llmServiceName(config.llm_provider, config.llm_base_url)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">{t('home.aiPolish')}</span>
-            <span className="text-text-primary font-medium">
-              {config.polish_enabled ? t('home.enabled') : t('home.disabled')}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">{t('home.outputMode')}</span>
-            <span className="text-text-primary font-medium">{config.output_mode}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <motion.button
-          onClick={() => navigate('settings')}
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scaleX: 1.06, scaleY: 0.94 }}
-          transition={spring.jellyGentle}
-          className="flex items-center gap-2.5 rounded-[14px] p-4 cursor-pointer text-left jelly-btn"
-        >
-          <Settings size={16} className="text-text-secondary" />
-          <span className="text-[13px] font-medium">{t('nav.settings')}</span>
-        </motion.button>
-        <motion.button
-          onClick={() => navigate('history')}
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scaleX: 1.06, scaleY: 0.94 }}
-          transition={spring.jellyGentle}
-          className="flex items-center gap-2.5 rounded-[14px] p-4 cursor-pointer text-left jelly-btn"
-        >
-          <History size={16} className="text-text-secondary" />
-          <span className="text-[13px] font-medium">{t('nav.history')}</span>
-        </motion.button>
-      </div>
     </div>
   )
 }

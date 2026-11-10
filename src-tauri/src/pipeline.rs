@@ -779,6 +779,8 @@ pub struct PipelineHandle {
     active_deadline_session_id: Arc<AtomicU64>,
     abort_flag: Arc<AtomicBool>,
     force_selection: Arc<AtomicBool>,
+    /// The loudest sample of the recording in progress.
+    recording_peak: Arc<std::sync::atomic::AtomicU32>,
     preloaded_config: Arc<Mutex<Option<storage::AppConfig>>>,
     preloaded_app_ctx: Arc<Mutex<Option<RecordingContext>>>,
     preloaded_dictionary: Arc<Mutex<Option<Vec<String>>>>,
@@ -1157,6 +1159,7 @@ impl PipelineHandle {
             active_deadline_session_id: Arc::new(AtomicU64::new(0)),
             abort_flag: Arc::new(AtomicBool::new(false)),
             force_selection: Arc::new(AtomicBool::new(false)),
+            recording_peak: Arc::new(std::sync::atomic::AtomicU32::new(0)),
             preloaded_config: Arc::new(Mutex::new(None)),
             preloaded_app_ctx: Arc::new(Mutex::new(None)),
             preloaded_dictionary: Arc::new(Mutex::new(None)),
@@ -1765,6 +1768,8 @@ impl PipelineHandle {
         };
         *self.stt_session.lock().unwrap_or_else(|e| e.into_inner()) = Some(stt_control.clone());
         let abort_flag_ref = self.abort_flag.clone();
+        let recording_peak = self.recording_peak.clone();
+        recording_peak.store(0, Ordering::SeqCst);
         let active_session_id_ref = self.active_stt_session_id.clone();
         let stt_error_ref = self.stt_error.clone();
 
@@ -1787,6 +1792,10 @@ impl PipelineHandle {
                     chunk = audio_rx.recv() => {
                         match chunk {
                             Some(data) => {
+                                recording_peak.fetch_max(
+                                    crate::audio::silence::peak(&data),
+                                    Ordering::SeqCst,
+                                );
                                 if let Err(error) = provider.send_audio(&data).await {
                                     tracing::error!("STT send audio error: {}", error);
                                     if let Some(user_error) = latch_stt_task_error_if_active(
@@ -2376,7 +2385,12 @@ impl PipelineHandle {
             .trim()
             .to_string();
 
-        if raw_text.is_empty() {
+        // A recognizer handed pure silence still returns a phrase, so the audio decides.
+        let silent = crate::audio::silence::is_silent(self.recording_peak.load(Ordering::SeqCst));
+        if silent {
+            tracing::warn!("the recording held no sound; its transcript is discarded");
+        }
+        if raw_text.is_empty() || silent {
             let _ = self
                 .app_handle
                 .emit("pipeline:error", no_speech_user_error(microphone_switched));

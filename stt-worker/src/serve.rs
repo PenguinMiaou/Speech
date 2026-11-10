@@ -36,6 +36,13 @@ pub trait Engine {
     fn isolate_feed(&mut self, pcm: &[f32]) -> Result<(), EngineError>;
     /// Ends the recording and returns its isolated audio.
     fn isolate_end(&mut self) -> Result<Vec<f32>, EngineError>;
+    /// Tells who spoke when in a whole recording.
+    fn diarize(
+        &mut self,
+        segmentation_model: &str,
+        embedding_model: &str,
+        pcm: &[f32],
+    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
 }
 
 pub fn not_isolating() -> EngineError {
@@ -70,6 +77,23 @@ pub fn serve<R: Read, W: Write, E: Engine>(
     while let Some(request) = read_frame::<_, Request>(reader)? {
         let response = match request {
             Request::Shutdown => return Ok(()),
+            Request::Diarize {
+                segmentation_model,
+                embedding_model,
+                pcm_path,
+            } => match std::fs::read(&pcm_path) {
+                Ok(raw) => {
+                    let pcm: Vec<f32> = raw
+                        .chunks_exact(4)
+                        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                        .collect();
+                    match engine.diarize(&segmentation_model, &embedding_model, &pcm) {
+                        Ok(turns) => Response::Speakers { turns },
+                        Err(e) => error(&e.code, e.message),
+                    }
+                }
+                Err(e) => error("audio_unreadable", e.to_string()),
+            },
             Request::IsolateBegin {
                 enroll_model,
                 chunk_model,
@@ -168,6 +192,19 @@ mod tests {
     }
 
     impl Engine for FakeEngine {
+        fn diarize(
+            &mut self,
+            _segmentation_model: &str,
+            _embedding_model: &str,
+            pcm: &[f32],
+        ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
+            Ok(vec![ot_stt_protocol::SpeakerTurn {
+                start_ms: 0,
+                end_ms: pcm.len() as u64,
+                speaker: 1,
+            }])
+        }
+
         fn load(&mut self, _model_path: &str) -> Result<String, EngineError> {
             if self.fail_load {
                 return Err(EngineError {
@@ -214,6 +251,42 @@ mod tests {
             },
             samples.to_vec(),
         )
+    }
+
+    #[test]
+    fn a_recording_on_disk_comes_back_as_speaker_turns() {
+        let path = std::env::temp_dir().join(format!("ot-diarize-{}.pcm", std::process::id()));
+        let samples = [0.5f32, 0.25, 0.125];
+        let raw: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        std::fs::write(&path, raw).unwrap();
+        let request = |pcm_path: String| Request::Diarize {
+            segmentation_model: "seg.onnx".into(),
+            embedding_model: "emb.onnx".into(),
+            pcm_path,
+        };
+        let frames = [
+            (request(path.to_string_lossy().into_owned()), vec![]),
+            (request("/nonexistent/audio.pcm".into()), vec![]),
+        ];
+        let mut output = Vec::new();
+        serve(&mut input(&frames), &mut output, &mut FakeEngine::default()).unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        let mut reader = Cursor::new(output);
+        assert_eq!(
+            read_frame::<_, Response>(&mut reader).unwrap(),
+            Some(Response::Speakers {
+                turns: vec![ot_stt_protocol::SpeakerTurn {
+                    start_ms: 0,
+                    end_ms: 3,
+                    speaker: 1
+                }]
+            })
+        );
+        assert!(matches!(
+            read_frame::<_, Response>(&mut reader).unwrap(),
+            Some(Response::Error { code, .. }) if code == "audio_unreadable"
+        ));
     }
 
     fn begin_frame() -> (Request, Vec<f32>) {

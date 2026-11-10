@@ -130,7 +130,7 @@ export function LlmPane() {
                       title={t('settings.appStyleMenu')}
                       aria-expanded={appStyleMenuOpen}
                       onClick={() => setAppStyleMenuOpen((open) => !open)}
-                      className="grid h-7 w-7 place-items-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+                      className="grid h-7 w-7 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
                     >
                       <MoreHorizontal size={15} />
                     </button>
@@ -206,7 +206,7 @@ export function LlmPane() {
             maxLength={20}
             aria-label={t('settings.assistantName')}
             placeholder={t('settings.assistantNamePlaceholder')}
-            className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none transition-all focus:border-border-focus"
+            className="w-full px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none transition-all focus:border-border-focus"
           />
           <p className="text-[11px] text-text-tertiary mt-1.5">{t('settings.assistantNameDesc')}</p>
         </FormField>
@@ -233,7 +233,7 @@ export function LlmPane() {
           type="button"
           aria-expanded={polishAdvancedOpen}
           onClick={() => setPolishAdvancedOpen((open) => !open)}
-          className="flex w-full items-center justify-between rounded-[10px] border border-border bg-bg-secondary/40 px-3 py-2 text-left text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
+          className="flex w-full items-center justify-between rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2 text-left text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
         >
           <span>{t('settings.advancedPolishSettings')}</span>
           <ChevronDown
@@ -267,7 +267,7 @@ export function LlmPane() {
                   maxLength={2000}
                   rows={4}
                   placeholder={t('settings.customPolishInstructionsPlaceholder')}
-                  className="w-full resize-y px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
+                  className="w-full resize-y px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none focus:border-border-focus transition-colors"
                 />
                 <p className="text-[11px] text-text-tertiary mt-1.5">
                   {t('settings.customPolishInstructionsCount', { count: polishPromptLength })}

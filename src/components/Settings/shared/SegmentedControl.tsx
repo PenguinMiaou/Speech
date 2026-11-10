@@ -11,12 +11,12 @@ export function SegmentedControl({ options, value, onChange }: Props) {
   const id = useId()
 
   return (
-    <div className="flex bg-bg-tertiary/50 rounded-[10px] p-0.5 gap-0.5">
+    <div className="flex bg-bg-secondary rounded-[8px] p-[3px] gap-0.5">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`relative flex-1 px-3 py-1.5 text-[13px] rounded-[8px] border-none cursor-pointer transition-colors ${
+          className={`relative flex-1 px-3 py-1.5 text-[13px] rounded-[6px] border-none cursor-pointer transition-colors ${
             value === opt.value
               ? 'text-text-primary font-medium'
               : 'text-text-secondary hover:text-text-primary bg-transparent'
@@ -25,7 +25,7 @@ export function SegmentedControl({ options, value, onChange }: Props) {
           {value === opt.value && (
             <motion.div
               layoutId={`segment-bg-${id}`}
-              className="absolute inset-0 rounded-[8px] jelly-nav-active"
+              className="absolute inset-0 segment-active"
               transition={{ type: 'spring', stiffness: 400, damping: 18 }}
             />
           )}

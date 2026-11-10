@@ -38,7 +38,7 @@ export function AboutPane() {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border border-border rounded-[10px] overflow-hidden">
+    <div className="border border-border rounded-[8px] overflow-hidden">
       <div className="px-3 py-2.5 bg-bg-secondary/50 border-b border-border">
         <h3 className="text-[13px] font-medium text-text-primary">{title}</h3>
       </div>

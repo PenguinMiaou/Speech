@@ -61,6 +61,9 @@ const ERROR_KEYS: Record<string, string> = {
   network: 'localStt.errorNetwork',
   checksum: 'localStt.errorChecksum',
   engine: 'localStt.errorEngine',
+  engine_cpu: 'localStt.errorEngineCpu',
+  engine_slow: 'localStt.errorEngineSlow',
+  engine_blocked: 'localStt.errorEngineBlocked',
 }
 
 const BUTTON_PRIMARY =
@@ -313,10 +316,17 @@ export function LocalModelCard() {
               )}
 
               {state === 'failed' && (
-                <p className="flex items-center gap-1 text-[12px] text-error">
-                  <XCircle size={13} className="flex-shrink-0" />
-                  <span>{t(errorKey ?? 'localStt.errorUnknown')}</span>
-                </p>
+                <div className="text-[12px]">
+                  <p className="flex items-center gap-1 text-error">
+                    <XCircle size={13} className="flex-shrink-0" />
+                    <span>{t(errorKey ?? 'localStt.errorUnknown')}</span>
+                  </p>
+                  {event?.error_detail && (
+                    <p className="mt-1 ml-[17px] select-text break-all font-mono text-[11px] text-text-tertiary">
+                      {event.error_detail}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )

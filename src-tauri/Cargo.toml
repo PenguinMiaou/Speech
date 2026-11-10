@@ -1,6 +1,6 @@
 [package]
 name = "opentypeless"
-version = "1.2.2"
+version = "1.2.3"
 description = "AI-powered speech-to-text and text polishing desktop app"
 authors = ["OpenTypeless Contributors"]
 license = "MIT"
@@ -54,6 +54,7 @@ flate2 = "1"
 pinyin = { version = "0.11.0", default-features = false, features = ["plain", "heteronym"] }
 unicode-segmentation = "1.12.0"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "aac", "isomp4", "wav", "flac", "ogg", "vorbis", "pcm", "mkv"] }
+tauri-plugin-dialog = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }

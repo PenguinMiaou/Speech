@@ -51,19 +51,12 @@
     "audio_microphone_switched": "The microphone heard nothing, so dictation now uses {{details}}"
   },
   "home": {
-    "welcome": "Bienvenido a OpenTypeless",
-    "description": "Mantén presionado {{hotkey}} para iniciar la grabación de voz. Tu habla será transcrita y opcionalmente pulida por IA.",
     "totalRecordings": "Grabaciones totales",
     "today": "Hoy",
-    "currentConfig": "Configuración actual",
     "sttProvider": "Proveedor STT",
-    "llmProvider": "Proveedor LLM",
     "aiPolish": "Pulido con IA",
-    "enabled": "Activado",
     "disabled": "Desactivado",
     "outputMode": "Modo de salida",
-    "wordsRemaining": "Palabras restantes",
-    "wordsReset": "Se reinicia el {{date}}",
     "tokens": {
       "title": "Tokens usados en el pulido",
       "today": "Hoy",
@@ -71,7 +64,9 @@
       "total": "Total"
     },
     "wordsDictated": "Palabras dictadas",
-    "timeSaved": "Ahorrado frente a teclear"
+    "timeSaved": "Ahorrado frente a teclear",
+    "speakWith": "Pulsa {{hotkey}} y habla",
+    "figures": "Tus cifras"
   },
   "onboarding": {
     "speakToWrite": "Habla para escribir — convierte tu voz en texto pulido en tiempo real",
@@ -763,7 +758,10 @@
     "errorChecksum": "The file failed verification. Please download it again.",
     "errorEngine": "The model could not run on this machine.",
     "errorUnknown": "Installation failed.",
-    "errorSave": "Could not save the setting. Please try again."
+    "errorSave": "Could not save the setting. Please try again.",
+    "errorEngineCpu": "El procesador de este ordenador no tiene las instrucciones AVX2 que necesita el reconocimiento local, así que los modelos locales no funcionan aquí. Usa la API en la nube.",
+    "errorEngineSlow": "El modelo tardó demasiado en cargarse. Puede que este ordenador sea lento o tenga poca memoria. Inténtalo de nuevo o elige un modelo más pequeño.",
+    "errorEngineBlocked": "No se pudo iniciar el programa de reconocimiento. Puede que el software de seguridad lo haya bloqueado o eliminado. Reinstala la aplicación e inténtalo de nuevo."
   },
   "snippets": {
     "title": "Fragmentos",
@@ -775,19 +773,34 @@
     "duplicate": "Esta frase ya está guardada",
     "failed": "No se pudo guardar"
   },
-  "fileTranscribe": {
-    "drop": "Suelta un archivo de audio o vídeo en esta ventana para pasarlo a texto con el modelo de este equipo",
-    "reading": "Leyendo el archivo…",
+  "meeting": {
+    "title": "Transcripción de reuniones",
+    "description": "Graba una reunión o arrastra aquí una grabación. El modelo de este ordenador la pasa a texto.",
+    "record": "Empezar a grabar",
+    "chooseFile": "Elegir archivo",
+    "stop": "Detener y transcribir",
+    "discard": "Descartar",
+    "speakers": "Distinguir hablantes",
+    "speakerLabel": "Hablante",
+    "downloadingSpeakers": "Descargando los modelos de hablantes {{percent}}%",
+    "model": "Modelo",
+    "reading": "Leyendo…",
+    "findingSpeakers": "Buscando quién habló y cuándo…",
     "working": "Transcribiendo, parte {{done}} de {{total}}",
     "result": "Transcripción",
     "copy": "Copiar",
+    "save": "Guardar como archivo",
+    "fileName": "Notas de la reunión.txt",
     "error": {
-      "file_not_audio": "Este archivo no contiene audio reconocible",
+      "file_not_audio": "Este archivo no tiene audio reconocible",
       "file_unreadable": "No se pudo abrir el archivo",
-      "file_too_long": "El archivo dura más de 3 horas",
-      "local_model_not_installed": "Aún no hay un modelo de voz local instalado",
-      "busy": "El archivo anterior aún no ha terminado",
-      "failed": "No se pudo transcribir el archivo"
+      "file_too_long": "Dura más de 3 horas, es demasiado",
+      "local_model_not_installed": "No hay ningún modelo de voz local instalado",
+      "speaker_models_not_installed": "Los modelos de hablantes aún no están descargados",
+      "busy": "La grabación anterior todavía se está transcribiendo",
+      "failed": "La transcripción no salió bien",
+      "speakerDownload": "No se pudieron descargar los modelos de hablantes",
+      "microphone": "No se pudo abrir el micrófono"
     }
   }
 }

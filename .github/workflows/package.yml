@@ -11,6 +11,11 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 90
+    env:
+      # Without GGML_NATIVE=OFF the recognition library is compiled for whatever processor
+      # the build machine has. On a machine with AVX-512 the result crashes on the many
+      # computers that lack it. OFF fixes the instruction set at AVX2.
+      TRANSCRIBE_CMAKE_ARGS: -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -118,16 +123,27 @@ jobs:
           fi
 
       - name: Build the app
-        run: npm run tauri build -- --bundles app,dmg
+        run: npm run tauri build -- --bundles app
 
-      # The disk image opens to a window where the app is dragged onto Applications.
+      # The disk image opens to a window where the app is dragged onto Applications. dmgbuild
+      # writes the window layout into the image itself, which works without a desktop session.
+      - name: Build the disk image
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet dmgbuild==1.6.7
+          "$RUNNER_TEMP/dmgbuild/bin/dmgbuild" -s src-tauri/dmg/settings.py \
+            -D app=src-tauri/target/release/bundle/macos/OpenTypeless.app \
+            OpenTypeless OpenTypeless-macos-arm64.dmg
+          if [ "$APPLE_SIGNING_IDENTITY" != "-" ]; then
+            codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" OpenTypeless-macos-arm64.dmg
+          fi
+
       - name: Check the app and notarize the disk image
         run: |
           codesign --verify --deep --strict src-tauri/target/release/bundle/macos/OpenTypeless.app
           codesign -dvv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'Signature=|TeamIdentifier=|flags='
           # Says whether this Mac would open the app as downloaded. Not a failure for ad hoc builds.
           spctl -a -t exec -vv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'accepted|rejected|source=' || true
-          cp src-tauri/target/release/bundle/dmg/*.dmg OpenTypeless-macos-arm64.dmg
           if [ -n "$APPLE_API_KEY_PATH" ]; then
             xcrun notarytool submit OpenTypeless-macos-arm64.dmg --key "$APPLE_API_KEY_PATH" \
               --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait --timeout 30m

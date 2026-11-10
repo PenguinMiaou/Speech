@@ -121,12 +121,12 @@ export function History() {
   return (
     <div className="w-full h-full bg-bg-primary text-text-primary flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-border">
-        <h2 className="text-[15px] font-medium">{t('history.title')}</h2>
+      <div className="page-header">
+        <h2 className="page-title">{t('history.title')}</h2>
       </div>
 
       {/* Search — jelly focus */}
-      <div className="px-5 py-3">
+      <div className="px-8 py-3 max-w-[784px]">
         <div className="relative">
           <Search
             size={14}
@@ -136,14 +136,14 @@ export function History() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('history.searchPlaceholder')}
-            className="w-full pl-8 pr-3 py-2.5 bg-bg-secondary border border-border rounded-[14px] text-[13px] text-text-primary outline-none focus:ring-2 focus:ring-jelly-primary focus:border-jelly-primary transition-all jelly-btn"
+            className="w-full pl-8 pr-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary outline-none focus:ring-2 focus:ring-jelly-primary focus:border-jelly-primary transition-all jelly-btn"
             style={{ transform: 'none' }}
           />
         </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-5 pb-4">
+      <div className="flex-1 overflow-y-auto px-8 pb-4">
         {filtered.length === 0 ? (
           <p className="text-center text-text-tertiary text-[13px] py-12">
             {search ? (
@@ -160,16 +160,13 @@ export function History() {
           <AnimatePresence>
             {Array.from(grouped.entries()).map(([label, entries]) => (
               <div key={label} className="mb-4">
-                <h3 className="text-[11px] font-medium text-text-tertiary uppercase tracking-wider mb-2 px-1 pb-1 border-b border-border">
-                  {label}
-                </h3>
+                <h3 className="section-label mb-2 px-1">{label}</h3>
                 <div className="space-y-0.5">
                   {entries.map((entry) => (
                     <motion.div
                       key={entry.id}
-                      whileHover={{ scale: 1.01 }}
                       transition={spring.jellyGentle}
-                      className="group flex items-start gap-3 px-3 py-2.5 rounded-[10px] hover:bg-bg-secondary transition-colors"
+                      className="group flex items-start gap-3 px-3 py-2.5 rounded-[8px] hover:bg-bg-secondary transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] text-text-primary leading-relaxed">
@@ -193,9 +190,8 @@ export function History() {
                       <div className="flex flex-shrink-0 items-center">
                         <motion.button
                           onClick={() => handleCopy(entry.id, entry.polished_text)}
-                          whileTap={{ scaleX: 1.1, scaleY: 0.9 }}
                           transition={spring.jelly}
-                          className="opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 p-1.5 rounded-[6px] hover:bg-bg-tertiary transition-all duration-200 bg-transparent border-none cursor-pointer text-text-tertiary hover:text-accent flex-shrink-0"
+                          className="opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 p-1.5 rounded-[8px] hover:bg-bg-tertiary transition-all duration-200 bg-transparent border-none cursor-pointer text-text-tertiary hover:text-accent flex-shrink-0"
                           aria-label={`Copy text: ${entry.polished_text.slice(0, 30)}`}
                         >
                           <Copy size={13} />
@@ -211,7 +207,7 @@ export function History() {
                             aria-label={t('history.moreActions')}
                             aria-haspopup="menu"
                             aria-expanded={menuEntryId === entry.id}
-                            className="p-1.5 rounded-[6px] hover:bg-bg-tertiary transition-all bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary flex-shrink-0"
+                            className="p-1.5 rounded-[8px] hover:bg-bg-tertiary transition-all bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary flex-shrink-0"
                           >
                             <MoreHorizontal size={13} />
                           </button>
@@ -254,9 +250,9 @@ export function History() {
 
       {/* Clear button — jelly */}
       {history.length > 0 && (
-        <div className="space-y-2 border-t border-border px-5 py-3">
+        <div className="space-y-2 border-t border-border px-8 py-3">
           {confirmingClear && (
-            <div className="rounded-[10px] border border-error/20 bg-error/10 px-3 py-2">
+            <div className="rounded-[8px] border border-error/20 bg-error/10 px-3 py-2">
               <p className="text-[12px] leading-relaxed text-text-secondary">
                 {t('history.clearConfirm')}
               </p>
@@ -264,14 +260,14 @@ export function History() {
                 <button
                   type="button"
                   onClick={() => setConfirmingClear(false)}
-                  className="rounded-[7px] border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
+                  className="rounded-[8px] border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="rounded-[7px] border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
+                  className="rounded-[8px] border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
                 >
                   {t('history.confirmClear')}
                 </button>
@@ -280,10 +276,8 @@ export function History() {
           )}
           <motion.button
             onClick={() => setConfirmingClear(true)}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scaleX: 1.06, scaleY: 0.94 }}
             transition={spring.jellyGentle}
-            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-[10px] py-2 text-[12px] text-text-tertiary transition-colors hover:text-error jelly-btn"
+            className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-[8px] py-2 text-[12px] text-text-tertiary transition-colors hover:text-error jelly-btn"
           >
             <Trash2 size={12} />
             {t('history.clearAll')}

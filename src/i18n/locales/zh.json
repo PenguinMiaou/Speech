@@ -51,17 +51,10 @@
     "audio_microphone_switched": "刚才的麦克风没有声音，已换成 {{details}}"
   },
   "home": {
-    "welcome": "欢迎使用 OpenTypeless",
-    "description": "使用 {{hotkey}} 开始语音录制。语音将被转录并可选择由 AI 润色。",
     "totalRecordings": "总录音数",
     "today": "今日",
-    "wordsRemaining": "剩余 words",
-    "wordsReset": "{{date}} 重置",
-    "currentConfig": "当前配置",
     "sttProvider": "语音识别服务",
-    "llmProvider": "LLM 服务",
     "aiPolish": "AI 润色",
-    "enabled": "已启用",
     "disabled": "已禁用",
     "outputMode": "文字写入",
     "tokens": {
@@ -71,7 +64,9 @@
       "total": "累计"
     },
     "wordsDictated": "听写字数",
-    "timeSaved": "比打字省下"
+    "timeSaved": "比打字省下",
+    "speakWith": "按 {{hotkey}} 开始说话",
+    "figures": "使用数据"
   },
   "onboarding": {
     "speakToWrite": "说话即写作 — 实时将语音转化为润色文本",
@@ -763,7 +758,10 @@
     "errorChecksum": "文件校验失败，请重新下载。",
     "errorEngine": "模型无法在这台机器上运行。",
     "errorUnknown": "安装失败。",
-    "errorSave": "设置保存失败，请重试。"
+    "errorSave": "设置保存失败，请重试。",
+    "errorEngineCpu": "这台电脑的处理器不支持本地识别需要的 AVX2 指令，本地模型跑不了，可以改用“云服务 API”。",
+    "errorEngineSlow": "模型加载超时，这台电脑可能太慢或内存不够，可以再试一次或换小一点的模型。",
+    "errorEngineBlocked": "识别程序启动不了，可能被安全软件拦截或删除了，重装应用后再试。"
   },
   "snippets": {
     "title": "片段",
@@ -775,19 +773,34 @@
     "duplicate": "这个短语已经有了",
     "failed": "没有保存成功"
   },
-  "fileTranscribe": {
-    "drop": "把音频或视频文件拖到这个窗口，用本机模型转成文字",
-    "reading": "正在读取文件…",
+  "meeting": {
+    "title": "会议转写",
+    "description": "录一段会议，或者把录音、录屏拖进来，用本机模型转成文字。",
+    "record": "开始录音",
+    "chooseFile": "选择文件",
+    "stop": "结束并转写",
+    "discard": "放弃",
+    "speakers": "区分说话人",
+    "speakerLabel": "说话人",
+    "downloadingSpeakers": "正在下载说话人模型 {{percent}}%",
+    "model": "识别模型",
+    "reading": "正在读取…",
+    "findingSpeakers": "正在区分说话人…",
     "working": "正在转写，第 {{done}} 段，共 {{total}} 段",
     "result": "转写结果",
     "copy": "复制",
+    "save": "存为文件",
+    "fileName": "会议记录.txt",
     "error": {
       "file_not_audio": "这个文件里没有能识别的音频",
       "file_unreadable": "文件打不开",
-      "file_too_long": "文件超过 3 小时，太长了",
+      "file_too_long": "超过 3 小时，太长了",
       "local_model_not_installed": "还没有安装本地识别模型",
-      "busy": "上一个文件还没转完",
-      "failed": "没有转写成功"
+      "speaker_models_not_installed": "说话人模型还没有下载",
+      "busy": "上一段还没转完",
+      "failed": "没有转写成功",
+      "speakerDownload": "说话人模型没有下载成功",
+      "microphone": "麦克风打不开"
     }
   }
 }

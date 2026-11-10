@@ -36,7 +36,7 @@ export function WelcomeStep() {
             <button
               key={lang.value}
               onClick={() => handleSelectLanguage(lang.value)}
-              className={`px-4 py-4 rounded-[10px] text-[14px] border cursor-pointer transition-all ${
+              className={`px-4 py-4 rounded-[8px] text-[14px] border cursor-pointer transition-all ${
                 currentLang === lang.value
                   ? 'bg-accent/10 border-accent text-accent font-medium'
                   : 'bg-bg-secondary border-border text-text-primary hover:border-text-tertiary'

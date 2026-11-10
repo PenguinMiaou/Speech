@@ -26,7 +26,7 @@ export function SttSetupStep() {
 
   return (
     <div className="space-y-5">
-      <div role="tablist" className="flex gap-1 rounded-[10px] bg-bg-secondary p-1">
+      <div role="tablist" className="flex gap-1 rounded-[8px] bg-bg-secondary p-1">
         <ModeTab
           selected={isLocal}
           label={t('onboarding.stt.localTab')}
@@ -114,7 +114,7 @@ function ApiForm({ onSelect }: { onSelect: (provider: string) => void }) {
     <>
       {isCustomWhisper ? (
         <Field label={t('onboarding.stt.serviceLabel')}>
-          <div className="rounded-[10px] border border-border bg-bg-secondary px-3 py-2.5">
+          <div className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5">
             <p className="text-[13px] font-medium text-text-primary">
               {t('onboarding.stt.customWhisperConfigured')}
             </p>
@@ -152,7 +152,7 @@ function ApiForm({ onSelect }: { onSelect: (provider: string) => void }) {
                 setSttTestStatus('idle')
               }}
               placeholder={t('onboarding.stt.apiKeyPlaceholder')}
-              className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[10px] text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent"
+              className="flex-1 px-3 py-2.5 bg-bg-secondary border border-border rounded-[8px] text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent"
             />
             <button
               onClick={handleTest}
@@ -162,7 +162,7 @@ function ApiForm({ onSelect }: { onSelect: (provider: string) => void }) {
                   ? !config.stt_custom_base_url.trim() || !config.stt_custom_model.trim()
                   : !config.stt_api_key)
               }
-              className="px-4 py-2.5 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-accent text-white rounded-[8px] text-[13px] border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               {sttTestStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
               {t('onboarding.stt.testButton')}

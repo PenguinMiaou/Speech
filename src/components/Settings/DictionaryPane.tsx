@@ -293,7 +293,7 @@ export function DictionaryPane() {
           onClick={() => importInputRef.current?.click()}
           aria-label={t('dictionary.import')}
           title={t('dictionary.import')}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
         >
           <Upload size={14} />
         </button>
@@ -318,7 +318,7 @@ export function DictionaryPane() {
             title={t('dictionary.export')}
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[6px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
           >
             <Download size={14} />
           </button>
@@ -403,7 +403,7 @@ export function DictionaryPane() {
           </div>
 
           <div className="overflow-hidden rounded-[8px] border border-border">
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_64px] gap-2 bg-bg-secondary px-3 py-2.5 text-[11px] font-medium uppercase text-text-secondary">
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_64px] gap-2 bg-bg-secondary px-3 py-2.5 text-[12px] font-medium text-text-secondary">
               <span>{t('dictionary.word')}</span>
               <span>{t('dictionary.pronunciation')}</span>
               <span />
@@ -423,7 +423,7 @@ export function DictionaryPane() {
                       aria-label={t('dictionary.word')}
                       value={editing.word}
                       onChange={(event) => setEditing({ ...editing, word: event.target.value })}
-                      className="min-w-0 rounded-[6px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <input
                       aria-label={t('dictionary.pronunciation')}
@@ -431,7 +431,7 @@ export function DictionaryPane() {
                       onChange={(event) =>
                         setEditing({ ...editing, pronunciation: event.target.value })
                       }
-                      className="min-w-0 rounded-[6px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <div className="flex justify-end">
                       <button
@@ -552,7 +552,7 @@ export function DictionaryPane() {
                       aria-label={t('dictionary.wrongPhrase')}
                       value={editing.pattern}
                       onChange={(event) => setEditing({ ...editing, pattern: event.target.value })}
-                      className="min-w-0 rounded-[6px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <input
                       aria-label={t('dictionary.correctPhrase')}
@@ -560,7 +560,7 @@ export function DictionaryPane() {
                       onChange={(event) =>
                         setEditing({ ...editing, replacement: event.target.value })
                       }
-                      className="min-w-0 rounded-[6px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <div className="flex justify-end">
                       <button

@@ -32,6 +32,16 @@ fn free_space(dir: &Path) -> std::io::Result<u64> {
 }
 
 fn emit(app: &tauri::AppHandle, model_id: &str, phase: Phase, error_code: Option<&str>) {
+    emit_with_detail(app, model_id, phase, error_code, None)
+}
+
+fn emit_with_detail(
+    app: &tauri::AppHandle,
+    model_id: &str,
+    phase: Phase,
+    error_code: Option<&str>,
+    error_detail: Option<String>,
+) {
     let total = catalog::find(model_id).map_or(0, |entry| entry.size_bytes);
     let _ = app.emit(
         PROGRESS_EVENT,
@@ -46,21 +56,22 @@ fn emit(app: &tauri::AppHandle, model_id: &str, phase: Phase, error_code: Option
             total,
             bytes_per_sec: 0,
             error_code: error_code.map(str::to_string),
+            error_detail,
         },
     );
 }
 
 /// Loads the model and transcribes one second of silence, so "ready" means it really runs here.
-async fn smoke_test(path: std::path::PathBuf) -> Result<(), InstallError> {
+async fn smoke_test(path: std::path::PathBuf) -> Result<(), crate::local_stt::LocalSttError> {
+    use crate::local_stt::LocalSttError;
     let supervisor =
-        crate::local_stt::global().ok_or_else(|| InstallError::Io("worker unavailable".into()))?;
+        crate::local_stt::global().ok_or_else(|| LocalSttError::Io("worker unavailable".into()))?;
     tokio::task::spawn_blocking(move || {
         supervisor.transcribe(&path, &[0.0f32; 16_000], Vec::new(), None)
     })
     .await
-    .map_err(|e| InstallError::Io(e.to_string()))?
+    .map_err(|e| LocalSttError::Io(e.to_string()))?
     .map(|_| ())
-    .map_err(|e| InstallError::Io(e.to_string()))
 }
 
 fn refuse_if_installing(state: &InstallState, model_id: &str) -> Result<(), String> {
@@ -144,12 +155,14 @@ pub fn local_stt_install_model(
                 .await
             }
         };
+        let mut detail = None;
         let outcome = match outcome {
             Ok(path) => {
                 emit(&app, &model_id, Phase::Testing, None);
                 smoke_test(path).await.map_err(|error| {
                     tracing::warn!("local model failed its smoke test: {error:?}");
-                    "engine"
+                    detail = Some(error.to_string());
+                    crate::local_stt::supervisor::failure_code(&error)
                 })
             }
             Err(InstallError::Cancelled) => Err("cancelled"),
@@ -169,7 +182,7 @@ pub fn local_stt_install_model(
         match outcome {
             Ok(()) => emit(&app, &model_id, Phase::Ready, None),
             Err("cancelled") => emit(&app, &model_id, Phase::Cancelled, None),
-            Err(code) => emit(&app, &model_id, Phase::Failed, Some(code)),
+            Err(code) => emit_with_detail(&app, &model_id, Phase::Failed, Some(code), detail),
         }
     });
     Ok(())
@@ -235,20 +248,44 @@ mod tests {
 
 static TRANSCRIBING_FILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+fn file_options(
+    speaker_label: Option<String>,
+    model_id: Option<String>,
+) -> crate::file_transcribe::Options {
+    crate::file_transcribe::Options {
+        speaker_label: speaker_label.filter(|label| !label.trim().is_empty()),
+        model_id,
+    }
+}
+
+fn report_stage(app: &tauri::AppHandle, stage: crate::file_transcribe::Stage) {
+    use crate::file_transcribe::Stage;
+    let payload = match stage {
+        Stage::Speakers => serde_json::json!({ "stage": "speakers", "done": 0, "total": 0 }),
+        Stage::Text { done, total } => {
+            serde_json::json!({ "stage": "text", "done": done, "total": total })
+        }
+    };
+    let _ = app.emit("file-transcribe:progress", payload);
+}
+
 /// Turns an audio or video file into text with the local model, one file at a time.
-/// Progress goes out as `file-transcribe:progress`.
+/// With `speaker_label` the text is written out by speaker. Progress goes out as
+/// `file-transcribe:progress`.
 #[tauri::command]
-pub async fn transcribe_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
-    use std::sync::atomic::Ordering;
+pub async fn transcribe_file(
+    app: tauri::AppHandle,
+    path: String,
+    speaker_label: Option<String>,
+    model_id: Option<String>,
+) -> Result<String, String> {
     if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
         return Err("busy".to_string());
     }
+    let options = file_options(speaker_label, model_id);
     let result = tokio::task::spawn_blocking(move || {
-        crate::file_transcribe::transcribe(std::path::Path::new(&path), |done, total| {
-            let _ = app.emit(
-                "file-transcribe:progress",
-                serde_json::json!({ "done": done, "total": total }),
-            );
+        crate::file_transcribe::transcribe(std::path::Path::new(&path), &options, |stage| {
+            report_stage(&app, stage)
         })
     })
     .await
@@ -256,4 +293,133 @@ pub async fn transcribe_file(app: tauri::AppHandle, path: String) -> Result<Stri
     .and_then(|result| result);
     TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
     result
+}
+
+/// Starts recording a meeting from the microphone.
+#[tauri::command]
+pub async fn meeting_record_start(input_device: String) -> Result<(), String> {
+    if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
+        return Err("busy".to_string());
+    }
+    crate::meeting_record::start(input_device).await
+}
+
+#[derive(Serialize)]
+pub struct MeetingLevel {
+    pub seconds: u64,
+    pub volume: f32,
+}
+
+/// The running meeting recording's length and microphone level, if one runs.
+#[tauri::command]
+pub fn meeting_record_level() -> Option<MeetingLevel> {
+    crate::meeting_record::level().map(|(seconds, volume)| MeetingLevel { seconds, volume })
+}
+
+/// Ends the meeting recording and turns it into text. With `discard` the audio is dropped.
+#[tauri::command]
+pub async fn meeting_record_stop(
+    app: tauri::AppHandle,
+    discard: bool,
+    speaker_label: Option<String>,
+    model_id: Option<String>,
+) -> Result<String, String> {
+    let pcm = crate::meeting_record::stop().await?;
+    if discard {
+        return Ok(String::new());
+    }
+    if pcm.len() < 16_000 {
+        return Err("file_not_audio".to_string());
+    }
+    if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
+        return Err("busy".to_string());
+    }
+    let options = file_options(speaker_label, model_id);
+    let result = tokio::task::spawn_blocking(move || {
+        crate::file_transcribe::transcribe_pcm(&pcm, &options, |stage| report_stage(&app, stage))
+    })
+    .await
+    .map_err(|error| error.to_string())
+    .and_then(|result| result);
+    TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
+    result
+}
+
+#[derive(Serialize)]
+pub struct SpeakerModelsStatus {
+    pub installed: bool,
+    pub downloading: bool,
+    pub total_bytes: u64,
+}
+
+#[tauri::command]
+pub fn speaker_models_status() -> SpeakerModelsStatus {
+    SpeakerModelsStatus {
+        installed: crate::speakers::installed_models().is_some(),
+        downloading: SPEAKER_DOWNLOAD.load(Ordering::SeqCst),
+        total_bytes: crate::speakers::MODEL_FILES
+            .iter()
+            .map(|file| file.size_bytes)
+            .sum(),
+    }
+}
+
+static SPEAKER_DOWNLOAD: AtomicBool = AtomicBool::new(false);
+
+/// Downloads and verifies the two speaker models, reporting progress over both as
+/// `speakers:download-progress`.
+#[tauri::command]
+pub async fn speaker_models_install(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = crate::speakers::model_dir().ok_or("models directory is not ready")?;
+    if SPEAKER_DOWNLOAD.swap(true, Ordering::SeqCst) {
+        return Err("busy".to_string());
+    }
+    let result = install_speaker_models(&app, &dir).await;
+    SPEAKER_DOWNLOAD.store(false, Ordering::SeqCst);
+    result
+}
+
+async fn install_speaker_models(app: &tauri::AppHandle, dir: &Path) -> Result<(), String> {
+    let files = &crate::speakers::MODEL_FILES;
+    let total: u64 = files.iter().map(|file| file.size_bytes).sum();
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .read_timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut before = 0;
+    for file in files {
+        if !crate::voice_isolation::is_downloaded(dir, file) {
+            let job = InstallJob {
+                model_id: file.file_name.to_string(),
+                url: file.url.to_string(),
+                file_name: file.file_name.to_string(),
+                size_bytes: file.size_bytes,
+                sha256: file.sha256.to_string(),
+                dir: dir.to_path_buf(),
+                client: client.clone(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                free_space,
+            };
+            let progress_app = app.clone();
+            install::download_and_verify(&job, move |progress| {
+                if progress.phase == Phase::Downloading {
+                    let _ = progress_app.emit(
+                        "speakers:download-progress",
+                        serde_json::json!({ "downloaded": before + progress.downloaded, "total": total }),
+                    );
+                }
+            })
+            .await
+            .map_err(|error| error.code().to_string())?;
+        }
+        before += file.size_bytes;
+    }
+    Ok(())
+}
+
+/// Writes text to the place the user just chose in the save dialog.
+#[tauri::command]
+pub fn save_text_file(path: String, text: String) -> Result<(), String> {
+    std::fs::write(path, text).map_err(|error| error.to_string())
 }

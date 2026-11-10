@@ -23,7 +23,7 @@ export function MainLayout({ children }: Props) {
   return (
     <div className="w-full h-full flex bg-bg-primary text-text-primary">
       {/* Sidebar — jelly surface */}
-      <aside className="w-[208px] flex flex-col border-r border-border jelly-surface-flat shrink-0">
+      <aside className="w-[200px] flex flex-col border-r border-border jelly-surface-flat shrink-0">
         {/* Logo */}
         <div className="px-5 pt-5 pb-4" data-tauri-drag-region>
           <h1 className="text-[15px] font-semibold tracking-tight">{t('app.name')}</h1>
@@ -39,9 +39,6 @@ export function MainLayout({ children }: Props) {
               <motion.button
                 key={id}
                 onClick={() => navigate(id)}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scaleX: 1.05, scaleY: 0.95 }}
-                transition={spring.jellyGentle}
                 aria-label={label}
                 aria-current={active ? 'page' : undefined}
                 className={`flex items-center gap-2.5 w-full px-3 py-2 text-[13px] rounded-[8px] transition-colors bg-transparent border-none cursor-pointer text-left relative ${
@@ -58,7 +55,7 @@ export function MainLayout({ children }: Props) {
                   />
                 )}
                 <span className="relative z-10 flex items-center gap-2.5">
-                  <Icon size={16} />
+                  <Icon size={16} className={active ? 'text-accent' : undefined} />
                   {label}
                 </span>
               </motion.button>

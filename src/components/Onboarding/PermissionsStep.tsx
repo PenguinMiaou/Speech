@@ -133,7 +133,7 @@ function PermissionRow({
   const StateIcon = state === 'ready' ? Check : state === 'needed' ? AlertCircle : null
 
   return (
-    <div className="flex items-center gap-3 rounded-[10px] bg-bg-secondary px-3 py-2.5">
+    <div className="flex items-center gap-3 rounded-[8px] bg-bg-secondary px-3 py-2.5">
       <div className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-bg-tertiary text-text-tertiary">
         <Icon size={14} />
       </div>
@@ -145,7 +145,7 @@ function PermissionRow({
         <button
           type="button"
           onClick={onAccessibility}
-          className="shrink-0 rounded-[7px] border border-border bg-bg-primary px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary"
+          className="shrink-0 rounded-[8px] border border-border bg-bg-primary px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary"
         >
           {t('onboarding.permissions.fix')}
         </button>

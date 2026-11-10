@@ -31,7 +31,21 @@ pub enum Request {
     },
     /// Ends the recording. The answer carries the isolated audio.
     IsolateEnd,
+    /// Tells who spoke when in the 16 kHz mono `f32` audio stored at `pcm_path`.
+    Diarize {
+        segmentation_model: String,
+        embedding_model: String,
+        pcm_path: String,
+    },
     Shutdown,
+}
+
+/// One stretch of speech by one speaker. Speakers are numbered from 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeakerTurn {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub speaker: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +58,10 @@ pub enum Response {
         text: String,
         language: Option<String>,
         elapsed_ms: u64,
+    },
+    /// Who spoke when, in order of start time.
+    Speakers {
+        turns: Vec<SpeakerTurn>,
     },
     /// The recording is being isolated; more audio may follow.
     Isolating,
