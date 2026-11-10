@@ -52,6 +52,55 @@ fn frontmost_process_id() -> Option<u32> {
     })
 }
 
+/// The category the app in front declares in its own bundle, such as
+/// `public.app-category.developer-tools`. Read from the app on this Mac.
+fn frontmost_app_category() -> Option<String> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    objc2::rc::autoreleasepool(|_| {
+        // SAFETY: every message returns an object or nil, and each is checked before use.
+        // The C string is copied before the pool releases its owner.
+        unsafe {
+            let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+            if workspace.is_null() {
+                return None;
+            }
+            let app: *mut AnyObject = msg_send![workspace, frontmostApplication];
+            if app.is_null() {
+                return None;
+            }
+            let url: *mut AnyObject = msg_send![app, bundleURL];
+            if url.is_null() {
+                return None;
+            }
+            let bundle: *mut AnyObject = msg_send![class!(NSBundle), bundleWithURL: url];
+            if bundle.is_null() {
+                return None;
+            }
+            let key: *mut AnyObject = msg_send![
+                class!(NSString),
+                stringWithUTF8String: c"LSApplicationCategoryType".as_ptr()
+            ];
+            let value: *mut AnyObject = msg_send![bundle, objectForInfoDictionaryKey: key];
+            if value.is_null() {
+                return None;
+            }
+            let is_string: bool = msg_send![value, isKindOfClass: class!(NSString)];
+            if !is_string {
+                return None;
+            }
+            let text: *const std::os::raw::c_char = msg_send![value, UTF8String];
+            if text.is_null() {
+                return None;
+            }
+            let text = std::ffi::CStr::from_ptr(text)
+                .to_string_lossy()
+                .into_owned();
+            Some(text).filter(|text| !text.is_empty())
+        }
+    })
+}
+
 impl ContextSignalSource for MacOsContextSource {
     fn frontmost_process_id(&self) -> Option<u32> {
         frontmost_process_id()
@@ -104,6 +153,7 @@ impl ContextSignalSource for MacOsContextSource {
             native_identity,
             process_alias: Some(app_name),
             window_title,
+            app_category: frontmost_app_category(),
             browser_host,
             is_supported_browser: browser.is_some(),
             browser_access_status,
@@ -309,5 +359,15 @@ mod tests {
             browser_access_status_for_automation_permission(-1),
             BrowserAccessStatus::Unknown
         );
+    }
+}
+
+#[cfg(test)]
+mod category_tests {
+    /// Needs a desktop session with an app in front. Run with `--ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn reads_the_category_of_the_app_in_front() {
+        println!("category: {:?}", super::frontmost_app_category());
     }
 }

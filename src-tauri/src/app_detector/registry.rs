@@ -191,9 +191,15 @@ impl AppRegistry {
         }
 
         if signals.is_supported_browser {
-            ContextProfile::general_browser()
-        } else {
-            ContextProfile::general_native()
+            return ContextProfile::general_browser();
+        }
+        match super::infer::infer_family(
+            signals.process_alias.as_deref(),
+            signals.native_identity.as_deref(),
+            signals.app_category.as_deref(),
+        ) {
+            Some(family) => ContextProfile::inferred(family, signals.process_alias.as_deref()),
+            None => ContextProfile::general_native(),
         }
     }
 
@@ -489,6 +495,87 @@ mod tests {
             assert_eq!(profile.id, "code.terminal", "{identity}");
             assert_eq!(profile.family, ContextFamily::PromptOrCode, "{identity}");
         }
+    }
+
+    fn unlisted(name: &str, identity: &str, category: Option<&str>) -> ContextSignals {
+        ContextSignals {
+            native_identity: Some(identity.to_string()),
+            process_alias: Some(name.to_string()),
+            app_category: category.map(str::to_string),
+            ..ContextSignals::default()
+        }
+    }
+
+    #[test]
+    fn an_unlisted_app_is_placed_by_the_category_it_declares() {
+        let registry = AppRegistry::builtin().unwrap();
+        let profile = registry.classify(&unlisted(
+            "Nova",
+            "com.example.nova",
+            Some("public.app-category.developer-tools"),
+        ));
+        assert_eq!(profile.family, ContextFamily::PromptOrCode);
+        assert_eq!(profile.source, ContextSource::Inferred);
+        assert_eq!(profile.app_label, "Nova");
+    }
+
+    #[test]
+    fn an_unlisted_app_is_placed_by_a_word_in_its_name() {
+        let registry = AppRegistry::builtin().unwrap();
+        for (name, identity, family) in [
+            ("Super Mail", "com.example.supermail", ContextFamily::Email),
+            (
+                "Hyper Terminal",
+                "hyperterminal.exe",
+                ContextFamily::PromptOrCode,
+            ),
+            (
+                "Blip Messenger",
+                "com.example.blip",
+                ContextFamily::PersonalChat,
+            ),
+            (
+                "Quick Notes",
+                "com.example.quicknotes",
+                ContextFamily::Document,
+            ),
+        ] {
+            let profile = registry.classify(&unlisted(name, identity, None));
+            assert_eq!(profile.family, family, "{name}");
+            assert_eq!(profile.source, ContextSource::Inferred, "{name}");
+        }
+    }
+
+    #[test]
+    fn an_unlisted_app_with_no_clue_stays_general() {
+        let registry = AppRegistry::builtin().unwrap();
+        for (name, identity, category) in [
+            ("Orbit", "com.example.orbit", None),
+            (
+                "Ledger",
+                "com.example.ledger",
+                Some("public.app-category.finance"),
+            ),
+            // A word inside a longer word is not a clue.
+            ("Codec Tool", "com.example.codectool", None),
+            ("Retail", "com.example.retail", None),
+        ] {
+            let profile = registry.classify(&unlisted(name, identity, category));
+            assert_eq!(profile.family, ContextFamily::General, "{name}");
+            assert_eq!(profile.source, ContextSource::Fallback, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_listed_app_is_not_second_guessed() {
+        let registry = AppRegistry::builtin().unwrap();
+        let profile = registry.classify(&unlisted(
+            "Ghostty",
+            "com.mitchellh.ghostty",
+            Some("public.app-category.social-networking"),
+        ));
+        assert_eq!(profile.id, "code.terminal");
+        assert_eq!(profile.source, ContextSource::NativeProcess);
     }
 
     #[test]

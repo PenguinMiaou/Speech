@@ -57,6 +57,7 @@ impl ContextSignalSource for LinuxContextSource {
             native_identity: process_alias.clone(),
             process_alias,
             window_title,
+            app_category: None,
             browser_host: None,
             is_supported_browser,
             browser_access_status: BrowserAccessStatus::for_unavailable_url_adapter(

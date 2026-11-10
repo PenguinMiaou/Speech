@@ -1,4 +1,5 @@
 pub mod cache;
+mod infer;
 pub mod platform;
 pub mod profiles;
 pub mod registry;

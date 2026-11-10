@@ -24,6 +24,8 @@ pub enum ContextSource {
     BrowserDomain,
     NativeProcess,
     WindowTitle,
+    /// Not in the list; placed by its own name or declared category.
+    Inferred,
     Fallback,
 }
 
@@ -46,6 +48,23 @@ impl ContextProfile {
 
     pub fn general_native() -> Self {
         Self::general("general.native", "General")
+    }
+
+    /// For an app that is not in the list but whose kind could be told.
+    pub(crate) fn inferred(family: ContextFamily, label: Option<&str>) -> Self {
+        Self {
+            id: "general.inferred".to_string(),
+            family,
+            app_label: label
+                .map(str::trim)
+                .filter(|label| !label.is_empty())
+                .unwrap_or("General")
+                .to_string(),
+            icon_key: "general".to_string(),
+            override_id: None,
+            source: ContextSource::Inferred,
+            confidence: 0.6,
+        }
     }
 
     fn general(id: &str, label: &str) -> Self {
@@ -98,6 +117,8 @@ pub(crate) struct ContextSignals {
     pub(crate) native_identity: Option<String>,
     pub(crate) process_alias: Option<String>,
     pub(crate) window_title: Option<String>,
+    /// The category the app declares to the system, where the platform has one.
+    pub(crate) app_category: Option<String>,
     pub(crate) browser_host: Option<String>,
     pub(crate) is_supported_browser: bool,
     pub(crate) browser_access_status: BrowserAccessStatus,
