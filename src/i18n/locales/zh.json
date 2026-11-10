@@ -430,11 +430,13 @@
       "check": "检查更新",
       "checking": "正在检查…",
       "upToDate": "已是最新版本（{{version}}）",
-      "install": "更新到 {{version}} 并重启（{{size}}）",
-      "installing": "正在更新…",
+      "install": "下载更新 {{version}}（{{size}}）",
+      "installing": "正在下载…",
       "openPage": "下载 {{version}}",
       "failed": "没有成功，请稍后再试",
-      "auto": "启动时检查更新"
+      "auto": "启动时检查更新",
+      "ready": "{{version}} 已下载好，重启后生效",
+      "restart": "立即重启"
     }
   },
   "contextFamilies": {

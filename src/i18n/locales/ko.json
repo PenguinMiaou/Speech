@@ -430,11 +430,13 @@
       "check": "업데이트 확인",
       "checking": "확인 중…",
       "upToDate": "최신 버전입니다 ({{version}})",
-      "install": "{{version}}(으)로 업데이트하고 다시 시작 ({{size}})",
-      "installing": "업데이트 중…",
+      "install": "업데이트 {{version}} 다운로드 ({{size}})",
+      "installing": "다운로드 중…",
       "openPage": "{{version}} 다운로드",
       "failed": "실패했습니다. 나중에 다시 시도하세요",
-      "auto": "시작할 때 업데이트 확인"
+      "auto": "시작할 때 업데이트 확인",
+      "ready": "{{version}} 다운로드를 마쳤습니다. 다시 시작하면 적용됩니다",
+      "restart": "지금 다시 시작"
     }
   },
   "contextFamilies": {

@@ -430,11 +430,13 @@
       "check": "Rechercher des mises à jour",
       "checking": "Recherche…",
       "upToDate": "Vous avez la dernière version ({{version}})",
-      "install": "Mettre à jour vers {{version}} et redémarrer ({{size}})",
-      "installing": "Mise à jour…",
+      "install": "Télécharger la mise à jour {{version}} ({{size}})",
+      "installing": "Téléchargement…",
       "openPage": "Télécharger {{version}}",
       "failed": "Cela n'a pas fonctionné. Réessayez plus tard",
-      "auto": "Rechercher les mises à jour au démarrage"
+      "auto": "Rechercher les mises à jour au démarrage",
+      "ready": "{{version}} est téléchargée et prendra effet au redémarrage",
+      "restart": "Redémarrer maintenant"
     }
   },
   "contextFamilies": {

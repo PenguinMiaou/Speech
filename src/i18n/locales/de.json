@@ -430,11 +430,13 @@
       "check": "Nach Updates suchen",
       "checking": "Suche…",
       "upToDate": "Sie haben die neueste Version ({{version}})",
-      "install": "Auf {{version}} aktualisieren und neu starten ({{size}})",
-      "installing": "Aktualisiere…",
+      "install": "Update {{version}} herunterladen ({{size}})",
+      "installing": "Wird heruntergeladen…",
       "openPage": "{{version}} herunterladen",
       "failed": "Das hat nicht geklappt. Später erneut versuchen",
-      "auto": "Beim Start nach Updates suchen"
+      "auto": "Beim Start nach Updates suchen",
+      "ready": "{{version}} ist heruntergeladen und wird nach einem Neustart aktiv",
+      "restart": "Jetzt neu starten"
     }
   },
   "contextFamilies": {

@@ -768,7 +768,21 @@ export async function updateCheck(): Promise<UpdateStatus> {
   return invoke('update_check')
 }
 
-/** Downloads the changed program files and restarts into the new version. */
-export async function updateInstall(): Promise<void> {
-  return invoke('update_install')
+export interface UpdateProgress {
+  downloaded: number
+  total: number
+}
+
+/** Downloads the changed program files and puts them in place. The app keeps running. */
+export async function updateDownload(): Promise<void> {
+  return invoke('update_download')
+}
+
+export function onUpdateProgress(handler: (progress: UpdateProgress) => void): Promise<UnlistenFn> {
+  return listen<UpdateProgress>('update:progress', (event) => handler(event.payload))
+}
+
+/** Restarts into the version that was downloaded. */
+export async function updateRestart(): Promise<void> {
+  return invoke('update_restart')
 }

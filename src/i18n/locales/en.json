@@ -430,11 +430,13 @@
       "check": "Check for updates",
       "checking": "Checking…",
       "upToDate": "You have the latest version ({{version}})",
-      "install": "Update to {{version}} and restart ({{size}})",
-      "installing": "Updating…",
+      "install": "Download update {{version}} ({{size}})",
+      "installing": "Downloading…",
       "openPage": "Download {{version}}",
       "failed": "That did not work. Try again later",
-      "auto": "Check for updates at launch"
+      "auto": "Check for updates at launch",
+      "ready": "{{version}} is downloaded and takes effect after a restart",
+      "restart": "Restart now"
     }
   },
   "contextFamilies": {

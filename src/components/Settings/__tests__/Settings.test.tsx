@@ -87,7 +87,9 @@ vi.mock('../../../lib/tauri', () => ({
   listLayoutHabits: vi.fn().mockResolvedValue([]),
   onVoiceIsolationProgress: vi.fn().mockResolvedValue(() => {}),
   updateCheck: vi.fn(),
-  updateInstall: vi.fn(),
+  updateDownload: vi.fn(),
+  updateRestart: vi.fn(),
+  onUpdateProgress: vi.fn().mockResolvedValue(() => {}),
   voiceIsolationStatus: vi.fn().mockResolvedValue({
     modelInstalled: false,
     downloading: false,

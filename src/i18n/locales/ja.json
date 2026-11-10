@@ -430,11 +430,13 @@
       "check": "アップデートを確認",
       "checking": "確認中…",
       "upToDate": "最新バージョンです（{{version}}）",
-      "install": "{{version}} に更新して再起動（{{size}}）",
-      "installing": "更新中…",
+      "install": "アップデート {{version}} をダウンロード（{{size}}）",
+      "installing": "ダウンロード中…",
       "openPage": "{{version}} をダウンロード",
       "failed": "うまくいきませんでした。後でもう一度お試しください",
-      "auto": "起動時にアップデートを確認"
+      "auto": "起動時にアップデートを確認",
+      "ready": "{{version}} をダウンロードしました。再起動後に有効になります",
+      "restart": "今すぐ再起動"
     }
   },
   "contextFamilies": {

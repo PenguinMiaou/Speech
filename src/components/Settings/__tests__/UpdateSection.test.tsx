@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { useAppStore } from '../../../stores/appStore'
@@ -27,6 +27,7 @@ describe('UpdateSection', () => {
     vi.clearAllMocks()
     localStorage.clear()
     useAppStore.setState({ updateStatus: null })
+    vi.mocked(tauri.onUpdateProgress).mockResolvedValue(() => {})
   })
   afterEach(cleanup)
 
@@ -44,15 +45,46 @@ describe('UpdateSection', () => {
     expect(await screen.findByText('settings.update.upToDate 1.2.0')).toBeTruthy()
   })
 
-  it('offers to download only what changed and restarts into the new version', async () => {
+  it('shows how much of the changed files has been downloaded', async () => {
     useAppStore.setState({ updateStatus: RELEASE })
-    vi.mocked(tauri.updateInstall).mockResolvedValue()
+    let report: (progress: { downloaded: number; total: number }) => void = () => {}
+    vi.mocked(tauri.onUpdateProgress).mockImplementation(async (handler) => {
+      report = handler
+      return () => {}
+    })
+    vi.mocked(tauri.updateDownload).mockReturnValue(new Promise(() => {}))
+    render(<UpdateSection />)
+
+    fireEvent.click(screen.getByText('settings.update.install 1.2.1 15 MB'))
+    await waitFor(() => expect(tauri.updateDownload).toHaveBeenCalled())
+    act(() => report({ downloaded: 6_000_000, total: 15_000_000 }))
+
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('40')
+    expect(screen.getByText('6 MB / 15 MB')).toBeTruthy()
+  })
+
+  it('asks before restarting once the new version is in place', async () => {
+    useAppStore.setState({ updateStatus: RELEASE })
+    vi.mocked(tauri.onUpdateProgress).mockResolvedValue(() => {})
+    vi.mocked(tauri.updateDownload).mockResolvedValue()
+    vi.mocked(tauri.updateCheck).mockResolvedValue({ ...RELEASE, patchBytes: 0 })
     render(<UpdateSection />)
 
     fireEvent.click(screen.getByText('settings.update.install 1.2.1 15 MB'))
 
-    await waitFor(() => expect(tauri.updateInstall).toHaveBeenCalled())
-    expect(screen.getByText('settings.update.installing')).toBeTruthy()
+    expect(await screen.findByText('settings.update.ready 1.2.1')).toBeTruthy()
+    expect(tauri.updateRestart).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByText('settings.update.restart'))
+    expect(tauri.updateRestart).toHaveBeenCalled()
+  })
+
+  it('still offers the restart when the app was left open after downloading', () => {
+    useAppStore.setState({ updateStatus: { ...RELEASE, patchBytes: 0 } })
+    vi.mocked(tauri.onUpdateProgress).mockResolvedValue(() => {})
+    render(<UpdateSection />)
+
+    expect(screen.getByText('settings.update.ready 1.2.1')).toBeTruthy()
+    expect(screen.queryByText(/settings\.update\.install/)).toBeNull()
   })
 
   it('opens the release page where the release is installed as a whole', () => {
@@ -62,7 +94,7 @@ describe('UpdateSection', () => {
     fireEvent.click(screen.getByText('settings.update.openPage 1.2.1'))
 
     expect(openUrl).toHaveBeenCalledWith(RELEASE.releaseUrl)
-    expect(tauri.updateInstall).not.toHaveBeenCalled()
+    expect(tauri.updateDownload).not.toHaveBeenCalled()
   })
 
   it('reports a check or an update that failed', async () => {

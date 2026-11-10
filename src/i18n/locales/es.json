@@ -430,11 +430,13 @@
       "check": "Buscar actualizaciones",
       "checking": "Buscando…",
       "upToDate": "Tienes la última versión ({{version}})",
-      "install": "Actualizar a {{version}} y reiniciar ({{size}})",
-      "installing": "Actualizando…",
+      "install": "Descargar la actualización {{version}} ({{size}})",
+      "installing": "Descargando…",
       "openPage": "Descargar {{version}}",
       "failed": "No funcionó. Inténtalo más tarde",
-      "auto": "Buscar actualizaciones al iniciar"
+      "auto": "Buscar actualizaciones al iniciar",
+      "ready": "{{version}} está descargada y se aplicará al reiniciar",
+      "restart": "Reiniciar ahora"
     }
   },
   "contextFamilies": {

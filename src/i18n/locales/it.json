@@ -430,11 +430,13 @@
       "check": "Cerca aggiornamenti",
       "checking": "Ricerca…",
       "upToDate": "Hai l'ultima versione ({{version}})",
-      "install": "Aggiorna a {{version}} e riavvia ({{size}})",
-      "installing": "Aggiornamento…",
+      "install": "Scarica l'aggiornamento {{version}} ({{size}})",
+      "installing": "Download…",
       "openPage": "Scarica {{version}}",
       "failed": "Non ha funzionato. Riprova più tardi",
-      "auto": "Cerca aggiornamenti all'avvio"
+      "auto": "Cerca aggiornamenti all'avvio",
+      "ready": "{{version}} è stata scaricata e sarà attiva dopo il riavvio",
+      "restart": "Riavvia ora"
     }
   },
   "contextFamilies": {
