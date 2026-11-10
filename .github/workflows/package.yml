@@ -88,12 +88,16 @@ jobs:
             src-tauri -> target
             stt-worker -> target
 
-      # A release is signed with the Developer ID certificate. Any other build is signed ad hoc.
+      # A release is signed with the Developer ID certificate and notarized by Apple. Any other
+      # build is signed ad hoc.
       - name: Choose the signature
         env:
           CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           if [ -n "$CERTIFICATE" ]; then
             {
@@ -104,6 +108,14 @@ jobs:
           else
             echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
           fi
+          if [ -n "$CERTIFICATE" ] && [ -n "$API_KEY_P8" ]; then
+            printf '%s\n' "$API_KEY_P8" > "$RUNNER_TEMP/notary-key.p8"
+            {
+              echo "APPLE_API_KEY=$API_KEY"
+              echo "APPLE_API_ISSUER=$API_ISSUER"
+              echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/notary-key.p8"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Build the app
         run: npm run tauri build -- --bundles app
@@ -112,6 +124,8 @@ jobs:
         run: |
           codesign --verify --deep --strict src-tauri/target/release/bundle/macos/OpenTypeless.app
           codesign -dvv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'Signature=|TeamIdentifier=|flags='
+          # Says whether this Mac would open the app as downloaded. Not a failure for ad hoc builds.
+          spctl -a -t exec -vv src-tauri/target/release/bundle/macos/OpenTypeless.app 2>&1 | grep -E 'accepted|rejected|source=' || true
           ditto -c -k --keepParent src-tauri/target/release/bundle/macos/OpenTypeless.app OpenTypeless-macos-arm64.zip
           ls -l OpenTypeless-macos-arm64.zip
 
