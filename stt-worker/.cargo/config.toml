@@ -1,0 +1,9 @@
+# The prebuilt voice filter library for Windows uses the static C runtime, so the whole
+# worker must use it too. Cargo reads this file only when it runs from this directory.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# The recognition library's C++ part takes its runtime from CMake, not from the flag above.
+# Only MSVC reads this setting.
+[env]
+TRANSCRIBE_CMAKE_ARGS = "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"

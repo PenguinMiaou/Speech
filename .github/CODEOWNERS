@@ -1,0 +1,18 @@
+# Code Owners
+# These users will be automatically requested for review on PRs
+# that modify matching paths.
+
+# Default owner for everything
+* @tover0314-w
+
+# Rust backend
+/src-tauri/ @tover0314-w
+
+# Frontend
+/src/ @tover0314-w
+
+# CI/CD
+/.github/ @tover0314-w
+
+# Documentation
+/*.md @tover0314-w

@@ -1,0 +1,23 @@
+name: CodeQL
+
+# Runs on request and on pull requests. Code scanning is not available to a private
+# personal repository, so it is not run on every push or on a schedule.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  security-events: write
+
+jobs:
+  analyze-javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - uses: github/codeql-action/analyze@v3

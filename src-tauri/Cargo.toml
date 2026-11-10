@@ -1,0 +1,86 @@
+[package]
+name = "opentypeless"
+version = "1.2.0"
+description = "AI-powered speech-to-text and text polishing desktop app"
+authors = ["OpenTypeless Contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.82"
+
+[lib]
+name = "opentypeless_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+devtools = ["tauri/devtools"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.2", features = ["tray-icon", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-store = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ot-stt-protocol = { path = "../stt-protocol" }
+sha2 = "0.10"
+fs2 = "0.4"
+cpal = "=0.18.2"
+enigo = "0.2"
+ogg = "=0.9.2"
+tokio = { version = "1", features = ["rt", "macros", "sync", "time", "test-util"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
+anyhow = "1"
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures-util = "0.3"
+async-trait = "0.1.92"
+arboard = "3"
+http = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+csv = "1.3"
+unicode-normalization = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = "0.4"
+url = "2"
+flate2 = "1"
+pinyin = { version = "0.11.0", default-features = false, features = ["plain", "heteronym"] }
+unicode-segmentation = "1.12.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
+block2 = "0.5"
+objc2 = { version = "0.5", features = ["exception"] }
+core-foundation = "0.10"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["linux-native-sync-persistent", "crypto-rust"] }
+libloading = "0.8"
+
+[dev-dependencies]
+wiremock = "0.6"
+plist = "1"
+tauri = { version = "=2.11.2", features = ["test"] }
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+lto = "thin"
+strip = true

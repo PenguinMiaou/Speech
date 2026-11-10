@@ -1,0 +1,22 @@
+rust:
+  - changed-files:
+      - any-glob-to-any-file: "src-tauri/**"
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: "src/components/**"
+
+i18n:
+  - changed-files:
+      - any-glob-to-any-file: "src/i18n/**"
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "README*"
+          - "*.md"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"

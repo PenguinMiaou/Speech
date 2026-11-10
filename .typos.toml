@@ -1,0 +1,33 @@
+[default.extend-words]
+# Allow these "words" that typos might flag
+cpal = "cpal"
+stt = "stt"
+llm = "llm"
+byok = "byok"
+hotkey = "hotkey"
+# "ot" is the prefix of the worker's name; the other two are cut-off words in tests
+ot = "ot"
+thi = "thi"
+hel = "hel"
+bund = "bund"
+ue = "ue"
+Historial = "Historial"
+speaches = "speaches"
+Speaches = "Speaches"
+SPEACHES = "SPEACHES"
+visibile = "visibile"
+
+[files]
+extend-exclude = [
+  "*.lock",
+  "node_modules/",
+  "target/",
+  "dist/",
+  "src/i18n/locales/*.json",
+  "*.min.js",
+  "*.min.css",
+  "CHANGELOG.md",
+  "README_zh.md",
+]
+
+[default.extend-identifiers]
