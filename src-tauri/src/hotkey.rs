@@ -913,6 +913,7 @@ pub fn handle_hotkey_role_event(
                 pipeline_state,
                 pipeline::PipelineStartOptions {
                     force_translate: true,
+                    force_selection: false,
                 },
             );
             handle_recording_shortcut(handle, action);
@@ -952,6 +953,30 @@ pub fn handle_hotkey_role_event(
                 pipeline::PipelineStartOptions::default(),
             );
             handle_recording_shortcut(handle, action);
+        }
+        HotkeyRole::EditSelection => {
+            let hotkey_mode = handle
+                .state::<HotkeyModeCache>()
+                .0
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let pipeline_state = handle.state::<pipeline::PipelineHandle>().current_state();
+            let action = recording_shortcut_action(
+                &hotkey_mode,
+                event_state,
+                pipeline_state,
+                pipeline::PipelineStartOptions {
+                    force_translate: false,
+                    force_selection: true,
+                },
+            );
+            handle_recording_shortcut(handle, action);
+        }
+        HotkeyRole::OpenApp => {
+            if event_state == ShortcutState::Pressed {
+                crate::restore_main_window(&handle);
+            }
         }
         role => handle_advanced_role_shortcut(handle, role, event_state),
     }
@@ -1518,11 +1543,13 @@ mod tests {
                 pipeline::PipelineState::Idle,
                 pipeline::PipelineStartOptions {
                     force_translate: true,
+                    force_selection: false,
                 },
             ),
             RecordingShortcutAction::Start {
                 options: pipeline::PipelineStartOptions {
                     force_translate: true,
+                    force_selection: false,
                 },
             }
         );
@@ -1534,6 +1561,7 @@ mod tests {
                 pipeline::PipelineState::Recording,
                 pipeline::PipelineStartOptions {
                     force_translate: true,
+                    force_selection: false,
                 },
             ),
             RecordingShortcutAction::Stop

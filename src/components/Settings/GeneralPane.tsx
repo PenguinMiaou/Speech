@@ -12,6 +12,7 @@ import {
 import type { HotkeyStatus } from '../../lib/tauri'
 import { SegmentedControl } from './shared/SegmentedControl'
 import { Toggle } from './shared/Toggle'
+import { AdvancedExtras } from './AdvancedExtras'
 import { ShortcutBindingList } from './ShortcutBindingList'
 import { MicrophoneSection } from './MicrophoneSection'
 
@@ -278,6 +279,35 @@ export function GeneralPane() {
               onChange={(checked) => updateConfig({ capsule_auto_hide: checked })}
               label={t('settings.hideCapsuleWhenIdle')}
             />
+            {(
+              [
+                ['editSelection', 'settings.editSelectionHotkey'],
+                ['switchScene', 'settings.switchSceneHotkey'],
+                ['openApp', 'settings.openAppHotkey'],
+              ] as const
+            ).map(([role, label]) => {
+              const own = config.hotkeys[role]
+              return (
+                <ShortcutBindingList
+                  key={role}
+                  role={role}
+                  label={t(label)}
+                  bindings={own ? [own] : []}
+                  otherBindings={[
+                    ...dictationBindings,
+                    ...askBindings,
+                    ...translateBindings,
+                    ...secondaryBindings.filter((binding) => binding !== own),
+                  ]}
+                  required={false}
+                  specialOptions={[]}
+                  onChange={(bindings) =>
+                    updateConfig({ hotkeys: { ...config.hotkeys, [role]: bindings[0] ?? null } })
+                  }
+                />
+              )
+            })}
+            <AdvancedExtras />
           </div>
         )}
       </div>

@@ -11,7 +11,8 @@ import type {
   RecordingDeadlineSnapshot,
   VoiceMode,
 } from '../stores/appStore'
-import { getHistory } from '../lib/tauri'
+import { getHistory, updateConfig as persistConfig } from '../lib/tauri'
+import { nextActiveScene } from '../lib/scene-switch'
 import { toast } from '../components/toast-service'
 import { capsuleErrorKeyFromPayload, type PipelineErrorPayload } from '../lib/capsuleError'
 
@@ -152,6 +153,24 @@ export function useTauriEvents() {
         i18n.changeLanguage(patch.ui_language)
         localStorage.setItem('ui_language', patch.ui_language)
       }
+    })
+
+    // The switch-scene hotkey: each of the user's scenes in turn, then none.
+    addListener<string>('hotkey:role', (role) => {
+      if (role !== 'switchScene') return
+      const { config, savedConfig, setConfig, setSavedConfig } = useAppStore.getState()
+      if (config.custom_scenes.length === 0) return
+      const active_scene = nextActiveScene(config.custom_scenes, config.active_scene)
+      const saved = { ...(savedConfig ?? config), active_scene }
+      setConfig({ ...config, active_scene })
+      setSavedConfig(saved)
+      Promise.resolve(persistConfig(saved)).catch(() => {})
+      toast(
+        active_scene
+          ? i18n.t('scenes.switchedTo', { name: active_scene.name })
+          : i18n.t('scenes.switchedOff'),
+        'info',
+      )
     })
 
     addListener<void>('tray:settings', () => {

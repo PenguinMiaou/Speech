@@ -69,7 +69,9 @@
       "today": "Oggi",
       "last30Days": "Ultimi 30 giorni",
       "total": "In totale"
-    }
+    },
+    "wordsDictated": "Parole dettate",
+    "timeSaved": "Risparmiato rispetto alla digitazione"
   },
   "onboarding": {
     "speakToWrite": "Parla per scrivere — trasforma la tua voce in testo rifinito in tempo reale",
@@ -448,7 +450,18 @@
       "restart": "Riavvia ora",
       "banner": "La versione {{version}} è disponibile",
       "bannerAction": "Aggiorna"
-    }
+    },
+    "editSelectionHotkey": "Riscrivi la selezione con la voce",
+    "switchSceneHotkey": "Cambia scena",
+    "openAppHotkey": "Apri la finestra principale",
+    "chineseScript": "Scrittura cinese",
+    "chineseScriptPreserve": "Come pronunciato",
+    "chineseScriptSimplified": "Semplificato",
+    "chineseScriptTraditional": "Tradizionale",
+    "punctuationMode": "Punteggiatura",
+    "punctuationAuto": "Aggiunta automaticamente",
+    "punctuationSpoken": "Solo i segni pronunciati",
+    "punctuationNone": "Nessuna"
   },
   "contextFamilies": {
     "email": "Email",
@@ -615,7 +628,9 @@
       "social": "Post social"
     },
     "systemSceneDescription": "Modalita di scrittura predefinita. Puoi modificarla o ripristinarla.",
-    "resetSystemScene": "Ripristina predefinito"
+    "resetSystemScene": "Ripristina predefinito",
+    "switchedTo": "Passato alla scena «{{name}}»",
+    "switchedOff": "Scena disattivata"
   },
   "history": {
     "title": "Cronologia",

@@ -57,6 +57,7 @@ export type InsertStatus = 'inserted' | 'copiedFallback' | 'failed' | 'partially
 export type HotkeyMode = 'hold' | 'toggle'
 export type Theme = 'light' | 'dark' | 'system'
 export type PolishChineseScript = 'preserve' | 'simplified' | 'traditional'
+export type PunctuationMode = 'auto' | 'spoken' | 'none'
 export type PolishStyle = 'minimal' | 'clean' | 'structured' | 'professional'
 export type SceneSource = 'custom' | 'builtin' | 'cloud'
 export type ContextFamily =
@@ -216,6 +217,7 @@ export interface AppConfig {
   polish_style: PolishStyle
   polish_custom_prompt: string
   polish_chinese_script: PolishChineseScript
+  punctuation_mode: PunctuationMode
   custom_scenes: CustomScene[]
   system_scene_overrides: SystemSceneOverride[]
   active_scene: ActiveScene | null
@@ -764,6 +766,7 @@ const defaultConfig: AppConfig = {
   polish_style: 'clean',
   polish_custom_prompt: '',
   polish_chinese_script: 'preserve',
+  punctuation_mode: 'auto',
   custom_scenes: [],
   system_scene_overrides: [],
   active_scene: null,

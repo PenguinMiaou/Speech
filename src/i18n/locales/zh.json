@@ -69,7 +69,9 @@
       "today": "今天",
       "last30Days": "近 30 天",
       "total": "累计"
-    }
+    },
+    "wordsDictated": "听写字数",
+    "timeSaved": "比打字省下"
   },
   "onboarding": {
     "speakToWrite": "说话即写作 — 实时将语音转化为润色文本",
@@ -448,7 +450,18 @@
       "restart": "立即重启",
       "banner": "新版本 {{version}} 可以更新了",
       "bannerAction": "去更新"
-    }
+    },
+    "editSelectionHotkey": "用说的改选中文字",
+    "switchSceneHotkey": "切换场景",
+    "openAppHotkey": "打开主窗口",
+    "chineseScript": "中文字形",
+    "chineseScriptPreserve": "跟随所说",
+    "chineseScriptSimplified": "简体",
+    "chineseScriptTraditional": "繁体",
+    "punctuationMode": "标点",
+    "punctuationAuto": "自动加标点",
+    "punctuationSpoken": "只加说出来的标点",
+    "punctuationNone": "不加标点"
   },
   "contextFamilies": {
     "email": "邮件",
@@ -615,7 +628,9 @@
       "social": "社交短帖"
     },
     "systemSceneDescription": "默认写法，可编辑，也可以恢复默认。",
-    "resetSystemScene": "恢复默认"
+    "resetSystemScene": "恢复默认",
+    "switchedTo": "已切换到场景“{{name}}”",
+    "switchedOff": "已关闭场景"
   },
   "history": {
     "title": "历史记录",

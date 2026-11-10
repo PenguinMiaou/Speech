@@ -12,6 +12,7 @@ import { AppLogo } from '../AppLogo'
 import { LlmConnectionForm } from './LlmConnectionForm'
 import { ContextAdaptationApps } from './ContextAdaptationApps'
 import { TranslationTargets } from './TranslationTargets'
+import { WritingRules } from './WritingRules'
 import { AppStyleMappingDialog } from './AppStyleMappingDialog'
 import { ManageAppMappingsDialog } from './ManageAppMappingsDialog'
 
@@ -255,6 +256,8 @@ export function LlmPane() {
                 {t('settings.selectedTextContextDesc')}
               </p>
             </div>
+
+            {config.polish_enabled && <WritingRules />}
 
             {config.polish_enabled && (
               <FormField label={t('settings.customPolishInstructions')}>

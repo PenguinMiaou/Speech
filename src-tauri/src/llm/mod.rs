@@ -6,6 +6,7 @@ pub mod prompt;
 pub mod protocol;
 pub mod text_style;
 pub mod usage;
+pub mod writing_rules;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

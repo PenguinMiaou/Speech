@@ -638,6 +638,14 @@ describe('Settings tab 切换', () => {
     }
   })
 
+  it('offers hotkeys for editing a selection, switching scene and opening the app', () => {
+    renderSettings()
+    fireEvent.click(screen.getByText('settings.advancedGeneral'))
+    for (const role of ['editSelection', 'switchScene', 'openApp']) {
+      expect(document.querySelector(`[data-hotkey-role="${role}"]`)).not.toBeNull()
+    }
+  })
+
   it('blocks local Ask hotkey drafts that conflict with Dictation', async () => {
     vi.useFakeTimers()
     try {

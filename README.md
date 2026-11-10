@@ -76,6 +76,8 @@ Dictionary, Snippets holds phrases and their text: say a phrase by itself and it
 
 On macOS the app watches how you edit what you dictated: swapping the polite and plain Chinese "you", removing exclamation marks, opening or closing the space between Chinese and Latin text, dropping the final period, joining lines. Once the same edit has been made five times in one app, polish follows it there. Only counts are stored, never text, and each habit can be forgotten on the Dictionary page.
 
+Settings, AI Polish, Advanced polish settings chooses the Chinese script (Simplified or Traditional) and the punctuation (automatic, only marks said aloud, or none). Settings, General, More settings has writing while the model generates, clipboard and history retention choices, and three more hotkeys: rewrite the selection by voice, switch scene, open the main window. Settings, About has a status check.
+
 ## Platforms
 
 | Platform               | State                                                                                                                                                         |

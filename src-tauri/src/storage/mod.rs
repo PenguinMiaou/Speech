@@ -351,6 +351,8 @@ pub struct AppConfig {
     pub polish_style: String,
     pub polish_custom_prompt: String,
     pub polish_chinese_script: String,
+    /// How much punctuation polish adds: "auto", "spoken" (only marks named aloud) or "none".
+    pub punctuation_mode: String,
     pub custom_scenes: Vec<CustomScene>,
     pub system_scene_overrides: Vec<SystemSceneOverride>,
     pub active_scene: Option<ActiveScene>,
@@ -419,6 +421,7 @@ impl Default for AppConfig {
             polish_style: "clean".to_string(),
             polish_custom_prompt: String::new(),
             polish_chinese_script: "preserve".to_string(),
+            punctuation_mode: "auto".to_string(),
             custom_scenes: Vec::new(),
             system_scene_overrides: Vec::new(),
             active_scene: None,

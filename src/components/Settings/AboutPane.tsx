@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ExternalLink } from 'lucide-react'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { DiagnosticsSection } from './DiagnosticsSection'
 import { UpdateSection } from './UpdateSection'
 import { APP_NAME, APP_VERSION, APP_REPO_URL } from '../../lib/constants'
 
@@ -19,6 +20,10 @@ export function AboutPane() {
 
       <SectionCard title={t('settings.update.title')}>
         <UpdateSection />
+      </SectionCard>
+
+      <SectionCard title={t('settings.diagnostics')}>
+        <DiagnosticsSection />
       </SectionCard>
 
       {/* Open Source */}

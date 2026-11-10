@@ -69,7 +69,9 @@
       "today": "今日",
       "last30Days": "過去 30 日",
       "total": "累計"
-    }
+    },
+    "wordsDictated": "音声入力した語数",
+    "timeSaved": "タイピングより節約"
   },
   "onboarding": {
     "speakToWrite": "話して書く — 音声をリアルタイムで整形されたテキストに変換します",
@@ -448,7 +450,18 @@
       "restart": "今すぐ再起動",
       "banner": "バージョン {{version}} が利用できます",
       "bannerAction": "アップデート"
-    }
+    },
+    "editSelectionHotkey": "選択範囲を声で書き換える",
+    "switchSceneHotkey": "シーンを切り替える",
+    "openAppHotkey": "メインウィンドウを開く",
+    "chineseScript": "中国語の字体",
+    "chineseScriptPreserve": "話したとおり",
+    "chineseScriptSimplified": "簡体字",
+    "chineseScriptTraditional": "繁体字",
+    "punctuationMode": "句読点",
+    "punctuationAuto": "自動で付ける",
+    "punctuationSpoken": "声に出した記号だけ",
+    "punctuationNone": "付けない"
   },
   "contextFamilies": {
     "email": "メールアドレス",
@@ -615,7 +628,9 @@
       "social": "ソーシャル投稿"
     },
     "systemSceneDescription": "既定の書き方です。編集したり既定値に戻したりできます。",
-    "resetSystemScene": "既定値に戻す"
+    "resetSystemScene": "既定値に戻す",
+    "switchedTo": "シーン「{{name}}」に切り替えました",
+    "switchedOff": "シーンをオフにしました"
   },
   "history": {
     "title": "履歴",

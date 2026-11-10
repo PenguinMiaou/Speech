@@ -69,7 +69,9 @@
       "today": "Today",
       "last30Days": "Last 30 days",
       "total": "All time"
-    }
+    },
+    "wordsDictated": "Words dictated",
+    "timeSaved": "Saved over typing"
   },
   "onboarding": {
     "speakToWrite": "Speak to write — turn your voice into polished text in real time",
@@ -448,7 +450,18 @@
       "restart": "Restart now",
       "banner": "Version {{version}} is available",
       "bannerAction": "Update"
-    }
+    },
+    "editSelectionHotkey": "Rewrite the selection by voice",
+    "switchSceneHotkey": "Switch scene",
+    "openAppHotkey": "Open the main window",
+    "chineseScript": "Chinese script",
+    "chineseScriptPreserve": "As spoken",
+    "chineseScriptSimplified": "Simplified",
+    "chineseScriptTraditional": "Traditional",
+    "punctuationMode": "Punctuation",
+    "punctuationAuto": "Added automatically",
+    "punctuationSpoken": "Only marks said aloud",
+    "punctuationNone": "None"
   },
   "contextFamilies": {
     "email": "Email",
@@ -615,7 +628,9 @@
       "social": "Social Post"
     },
     "systemSceneDescription": "Default writing mode. You can edit it or reset to default.",
-    "resetSystemScene": "Reset to default"
+    "resetSystemScene": "Reset to default",
+    "switchedTo": "Switched to the scene “{{name}}”",
+    "switchedOff": "Scene switched off"
   },
   "history": {
     "title": "History",

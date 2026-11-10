@@ -69,7 +69,9 @@
       "today": "오늘",
       "last30Days": "최근 30일",
       "total": "누적"
-    }
+    },
+    "wordsDictated": "받아쓴 단어 수",
+    "timeSaved": "타이핑보다 절약"
   },
   "onboarding": {
     "speakToWrite": "말해서 글 쓰기 — 음성을 실시간으로 다듬어진 텍스트로 변환합니다",
@@ -448,7 +450,18 @@
       "restart": "지금 다시 시작",
       "banner": "버전 {{version}}을 사용할 수 있습니다",
       "bannerAction": "업데이트"
-    }
+    },
+    "editSelectionHotkey": "선택한 글을 말로 고치기",
+    "switchSceneHotkey": "장면 전환",
+    "openAppHotkey": "기본 창 열기",
+    "chineseScript": "중국어 글자체",
+    "chineseScriptPreserve": "말한 대로",
+    "chineseScriptSimplified": "간체",
+    "chineseScriptTraditional": "번체",
+    "punctuationMode": "문장 부호",
+    "punctuationAuto": "자동으로 넣기",
+    "punctuationSpoken": "말로 한 부호만",
+    "punctuationNone": "넣지 않음"
   },
   "contextFamilies": {
     "email": "이메일",
@@ -615,7 +628,9 @@
       "social": "소셜 게시글"
     },
     "systemSceneDescription": "기본 글쓰기 모드입니다. 편집하거나 기본값으로 되돌릴 수 있습니다.",
-    "resetSystemScene": "기본값으로 재설정"
+    "resetSystemScene": "기본값으로 재설정",
+    "switchedTo": "“{{name}}” 장면으로 전환했습니다",
+    "switchedOff": "장면을 껐습니다"
   },
   "history": {
     "title": "기록",

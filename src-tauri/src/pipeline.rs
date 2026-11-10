@@ -718,6 +718,8 @@ fn latch_stt_task_error_if_active(
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PipelineStartOptions {
     pub force_translate: bool,
+    /// Read the selected text for this recording even when that is switched off in general.
+    pub force_selection: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -776,6 +778,7 @@ pub struct PipelineHandle {
     active_stt_session_id: Arc<AtomicU64>,
     active_deadline_session_id: Arc<AtomicU64>,
     abort_flag: Arc<AtomicBool>,
+    force_selection: Arc<AtomicBool>,
     preloaded_config: Arc<Mutex<Option<storage::AppConfig>>>,
     preloaded_app_ctx: Arc<Mutex<Option<RecordingContext>>>,
     preloaded_dictionary: Arc<Mutex<Option<Vec<String>>>>,
@@ -1153,6 +1156,7 @@ impl PipelineHandle {
             active_stt_session_id: Arc::new(AtomicU64::new(0)),
             active_deadline_session_id: Arc::new(AtomicU64::new(0)),
             abort_flag: Arc::new(AtomicBool::new(false)),
+            force_selection: Arc::new(AtomicBool::new(false)),
             preloaded_config: Arc::new(Mutex::new(None)),
             preloaded_app_ctx: Arc::new(Mutex::new(None)),
             preloaded_dictionary: Arc::new(Mutex::new(None)),
@@ -1304,6 +1308,8 @@ impl PipelineHandle {
 
         // Reset abort flag for new recording
         self.abort_flag.store(false, Ordering::SeqCst);
+        self.force_selection
+            .store(options.force_selection, Ordering::SeqCst);
         crate::readback::recording_started();
 
         // Atomic CAS: only one caller can transition Idle → Preparing. Recording is emitted only
@@ -2007,15 +2013,16 @@ impl PipelineHandle {
             .unwrap_or_else(|e| e.into_inner())
             .clone()
             .unwrap_or_default();
-        let selected_text = if config_data.selected_text_enabled {
-            tokio::time::sleep(std::time::Duration::from_millis(
-                SELECTED_TEXT_CAPTURE_DELAY_MS,
-            ))
-            .await;
-            tokio::task::block_in_place(|| self.capture_selected_text())
-        } else {
-            None
-        };
+        let selected_text =
+            if config_data.selected_text_enabled || self.force_selection.load(Ordering::SeqCst) {
+                tokio::time::sleep(std::time::Duration::from_millis(
+                    SELECTED_TEXT_CAPTURE_DELAY_MS,
+                ))
+                .await;
+                tokio::task::block_in_place(|| self.capture_selected_text())
+            } else {
+                None
+            };
         tracing::info!(
             "Selected text result: len={}",
             selected_text.as_deref().map(|s| s.len()).unwrap_or(0)
@@ -2575,7 +2582,7 @@ impl PipelineHandle {
             app_ctx.mapped_scene_id.as_deref(),
         )
         .unwrap_or_default();
-        let layout_habits = match &app_ctx.target_guard.native_identity {
+        let mut layout_habits: Vec<String> = match &app_ctx.target_guard.native_identity {
             Some(app) => self
                 .app_handle
                 .state::<storage::DictionaryStore>()
@@ -2587,6 +2594,11 @@ impl PipelineHandle {
                 .collect(),
             None => Vec::new(),
         };
+        // The script and punctuation the user chose apply everywhere, next to the habits.
+        layout_habits.extend(llm::writing_rules::writing_rules(
+            &config.polish_chinese_script,
+            &config.punctuation_mode,
+        ));
         let mut req = PolishRequest {
             layout_habits,
             raw_text: provider_text.to_string(),
@@ -4028,6 +4040,7 @@ mod tests {
             config.clone(),
             PipelineStartOptions {
                 force_translate: true,
+                force_selection: false,
             },
         );
 

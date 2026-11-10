@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
 import { useAppStore } from '../../stores/appStore'
 import { useRoute } from '../../lib/router'
+import { dictationStats, formatMinutes } from '../../lib/dictation-stats'
 import { FileTranscribeCard } from './FileTranscribeCard'
 import { TokenUsageCard } from './TokenUsageCard'
 
@@ -17,6 +18,7 @@ export function HomePage() {
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayCount = history.filter((h) => h.created_at.startsWith(today)).length
+  const stats = dictationStats(history)
   return (
     <div className="p-6 space-y-6">
       {/* Welcome */}
@@ -50,6 +52,18 @@ export function HomePage() {
             {t('home.today')}
           </p>
           <p className="text-[22px] font-semibold">{todayCount}</p>
+        </div>
+        <div className="rounded-[18px] p-4 jelly-card">
+          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
+            {t('home.wordsDictated')}
+          </p>
+          <p className="text-[22px] font-semibold">{stats.units.toLocaleString('en-US')}</p>
+        </div>
+        <div className="rounded-[18px] p-4 jelly-card">
+          <p className="text-[11px] text-text-tertiary uppercase tracking-wider mb-1">
+            {t('home.timeSaved')}
+          </p>
+          <p className="text-[22px] font-semibold">{formatMinutes(stats.savedMinutes)}</p>
         </div>
       </div>
 

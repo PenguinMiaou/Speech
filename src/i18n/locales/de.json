@@ -69,7 +69,9 @@
       "today": "Heute",
       "last30Days": "Letzte 30 Tage",
       "total": "Insgesamt"
-    }
+    },
+    "wordsDictated": "Diktierte Wörter",
+    "timeSaved": "Gegenüber Tippen gespart"
   },
   "onboarding": {
     "speakToWrite": "Sprechen Sie, um zu schreiben — verwandeln Sie Ihre Stimme in Echtzeit in geglätteten Text",
@@ -448,7 +450,18 @@
       "restart": "Jetzt neu starten",
       "banner": "Version {{version}} ist verfügbar",
       "bannerAction": "Aktualisieren"
-    }
+    },
+    "editSelectionHotkey": "Auswahl per Sprache umschreiben",
+    "switchSceneHotkey": "Szene wechseln",
+    "openAppHotkey": "Hauptfenster öffnen",
+    "chineseScript": "Chinesische Schrift",
+    "chineseScriptPreserve": "Wie gesprochen",
+    "chineseScriptSimplified": "Vereinfacht",
+    "chineseScriptTraditional": "Traditionell",
+    "punctuationMode": "Satzzeichen",
+    "punctuationAuto": "Automatisch gesetzt",
+    "punctuationSpoken": "Nur ausgesprochene Zeichen",
+    "punctuationNone": "Keine"
   },
   "contextFamilies": {
     "email": "E-Mail",
@@ -615,7 +628,9 @@
       "social": "Social-Media-Beitrag"
     },
     "systemSceneDescription": "Standard-Schreibmodus. Du kannst ihn bearbeiten oder auf Standard zuruecksetzen.",
-    "resetSystemScene": "Auf Standard zuruecksetzen"
+    "resetSystemScene": "Auf Standard zuruecksetzen",
+    "switchedTo": "Zur Szene „{{name}}“ gewechselt",
+    "switchedOff": "Szene ausgeschaltet"
   },
   "history": {
     "title": "Verlauf",

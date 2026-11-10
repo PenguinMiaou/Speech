@@ -69,7 +69,9 @@
       "today": "Сегодня",
       "last30Days": "За 30 дней",
       "total": "Всего"
-    }
+    },
+    "wordsDictated": "Надиктовано слов",
+    "timeSaved": "Сэкономлено против набора"
   },
   "onboarding": {
     "speakToWrite": "Говорите, чтобы писать — превращайте голос в обработанный текст в реальном времени",
@@ -448,7 +450,18 @@
       "restart": "Перезапустить сейчас",
       "banner": "Доступна версия {{version}}",
       "bannerAction": "Обновить"
-    }
+    },
+    "editSelectionHotkey": "Переписать выделенное голосом",
+    "switchSceneHotkey": "Сменить сцену",
+    "openAppHotkey": "Открыть главное окно",
+    "chineseScript": "Китайское письмо",
+    "chineseScriptPreserve": "Как произнесено",
+    "chineseScriptSimplified": "Упрощённое",
+    "chineseScriptTraditional": "Традиционное",
+    "punctuationMode": "Пунктуация",
+    "punctuationAuto": "Расставлять автоматически",
+    "punctuationSpoken": "Только названные вслух знаки",
+    "punctuationNone": "Без знаков"
   },
   "contextFamilies": {
     "email": "Электронная почта",
@@ -615,7 +628,9 @@
       "social": "Социальный пост"
     },
     "systemSceneDescription": "Режим письма по умолчанию. Его можно изменить или сбросить.",
-    "resetSystemScene": "Сбросить по умолчанию"
+    "resetSystemScene": "Сбросить по умолчанию",
+    "switchedTo": "Включена сцена «{{name}}»",
+    "switchedOff": "Сцена выключена"
   },
   "history": {
     "title": "История",
