@@ -63,7 +63,13 @@
     "disabled": "無効",
     "outputMode": "出力モード",
     "wordsRemaining": "残り words",
-    "wordsReset": "{{date}} にリセット"
+    "wordsReset": "{{date}} にリセット",
+    "tokens": {
+      "title": "整形に使ったトークン",
+      "today": "今日",
+      "last30Days": "過去 30 日",
+      "total": "累計"
+    }
   },
   "onboarding": {
     "speakToWrite": "話して書く — 音声をリアルタイムで整形されたテキストに変換します",

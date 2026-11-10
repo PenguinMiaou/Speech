@@ -786,3 +786,20 @@ export function onUpdateProgress(handler: (progress: UpdateProgress) => void): P
 export async function updateRestart(): Promise<void> {
   return invoke('update_restart')
 }
+
+export interface TokenUsageSpan {
+  input: number
+  output: number
+  requests: number
+}
+
+export interface TokenUsageSummary {
+  today: TokenUsageSpan
+  last30Days: TokenUsageSpan
+  total: TokenUsageSpan
+}
+
+/** Tokens the polish model reported using, counted on this machine. */
+export async function tokenUsageSummary(): Promise<TokenUsageSummary> {
+  return invoke('token_usage_summary')
+}

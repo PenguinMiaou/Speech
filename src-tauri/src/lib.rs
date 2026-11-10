@@ -863,6 +863,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             local_stt::init(&data_dir);
             voice_isolation::init(&data_dir);
+            llm::usage::init(&data_dir);
             if let Some(dir) = std::env::current_exe()
                 .ok()
                 .and_then(|exe| exe.parent().map(|dir| dir.to_path_buf()))
@@ -1161,6 +1162,7 @@ pub fn run() {
             commands::credentials::clear_credential,
             commands::credentials::migrate_legacy_credentials,
             commands::update::update_check,
+            commands::update::token_usage_summary,
             commands::update::update_download,
             commands::update::update_restart,
             commands::voice_isolation::voice_isolation_status,

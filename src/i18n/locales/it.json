@@ -63,7 +63,13 @@
     "disabled": "Disabilitato",
     "outputMode": "Modalità di output",
     "wordsRemaining": "Parole rimanenti",
-    "wordsReset": "Si reimposta il {{date}}"
+    "wordsReset": "Si reimposta il {{date}}",
+    "tokens": {
+      "title": "Token usati per la rifinitura",
+      "today": "Oggi",
+      "last30Days": "Ultimi 30 giorni",
+      "total": "In totale"
+    }
   },
   "onboarding": {
     "speakToWrite": "Parla per scrivere — trasforma la tua voce in testo rifinito in tempo reale",

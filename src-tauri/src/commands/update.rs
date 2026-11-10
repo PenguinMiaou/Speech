@@ -83,7 +83,7 @@ pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
     for entry in &changed {
         let job = InstallJob {
             model_id: entry.name.clone(),
-            url: update::asset_url(&manifest.version, &entry.asset),
+            url: update::asset_url(&entry.asset),
             file_name: update::staged_name(&entry.name),
             size_bytes: entry.size,
             sha256: entry.sha256.to_lowercase(),
@@ -116,4 +116,10 @@ pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn update_restart(app: tauri::AppHandle) {
     app.restart()
+}
+
+/// Tokens the polish model reported using: today, the last 30 days and in all.
+#[tauri::command]
+pub fn token_usage_summary() -> crate::llm::usage::Summary {
+    crate::llm::usage::summary()
 }

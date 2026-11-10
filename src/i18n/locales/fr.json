@@ -63,7 +63,13 @@
     "disabled": "Désactivé",
     "outputMode": "Mode de sortie",
     "wordsRemaining": "Mots restants",
-    "wordsReset": "Réinitialisation le {{date}}"
+    "wordsReset": "Réinitialisation le {{date}}",
+    "tokens": {
+      "title": "Tokens utilisés pour la mise en forme",
+      "today": "Aujourd’hui",
+      "last30Days": "30 derniers jours",
+      "total": "Au total"
+    }
   },
   "onboarding": {
     "speakToWrite": "Parlez pour écrire — transformez votre voix en texte amélioré en temps réel",

@@ -164,12 +164,16 @@ pub fn status(
     })
 }
 
-pub fn asset_url(version: &str, asset: &str) -> String {
-    format!("{RELEASES_URL}/download/v{version}/{asset}")
+/// The release entry that holds the files of the newest version, kept apart from the
+/// release pages so those list only what a person installs.
+const UPDATE_FILES_TAG: &str = "update-files";
+
+pub fn asset_url(asset: &str) -> String {
+    format!("{RELEASES_URL}/download/{UPDATE_FILES_TAG}/{asset}")
 }
 
 pub fn manifest_url() -> String {
-    format!("{RELEASES_URL}/latest/download/{MANIFEST_NAME}")
+    asset_url(MANIFEST_NAME)
 }
 
 #[cfg(test)]
@@ -358,8 +362,12 @@ mod tests {
             "opentypeless-windows-x64.exe"
         );
         assert_eq!(
-            asset_url(&manifest.version, "opentypeless-windows-x64.exe"),
-            format!("{RELEASES_URL}/download/v1.2.1/opentypeless-windows-x64.exe")
+            asset_url("opentypeless-windows-x64.exe"),
+            format!("{RELEASES_URL}/download/update-files/opentypeless-windows-x64.exe")
+        );
+        assert_eq!(
+            manifest_url(),
+            format!("{RELEASES_URL}/download/update-files/update-manifest.json")
         );
     }
 }

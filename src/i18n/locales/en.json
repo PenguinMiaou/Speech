@@ -63,7 +63,13 @@
     "aiPolish": "AI Polish",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "outputMode": "Text output"
+    "outputMode": "Text output",
+    "tokens": {
+      "title": "Tokens used for polish",
+      "today": "Today",
+      "last30Days": "Last 30 days",
+      "total": "All time"
+    }
   },
   "onboarding": {
     "speakToWrite": "Speak to write — turn your voice into polished text in real time",

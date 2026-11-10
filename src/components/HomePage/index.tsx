@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
 import { useAppStore } from '../../stores/appStore'
 import { useRoute } from '../../lib/router'
+import { TokenUsageCard } from './TokenUsageCard'
 
 export function HomePage() {
   const config = useAppStore((s) => s.config)
@@ -50,6 +51,8 @@ export function HomePage() {
           <p className="text-[22px] font-semibold">{todayCount}</p>
         </div>
       </div>
+
+      <TokenUsageCard />
 
       {/* Current config */}
       <div className="rounded-[18px] p-5 jelly-card">

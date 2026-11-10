@@ -5,6 +5,7 @@ pub mod openai;
 pub mod prompt;
 pub mod protocol;
 pub mod text_style;
+pub mod usage;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

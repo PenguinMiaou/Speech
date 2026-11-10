@@ -63,7 +63,13 @@
     "disabled": "Deaktiviert",
     "outputMode": "Ausgabemodus",
     "wordsRemaining": "Verbleibende Wörter",
-    "wordsReset": "Wird am {{date}} zurückgesetzt"
+    "wordsReset": "Wird am {{date}} zurückgesetzt",
+    "tokens": {
+      "title": "Für die Überarbeitung verbrauchte Tokens",
+      "today": "Heute",
+      "last30Days": "Letzte 30 Tage",
+      "total": "Insgesamt"
+    }
   },
   "onboarding": {
     "speakToWrite": "Sprechen Sie, um zu schreiben — verwandeln Sie Ihre Stimme in Echtzeit in geglätteten Text",

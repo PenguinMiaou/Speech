@@ -63,7 +63,13 @@
     "disabled": "Desactivado",
     "outputMode": "Modo de salida",
     "wordsRemaining": "Palabras restantes",
-    "wordsReset": "Se reinicia el {{date}}"
+    "wordsReset": "Se reinicia el {{date}}",
+    "tokens": {
+      "title": "Tokens usados en el pulido",
+      "today": "Hoy",
+      "last30Days": "Últimos 30 días",
+      "total": "Total"
+    }
   },
   "onboarding": {
     "speakToWrite": "Habla para escribir — convierte tu voz en texto pulido en tiempo real",

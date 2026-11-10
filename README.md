@@ -66,7 +66,9 @@ There is no account and no telemetry. At launch the app asks GitHub whether a ne
 
 ## Updates
 
-Settings, About has a button that checks for a newer release. On Windows the app downloads only the program files that changed, checks each against the SHA-256 the release lists and replaces them, showing the progress. The new version takes effect when you press Restart. Models, settings and history are not touched. On macOS the button opens the release page; the app is replaced as a whole there.
+The app checks for a newer release when it starts and says so in a bar at the top of the window. Settings, About can switch that off and has a button to check by hand. On Windows the app downloads only the program files that changed, checks each against the SHA-256 the release lists and replaces them, showing the progress. The new version takes effect when you press Restart. Models, settings and history are not touched. On macOS the button opens the release page, where the `.dmg` is downloaded and the app dragged onto Applications.
+
+The home page shows the tokens the polish model reports using: today, the last 30 days and in all. The counts are kept on this machine and stay hidden when the provider reports none.
 
 ## Platforms
 

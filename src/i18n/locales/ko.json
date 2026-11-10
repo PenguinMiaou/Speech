@@ -63,7 +63,13 @@
     "disabled": "비활성화",
     "outputMode": "출력 모드",
     "wordsRemaining": "남은 words",
-    "wordsReset": "{{date}} 재설정"
+    "wordsReset": "{{date}} 재설정",
+    "tokens": {
+      "title": "다듬기에 사용한 토큰",
+      "today": "오늘",
+      "last30Days": "최근 30일",
+      "total": "누적"
+    }
   },
   "onboarding": {
     "speakToWrite": "말해서 글 쓰기 — 음성을 실시간으로 다듬어진 텍스트로 변환합니다",

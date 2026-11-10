@@ -165,4 +165,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l dist
-          gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+          # The release page lists only what a person downloads to install.
+          gh release create "$GITHUB_REF_NAME" \
+            dist/OpenTypeless-macos-arm64.dmg \
+            dist/OpenTypeless-windows-x64-setup.exe \
+            dist/OpenTypeless-windows-x64-portable.zip \
+            --title "$GITHUB_REF_NAME" --generate-notes
+          # The files the in-app update fetches live in one separate entry, replaced each
+          # release. The list of them goes up last, so it never names a file not yet there.
+          gh release view update-files >/dev/null 2>&1 || gh release create update-files \
+            --title "Files for the in-app update" --prerelease --latest=false --target "$GITHUB_SHA" \
+            --notes "The app downloads these when it updates itself. To install, use the latest release."
+          gh release upload update-files --clobber \
+            dist/opentypeless-windows-x64.exe dist/ot-stt-worker-windows-x64.exe
+          gh release upload update-files --clobber dist/update-manifest.json

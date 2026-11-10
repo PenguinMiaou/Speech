@@ -183,6 +183,7 @@ impl LlmProvider for OpenAiProvider {
         if let Some(callback) = on_chunk {
             // Streaming mode
             let mut full_text = String::new();
+            let mut used = super::usage::TokenUsage::default();
             let mut reasoning_text = String::new();
             let mut think_filter = protocol::ThinkFilter::default();
             let mut stream = response.bytes_stream();
@@ -207,6 +208,7 @@ impl LlmProvider for OpenAiProvider {
                             break;
                         }
                         if let Ok(v) = serde_json::from_str::<serde_json::Value>(data) {
+                            used.absorb(&v);
                             let event = protocol::parse_stream_event(api_kind, &v);
                             if let Some(error) = event.error {
                                 return Err(AppError::Config(error));
@@ -251,6 +253,7 @@ impl LlmProvider for OpenAiProvider {
                 tracing::error!("LLM streaming returned no content and no reasoning_content");
             }
 
+            super::usage::report(used);
             Ok(PolishResponse {
                 polished_text: full_text,
             })
@@ -266,6 +269,9 @@ impl LlmProvider for OpenAiProvider {
                 );
             }
 
+            let mut used = super::usage::TokenUsage::default();
+            used.absorb(&v);
+            super::usage::report(used);
             Ok(PolishResponse {
                 polished_text: text,
             })

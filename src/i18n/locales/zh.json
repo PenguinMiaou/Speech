@@ -63,7 +63,13 @@
     "aiPolish": "AI 润色",
     "enabled": "已启用",
     "disabled": "已禁用",
-    "outputMode": "文字写入"
+    "outputMode": "文字写入",
+    "tokens": {
+      "title": "润色用掉的 token",
+      "today": "今天",
+      "last30Days": "近 30 天",
+      "total": "累计"
+    }
   },
   "onboarding": {
     "speakToWrite": "说话即写作 — 实时将语音转化为润色文本",

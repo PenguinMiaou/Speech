@@ -63,7 +63,13 @@
     "disabled": "Desativado",
     "outputMode": "Modo de Saída",
     "wordsRemaining": "Palavras restantes",
-    "wordsReset": "Reinicia em {{date}}"
+    "wordsReset": "Reinicia em {{date}}",
+    "tokens": {
+      "title": "Tokens usados no polimento",
+      "today": "Hoje",
+      "last30Days": "Últimos 30 dias",
+      "total": "Total"
+    }
   },
   "onboarding": {
     "speakToWrite": "Fale para escrever — transforme sua voz em texto polido em tempo real",
