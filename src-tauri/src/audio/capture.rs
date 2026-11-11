@@ -223,7 +223,7 @@ impl AudioCaptureHandle {
 
 /// Downsample audio from `from_rate` to `to_rate` (simple linear interpolation, mono).
 /// Mix multi-channel audio down to mono by averaging channels.
-fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
+pub(crate) fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
     if channels <= 1 {
         return samples.to_vec();
     }
@@ -234,7 +234,7 @@ fn to_mono(samples: &[f32], channels: u16) -> Vec<f32> {
         .collect()
 }
 
-fn samples_to_f32<T>(samples: &[T]) -> Vec<f32>
+pub(crate) fn samples_to_f32<T>(samples: &[T]) -> Vec<f32>
 where
     T: cpal::SizedSample,
     f32: cpal::FromSample<T>,

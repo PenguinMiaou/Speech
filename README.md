@@ -3,14 +3,14 @@
 </p>
 
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="OpenTypeless logo" />
+  <img src="src-tauri/icons/128x128@2x.png" width="128" height="128" alt="Speech logo" />
 </p>
 
-<h1 align="center">OpenTypeless, local speech recognition</h1>
+<h1 align="center">Speech, dictation and meeting notes on your own machine</h1>
 
 Hold a hotkey, speak, and the text is typed into the app you are using. Speech recognition runs on your computer. Only the recognized text goes to a language model for cleanup, and you choose that model and supply its key.
 
-This is a fork of [OpenTypeless](https://github.com/tover0314-w/opentypeless) (MIT). The hosted service, accounts and paid plans of the original are removed.
+Speech is a fork of [OpenTypeless](https://github.com/tover0314-w/opentypeless) (MIT). The hosted service, accounts and paid plans of the original are removed.
 
 ## What it does
 
@@ -21,6 +21,29 @@ This is a fork of [OpenTypeless](https://github.com/tover0314-w/opentypeless) (M
 - **Translation** of what you say into one or more target languages.
 - **Scenes and per-app writing style**, with your own prompt templates.
 - **A personal dictionary** with file import.
+
+## Meetings
+
+<p align="center">
+  <img src="docs/images/speech-live.gif" width="760" alt="A meeting written out while it is recorded: a grey guess at the words being said, replaced by the settled paragraph with the speaker's name" />
+</p>
+
+The Meetings page records a meeting, or takes an audio or video file you choose or drop in (mp3, m4a, wav, flac, ogg, mp4, mov, mkv, up to 3 hours), and the model on this machine turns it into text.
+
+- **Words as they are said.** A guess at the words being said appears in grey every few seconds and is replaced by the settled paragraph about every 12 to 20 seconds. A slow machine guesses less often or not at all.
+- **Speakers.** With "Tell speakers apart" on, each paragraph carries who spoke and when, each speaker in a colour of their own. The first time, two models totalling 34 MB are downloaded.
+- **Voices remembered by name.** Give a speaker a name and the app remembers that voice on this machine; the same person gets the name in later meetings. Remembered voices are listed under Options and can be removed.
+- **Both sides of a call.** With "Include computer sound" on, what the computer plays is recorded together with the microphone (macOS 14.6 or Windows 10 and later).
+- **Audio kept with the meeting.** It can be played in the app, a click on a time in the text jumps there, and it can be saved elsewhere or transcribed again as a whole. It stays until you delete the audio or the meeting.
+- **Minutes and questions.** "Write minutes" fills in a template, the built-in one, one by chapter, or a Markdown or text file you import. Notes you type during the meeting steer the minutes. You can also ask a question about a meeting.
+- **Live translation.** With "Translate live" on, each settled paragraph is translated and shown under the original.
+- **Export.** Text and minutes can be saved as plain text, Markdown or a Word document.
+
+<p align="center">
+  <img src="docs/images/speech-meeting.png" width="760" alt="A meeting with its name, length, audio player and the text by speaker" />
+</p>
+
+Recognition, speaker separation and voice matching run on this machine. Minutes, questions and live translation send the meeting text, and the notes you typed, to the polish model chosen in Settings; with those left unused, no meeting text leaves the machine. Words from your dictionary are given to the recognizer as words to expect, and a recording goes on while you use other pages.
 
 ## What this fork adds
 
@@ -69,8 +92,6 @@ There is no account and no telemetry. At launch the app asks GitHub whether a ne
 The app checks for a newer release when it starts and says so in a bar at the top of the window. Settings, About can switch that off and has a button to check by hand. On Windows the app downloads only the program files that changed, checks each against the SHA-256 the release lists and replaces them, showing the progress. The new version takes effect when you press Restart. Models, settings and history are not touched. On macOS the button opens the release page, where the `.dmg` is downloaded and the app dragged onto Applications.
 
 The home page shows the tokens the polish model reports using: today, the last 30 days and in all. The counts are kept on this machine and stay hidden when the provider reports none.
-
-Meeting transcription on the home page records a meeting, or takes an audio or video file you choose or drop in (mp3, m4a, wav, flac, ogg, mp4, mov, mkv, up to 3 hours), and the model on this machine turns it into text. With "Tell speakers apart" on, the text is split by speaker and each paragraph carries its start time; the first time, two models totalling 34 MB are downloaded. When several speech models are installed you can pick one. The result can be copied or saved as a file. A recording is written out while it runs, a paragraph about every half minute, and its audio is kept in one file in the app's data folder until the next recording starts or you delete it; from there it can be saved elsewhere or transcribed again as a whole. "Write minutes" sends the text to the polish model chosen in Settings and fills in a template, the built-in one or a Markdown or text file you import.
 
 Dictionary, Snippets holds phrases and their text: say a phrase by itself and its text is entered exactly as written, without going to the polish model.
 

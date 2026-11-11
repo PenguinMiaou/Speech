@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { addSegment, meetingText, type Paragraph } from '../meeting-text'
+import {
+  addSegment,
+  addTranslation,
+  meetingText,
+  renameSpeakers,
+  speakersIn,
+  transcriptLines,
+  type Paragraph,
+} from '../meeting-text'
 
 const said = (speaker: number | null, start_ms: number, text: string) => ({
   speaker,
@@ -37,6 +45,20 @@ describe('meeting text', () => {
     expect(meetingText(paragraphs, 'Speaker')).toBe('one\n\ntwo')
   })
 
+  it('finds the speakers a text names', () => {
+    const text = '说话人 2  00:00\n你好\n\n说话人 1  00:05\n说话人 9 是谁\n\n说话人 2  00:09\n好'
+    expect(speakersIn(text, '说话人')).toEqual([1, 2])
+    expect(speakersIn('plain text', 'Speaker')).toEqual([])
+  })
+
+  it('puts a name in place of a speaker number, in headings only', () => {
+    const text =
+      'Speaker 1  00:00\nSpeaker 2 said so\n\nSpeaker 2  1:02:05\nyes\n\nSpeaker 12  1:03:00\nno'
+    expect(renameSpeakers(text, 'Speaker', { 1: 'Ann', 2: '  ', 12: 'Bo (PM)' })).toBe(
+      'Ann  00:00\nSpeaker 2 said so\n\nSpeaker 2  1:02:05\nyes\n\nBo (PM)  1:03:00\nno',
+    )
+  })
+
   it('writes the meeting out with who spoke and when', () => {
     const paragraphs = [
       { speaker: 1, startMs: 0, text: '你好' },
@@ -46,5 +68,38 @@ describe('meeting text', () => {
     expect(meetingText(paragraphs, '说话人')).toBe(
       '说话人 1  00:00\n你好\n\n说话人 2  1:02:05\n收到\n\n说话人  1:06:40\n嗯',
     )
+  })
+
+  it('puts a translation under the paragraph it belongs to and joins later ones to it', () => {
+    let paragraphs = addSegment([], said(1, 0, '周五上线'))
+    paragraphs = addSegment(paragraphs, said(2, 5000, '好的'))
+    paragraphs = addTranslation(paragraphs, 0, 'We ship on Friday.')
+    paragraphs = addTranslation(paragraphs, 0, 'Testing first.')
+    expect(paragraphs[0].translation).toBe('We ship on Friday. Testing first.')
+    expect(paragraphs[1].translation).toBeUndefined()
+    expect(addTranslation(paragraphs, 7, 'lost')).toBe(paragraphs)
+  })
+
+  it('writes a translation out under its paragraph', () => {
+    const paragraphs = addTranslation(
+      addSegment([], said(1, 0, '周五上线')),
+      0,
+      'We ship on Friday.',
+    )
+    expect(meetingText(paragraphs, '说话人')).toBe('说话人 1  00:00\n周五上线\nWe ship on Friday.')
+  })
+
+  it('reads a transcript line by line, telling who speaks from what was said', () => {
+    expect(transcriptLines('说话人 2  1:02:05\n收到\n\n说话人  00:07\n嗯', '说话人')).toEqual([
+      { speaker: 2, time: '1:02:05' },
+      { text: '收到' },
+      { text: '' },
+      { speaker: 0, time: '00:07' },
+      { text: '嗯' },
+    ])
+  })
+
+  it('takes a line that only looks like a heading as words', () => {
+    expect(transcriptLines('说话人 2 说了很多', '说话人')).toEqual([{ text: '说话人 2 说了很多' }])
   })
 })

@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "AI-Spracheingabe"
   },
   "nav": {
     "home": "Startseite",
+    "meeting": "Meetings",
     "ask": "Fragen",
     "settings": "Einstellungen",
     "history": "Verlauf",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Willkommen",
-      "welcomeSub": "Richten Sie OpenTypeless in wenigen Schritten ein",
+      "welcomeSub": "Richten Sie Speech in wenigen Schritten ein",
       "speechRecognition": "Spracherkennung",
       "speechRecognitionSub": "Konfigurieren Sie Ihren STT-Dienst",
       "aiPolish": "KI-Glättung",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless fragt nur nach Zugriff, wenn eine Funktion ihn braucht.",
+      "subtitle": "Speech fragt nur nach Zugriff, wenn eine Funktion ihn braucht.",
       "microphone": "Mikrofon",
       "microphoneDesc": "Ihre Stimme aufnehmen.",
       "textOutput": "Textausgabe",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Richte zuerst in den Einstellungen ein Sprachmodell ein",
       "template_too_large": "Die Vorlagendatei ist zu groß",
       "template_empty": "Die Vorlagendatei ist leer",
-      "template_unreadable": "Die Vorlage ließ sich nicht öffnen. Sie muss eine Textdatei sein"
+      "template_unreadable": "Die Vorlage ließ sich nicht öffnen. Sie muss eine Textdatei sein",
+      "ask": "Es kam keine Antwort",
+      "system_audio_unsupported": "Diese Systemversion kann den Computerton nicht aufnehmen"
     },
     "live": "Live-Text",
-    "listening": "Hört zu. Text erscheint etwa jede halbe Minute",
+    "listening": "Hört zu. Text erscheint etwa alle fünfzehn Sekunden",
     "finishing": "Die letzten {{seconds}} Sekunden werden erkannt",
     "saveAudio": "Aufnahme speichern",
     "again": "Ganze Aufnahme neu transkribieren",
@@ -823,6 +826,35 @@
     "importTemplate": "Vorlage importieren",
     "removeTemplate": "Vorlage entfernen",
     "minutesFileName": "Besprechungsprotokoll.md",
-    "defaultTemplate": "# Besprechungsprotokoll\n\n## Themen\n\n## Beschlüsse\n\n## Diskussionspunkte\n\n## Aufgaben\nJeweils mit Verantwortlichem und Termin\n\n## Offene Fragen"
+    "defaultTemplate": "# Besprechungsprotokoll\n\n## Themen\n\n## Beschlüsse\n\n## Diskussionspunkte\n\n## Aufgaben\nJeweils mit Verantwortlichem und Termin\n\n## Offene Fragen",
+    "notes": "Meine Notizen",
+    "notesPlaceholder": "Notiere nebenbei, was wichtig ist. Das Protokoll stellt diese Punkte in den Mittelpunkt",
+    "voices": "{{count}} Stimmen gemerkt",
+    "voicesList": "Gemerkte Stimmen",
+    "forgetVoice": "Stimme von {{name}} vergessen",
+    "past": "Frühere Besprechungen {{count}}",
+    "pastList": "Frühere Besprechungen",
+    "deleteMeeting": "Diese Besprechung löschen",
+    "ask": "Frage zur Besprechung, z. B. wer das Exportproblem übernimmt",
+    "askButton": "Fragen",
+    "asking": "Antwort wird geschrieben…",
+    "chaptersTemplateName": "Nach Kapiteln",
+    "chaptersTemplate": "# Besprechungsprotokoll\n\n## Kapitel\nTeile die Besprechung in der Reihenfolge der Diskussion in Kapitel. Jeweils Startzeit, Titel und zwei bis drei Sätze\n\n## Beschlüsse\n\n## Aufgaben\nJeweils mit Verantwortlichem und Termin",
+    "systemSound": "Computerton mit aufnehmen",
+    "tabText": "Text",
+    "tabMinutes": "Protokoll",
+    "translate": "Live übersetzen (über das Korrekturmodell)",
+    "translateTo": "Übersetzen in",
+    "translateFailed": "Ein Abschnitt konnte nicht übersetzt werden. Prüfe das Korrekturmodell in den Einstellungen.",
+    "options": "Optionen",
+    "all": "Alle Meetings",
+    "empty": "Noch keine Meetings. Starte eine Aufnahme oder zieh eine Audio- oder Videodatei hierher.",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "position": "Position",
+    "titlePlaceholder": "Meeting benennen",
+    "more": "Mehr",
+    "deleteThis": "Meeting löschen",
+    "people": "{{count}} Sprecher"
   }
 }

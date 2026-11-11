@@ -308,7 +308,13 @@ impl WorkerSupervisor {
         embedding_model: &Path,
         pcm: &[f32],
         scratch_dir: &Path,
-    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+    ) -> Result<
+        (
+            Vec<ot_stt_protocol::SpeakerTurn>,
+            Vec<ot_stt_protocol::SpeakerVoice>,
+        ),
+        LocalSttError,
+    > {
         self.speakers(segmentation_model, embedding_model, pcm, scratch_dir, None)
     }
 
@@ -321,7 +327,13 @@ impl WorkerSupervisor {
         pcm: &[f32],
         scratch_dir: &Path,
         first: bool,
-    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+    ) -> Result<
+        (
+            Vec<ot_stt_protocol::SpeakerTurn>,
+            Vec<ot_stt_protocol::SpeakerVoice>,
+        ),
+        LocalSttError,
+    > {
         self.speakers(
             segmentation_model,
             embedding_model,
@@ -338,18 +350,32 @@ impl WorkerSupervisor {
         pcm: &[f32],
         scratch_dir: &Path,
         window: Option<bool>,
-    ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, LocalSttError> {
+    ) -> Result<
+        (
+            Vec<ot_stt_protocol::SpeakerTurn>,
+            Vec<ot_stt_protocol::SpeakerVoice>,
+        ),
+        LocalSttError,
+    > {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let pcm_path = scratch_dir.join(format!(
             "speakers-{}-{}.pcm",
             std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         ));
-        let mut raw = Vec::with_capacity(pcm.len() * 4);
-        for sample in pcm {
-            raw.extend_from_slice(&sample.to_le_bytes());
+        // Written through a small buffer, so a long recording is not held twice.
+        let written = (|| -> std::io::Result<()> {
+            use std::io::Write;
+            let mut file = std::io::BufWriter::new(std::fs::File::create(&pcm_path)?);
+            for sample in pcm {
+                file.write_all(&sample.to_le_bytes())?;
+            }
+            file.flush()
+        })();
+        if let Err(error) = written {
+            let _ = std::fs::remove_file(&pcm_path);
+            return Err(LocalSttError::Io(error.to_string()));
         }
-        std::fs::write(&pcm_path, raw).map_err(|error| LocalSttError::Io(error.to_string()))?;
         let text = |path: &Path| path.to_string_lossy().into_owned();
         let request = match window {
             Some(first) => Request::SpeakersWindow {
@@ -373,7 +399,7 @@ impl WorkerSupervisor {
             }
             let running = state.as_mut().expect("worker was just started");
             match exchange(running, payload, self.request_timeout + audio_time) {
-                Ok(Response::Speakers { turns }) => Ok(turns),
+                Ok(Response::Speakers { turns, voices }) => Ok((turns, voices)),
                 Ok(Response::Error { code, message }) => {
                     Err(LocalSttError::Engine { code, message })
                 }
@@ -636,7 +662,7 @@ while True:
         let dir = unique_path("diarize");
         std::fs::create_dir_all(&dir).unwrap();
         let supervisor = supervisor("ok", "", 5_000, 60_000);
-        let turns = supervisor
+        let (turns, _) = supervisor
             .diarize(
                 Path::new("seg.onnx"),
                 Path::new("emb.onnx"),

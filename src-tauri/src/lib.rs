@@ -3,6 +3,7 @@ pub mod audio;
 pub mod commands;
 pub mod credentials;
 pub mod dictionary_io;
+pub mod docx;
 pub mod error;
 pub mod file_transcribe;
 pub mod hotkey;
@@ -11,6 +12,7 @@ mod linux_x11;
 pub mod llm;
 pub mod local_stt;
 mod meeting_record;
+pub mod meetings;
 pub mod minutes;
 pub mod native_hotkey;
 pub mod output;
@@ -25,10 +27,12 @@ pub mod speakers;
 pub mod storage;
 pub mod stt;
 pub mod stt_finalize;
+pub mod system_audio;
 pub mod tray;
 pub mod update;
 pub mod voice_intent;
 pub mod voice_isolation;
+pub mod voiceprints;
 mod window_state;
 
 pub use hotkey::{default_ask_shortcut, default_shortcut, parse_hotkey};
@@ -203,7 +207,7 @@ fn build_ask_window(handle: &tauri::AppHandle) -> tauri::Result<tauri::WebviewWi
         "ask",
         tauri::WebviewUrl::App("index.html#ask".into()),
     )
-    .title("OpenTypeless Ask")
+    .title("Speech Ask")
     .inner_size(400.0, 220.0)
     .min_inner_size(360.0, 180.0)
     .resizable(false)
@@ -871,6 +875,8 @@ pub fn run() {
             voice_isolation::init(&data_dir);
             speakers::init(&data_dir);
             minutes::init(&data_dir);
+            meetings::init(&data_dir);
+            voiceprints::init(&data_dir);
             meeting_record::init(&data_dir);
             llm::usage::init(&data_dir);
             if let Some(dir) = std::env::current_exe()
@@ -969,7 +975,7 @@ pub fn run() {
                         .clone(),
                 )
                 .menu(&tray_menu)
-                .tooltip("OpenTypeless")
+                .tooltip("Speech")
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);
@@ -1204,7 +1210,21 @@ pub fn run() {
             commands::local_stt::speaker_models_install,
             commands::local_stt::meeting_recording_save,
             commands::local_stt::meeting_recording_delete,
+            commands::local_stt::speaker_remember,
+            commands::local_stt::speaker_confirm,
+            commands::local_stt::speaker_voices,
+            commands::local_stt::speaker_forget,
+            commands::meetings::meetings_list,
+            commands::meetings::meeting_get,
+            commands::meetings::meeting_save,
+            commands::meetings::meeting_delete,
+            commands::meetings::meeting_audio,
+            commands::meetings::meeting_audio_keep,
+            commands::meetings::meeting_audio_save,
+            commands::meetings::meeting_audio_delete,
             commands::minutes::meeting_minutes,
+            commands::minutes::meeting_ask,
+            commands::minutes::meeting_translate,
             commands::minutes::minutes_templates,
             commands::minutes::minutes_template_import,
             commands::minutes::minutes_template_remove,

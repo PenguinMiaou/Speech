@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "AI音声入力"
   },
   "nav": {
     "home": "ホーム",
+    "meeting": "会議",
     "ask": "質問",
     "settings": "設定",
     "history": "履歴",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "ようこそ",
-      "welcomeSub": "いくつかのステップでOpenTypelessを設定しましょう",
+      "welcomeSub": "いくつかのステップでSpeechを設定しましょう",
       "speechRecognition": "音声認識",
       "speechRecognitionSub": "STTサービスを設定します",
       "aiPolish": "AI整形",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypelessは機能に必要なときだけアクセスを求めます。",
+      "subtitle": "Speechは機能に必要なときだけアクセスを求めます。",
       "microphone": "マイク",
       "microphoneDesc": "音声を録音します。",
       "textOutput": "テキスト出力",
@@ -805,10 +806,12 @@
       "llm_not_configured": "先に設定で整形モデルを設定してください",
       "template_too_large": "テンプレートファイルが大きすぎます",
       "template_empty": "テンプレートファイルが空です",
-      "template_unreadable": "テンプレートを開けません。テキストファイルが必要です"
+      "template_unreadable": "テンプレートを開けません。テキストファイルが必要です",
+      "ask": "回答が得られませんでした",
+      "system_audio_unsupported": "このシステムのバージョンではパソコンの音を録音できません"
     },
     "live": "リアルタイムの文字",
-    "listening": "聞き取り中。文字は約30秒ごとに出ます",
+    "listening": "聞き取り中。文字は約15秒ごとに出ます",
     "finishing": "最後の {{seconds}} 秒を認識しています",
     "saveAudio": "録音を保存",
     "again": "録音全体をもう一度文字起こし",
@@ -823,6 +826,35 @@
     "importTemplate": "テンプレートを読み込む",
     "removeTemplate": "テンプレートを削除",
     "minutesFileName": "議事録.md",
-    "defaultTemplate": "# 議事録\n\n## 議題\n\n## 決定事項\n\n## 議論の要点\n\n## 対応事項\nそれぞれ担当者と期限を書く\n\n## 未解決の課題"
+    "defaultTemplate": "# 議事録\n\n## 議題\n\n## 決定事項\n\n## 議論の要点\n\n## 対応事項\nそれぞれ担当者と期限を書く\n\n## 未解決の課題",
+    "notes": "自分のメモ",
+    "notesPlaceholder": "会議中に要点をメモしておくと、議事録はそれを中心にまとめられます",
+    "voices": "{{count}} 人の声を記憶",
+    "voicesList": "記憶した声",
+    "forgetVoice": "{{name}} の声を忘れる",
+    "past": "過去の会議 {{count}}",
+    "pastList": "過去の会議",
+    "deleteMeeting": "この会議を削除",
+    "ask": "この会議について質問する（例：エクスポートの問題は誰が担当？）",
+    "askButton": "質問",
+    "asking": "回答中…",
+    "chaptersTemplateName": "チャプター別",
+    "chaptersTemplate": "# 議事録\n\n## チャプター\n議論の順にチャプターに分け、それぞれ開始時刻、見出し、2〜3文の内容を書く\n\n## 決定事項\n\n## 対応事項\nそれぞれ担当者と期限を書く",
+    "systemSound": "パソコンの音も録音",
+    "tabText": "文字",
+    "tabMinutes": "議事録",
+    "translate": "リアルタイム翻訳（整文モデル経由）",
+    "translateTo": "翻訳先",
+    "translateFailed": "翻訳できない部分がありました。整文モデルの設定を確認してください。",
+    "options": "オプション",
+    "all": "すべての会議",
+    "empty": "会議はまだありません。録音を始めるか、音声や動画のファイルをドロップしてください。",
+    "play": "再生",
+    "pause": "一時停止",
+    "position": "再生位置",
+    "titlePlaceholder": "会議に名前を付ける",
+    "more": "その他",
+    "deleteThis": "会議を削除",
+    "people": "{{count}} 人"
   }
 }

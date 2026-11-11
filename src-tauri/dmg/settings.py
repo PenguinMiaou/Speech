@@ -1,5 +1,5 @@
 # Layout of the macOS disk image, read by dmgbuild:
-#   dmgbuild -s src-tauri/dmg/settings.py -D app=<path to OpenTypeless.app> OpenTypeless <out.dmg>
+#   dmgbuild -s src-tauri/dmg/settings.py -D app=<path to Speech.app> Speech <out.dmg>
 import os
 
 here = defines.get("settings_dir", "src-tauri/dmg")  # noqa: F821

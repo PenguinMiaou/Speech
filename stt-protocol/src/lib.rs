@@ -48,6 +48,15 @@ pub enum Request {
     Shutdown,
 }
 
+/// A speaker's voice as the numbers the voice model gives it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerVoice {
+    pub speaker: u32,
+    pub embedding: Vec<f32>,
+}
+
+impl Eq for SpeakerVoice {}
+
 /// One stretch of speech by one speaker. Speakers are numbered from 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpeakerTurn {
@@ -70,6 +79,9 @@ pub enum Response {
     /// Who spoke when, in order of start time.
     Speakers {
         turns: Vec<SpeakerTurn>,
+        /// What each speaker's voice sounds like, for telling known people by voice.
+        #[serde(default)]
+        voices: Vec<SpeakerVoice>,
     },
     /// The recording is being isolated; more audio may follow.
     Isolating,

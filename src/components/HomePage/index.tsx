@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { llmServiceName } from '../../lib/llm-endpoints'
 import { useAppStore } from '../../stores/appStore'
 import { dictationStats, formatMinutes } from '../../lib/dictation-stats'
-import { MeetingCard } from './MeetingCard'
 import { TokenUsageCard } from './TokenUsageCard'
 
 const HOTKEY_SLOT = '\u0001'
@@ -69,11 +68,11 @@ export function HomePage() {
       <dl
         role="group"
         aria-label={t('home.figures')}
-        className="surface m-0 grid grid-cols-2 sm:grid-cols-4"
+        className="m-0 grid grid-cols-2 border-y border-border sm:grid-cols-4"
       >
         {figures.map(([label, value], index) => (
           <Fragment key={label}>
-            <div className={`px-5 py-4 ${index > 0 ? 'figure-divided' : ''}`}>
+            <div className={`py-4 pr-5 ${index > 0 ? 'figure-divided pl-5' : ''}`}>
               <dt className="text-[12px] text-text-secondary">{t(label)}</dt>
               <dd className="m-0 mt-1 text-[24px] font-semibold tabular-nums tracking-tight">
                 {value}
@@ -82,8 +81,6 @@ export function HomePage() {
           </Fragment>
         ))}
       </dl>
-
-      <MeetingCard />
 
       <TokenUsageCard />
     </div>

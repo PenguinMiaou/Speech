@@ -13,6 +13,7 @@ pub struct RealEngine {
     isolating: Option<(String, Isolator<VoxLock>)>,
     /// The voices heard so far in a recording still running, with the model files.
     live_speakers: Option<(String, crate::diarize::LiveSpeakers)>,
+    voices: Vec<ot_stt_protocol::SpeakerVoice>,
 }
 
 /// Which optional hints the loaded model can use.
@@ -68,6 +69,10 @@ impl Engine for RealEngine {
         Ok(())
     }
 
+    fn last_voices(&mut self) -> Vec<ot_stt_protocol::SpeakerVoice> {
+        std::mem::take(&mut self.voices)
+    }
+
     fn speakers_window(
         &mut self,
         segmentation_model: &str,
@@ -89,7 +94,9 @@ impl Engine for RealEngine {
             self.live_speakers = Some((wanted, live));
         }
         let (_, live) = self.live_speakers.as_mut().expect("opened above");
-        live.window(pcm).map_err(failed)
+        let (turns, voices) = live.window(pcm).map_err(failed)?;
+        self.voices = voices;
+        Ok(turns)
     }
 
     fn diarize(
@@ -99,12 +106,15 @@ impl Engine for RealEngine {
         pcm: &[f32],
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
         let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
-        crate::diarize::diarize(segmentation_model, embedding_model, pcm, threads).map_err(
-            |message| EngineError {
-                code: "diarize_failed".into(),
-                message,
-            },
-        )
+        let (turns, voices) =
+            crate::diarize::diarize(segmentation_model, embedding_model, pcm, threads).map_err(
+                |message| EngineError {
+                    code: "diarize_failed".into(),
+                    message,
+                },
+            )?;
+        self.voices = voices;
+        Ok(turns)
     }
 
     fn isolate_end(&mut self) -> Result<Vec<f32>, EngineError> {

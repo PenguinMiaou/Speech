@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import type {
   AppConfig,
   HistoryEntry,
@@ -854,9 +854,10 @@ export interface MeetingSegment {
 export function meetingRecordStart(
   inputDevice: string,
   bySpeaker: boolean,
+  systemSound: boolean,
   modelId: string | null,
 ): Promise<void> {
-  return invoke('meeting_record_start', { inputDevice, bySpeaker, modelId })
+  return invoke('meeting_record_start', { inputDevice, bySpeaker, systemSound, modelId })
 }
 
 /** `waiting` is the seconds recorded and not yet recognized. */
@@ -875,19 +876,35 @@ export function meetingRecordStop(discard: boolean): Promise<string | null> {
 }
 
 /** Asks where to put a copy of the latest meeting's audio. False when the dialog is closed. */
-export async function saveMeetingRecording(suggestedName: string): Promise<boolean> {
+/** Where the sound of a meeting is kept, if it still is. */
+export function meetingAudio(id: string): Promise<string | null> {
+  return invoke('meeting_audio', { id })
+}
+
+/** Gives the recording that has just ended to the meeting written from it. */
+export function meetingAudioKeep(id: string): Promise<string | null> {
+  return invoke('meeting_audio_keep', { id })
+}
+
+export function meetingAudioDelete(id: string): Promise<void> {
+  return invoke('meeting_audio_delete', { id })
+}
+
+/** Asks where to put a copy of a meeting's sound and writes it there. */
+export async function saveMeetingAudio(id: string, suggestedName: string): Promise<boolean> {
   const { save } = await import('@tauri-apps/plugin-dialog')
   const path = await save({
     defaultPath: suggestedName,
     filters: [{ name: 'WAV', extensions: ['wav'] }],
   })
   if (!path) return false
-  await invoke('meeting_recording_save', { path })
+  await invoke('meeting_audio_save', { id, path })
   return true
 }
 
-export function deleteMeetingRecording(): Promise<void> {
-  return invoke('meeting_recording_delete')
+/** The address the page plays a kept sound file from. */
+export function audioSource(path: string): string {
+  return convertFileSrc(path)
 }
 
 export function onMeetingSegment(handler: (segment: MeetingSegment) => void): Promise<UnlistenFn> {
@@ -898,14 +915,100 @@ export function onMeetingError(handler: (error: string) => void): Promise<Unlist
   return listen<string>('meeting:error', (event) => handler(event.payload))
 }
 
+/** A guess at the words being said now, replaced by the settled words when they come. */
+export function onMeetingInterim(handler: (text: string) => void): Promise<UnlistenFn> {
+  return listen<string>('meeting:interim', (event) => handler(event.payload))
+}
+
+/** Names of the speakers in the meeting in hand whose voices were remembered earlier. */
+export function onMeetingNames(
+  handler: (names: Record<string, string>) => void,
+): Promise<UnlistenFn> {
+  return listen<Record<string, string>>('meeting:names', (event) => handler(event.payload))
+}
+
+/** Remembers a speaker's voice under a name, so the same person gets it in later meetings.
+ * Resolves with all remembered names. */
+export function rememberSpeaker(speaker: number, name: string): Promise<string[]> {
+  return invoke('speaker_remember', { speaker, name })
+}
+
+/** Learns from the names a meeting ended with: each named speaker's voice becomes one
+ * more sample of that person. */
+export function speakerConfirm(names: Record<number, string>): Promise<string[]> {
+  return invoke('speaker_confirm', { names })
+}
+
+export function speakerVoices(): Promise<string[]> {
+  return invoke('speaker_voices')
+}
+
+export function forgetSpeaker(name: string): Promise<string[]> {
+  return invoke('speaker_forget', { name })
+}
+
+/** A past meeting as it is kept on this machine. */
+export interface MeetingRecord {
+  id: string
+  started_at: number
+  transcript: string
+  notes: string
+  minutes: string
+  names: Record<number, string>
+  title?: string
+  duration_s?: number
+}
+
+export interface MeetingSummary {
+  id: string
+  started_at: number
+  preview: string
+  has_minutes: boolean
+  title?: string
+  duration_s?: number
+  has_audio?: boolean
+}
+
+/** Past meetings, the newest first. */
+export function meetingsList(): Promise<MeetingSummary[]> {
+  return invoke('meetings_list')
+}
+
+export function meetingGet(id: string): Promise<MeetingRecord> {
+  return invoke('meeting_get', { id })
+}
+
+export function meetingSave(meeting: MeetingRecord): Promise<void> {
+  return invoke('meeting_save', { meeting })
+}
+
+export function meetingDelete(id: string): Promise<void> {
+  return invoke('meeting_delete', { id })
+}
+
 export interface MinutesTemplate {
   name: string
   text: string
 }
 
-/** Writes minutes after `template` with the language model chosen in the settings. */
-export function meetingMinutes(transcript: string, template: string): Promise<string> {
-  return invoke('meeting_minutes', { transcript, template })
+/** Writes minutes after `template` with the language model chosen in the settings.
+ * `notes` is what the user typed during the meeting. */
+export function meetingMinutes(
+  transcript: string,
+  template: string,
+  notes: string,
+): Promise<string> {
+  return invoke('meeting_minutes', { transcript, template, notes })
+}
+
+/** Answers a question about a meeting with the language model chosen in the settings. */
+export function meetingAsk(transcript: string, question: string): Promise<string> {
+  return invoke('meeting_ask', { transcript, question })
+}
+
+/** Translates one piece of a meeting with the language model chosen in the settings. */
+export function meetingTranslate(text: string, target: string): Promise<string> {
+  return invoke('meeting_translate', { text, target })
 }
 
 export function minutesTemplates(): Promise<MinutesTemplate[]> {
@@ -980,7 +1083,11 @@ export async function saveTextFile(text: string, suggestedName: string): Promise
   const { save } = await import('@tauri-apps/plugin-dialog')
   const path = await save({
     defaultPath: suggestedName,
-    filters: [{ name: 'Text', extensions: ['txt', 'md'] }],
+    // Saved under a .docx name, the text is written as a Word document.
+    filters: [
+      { name: 'Text', extensions: ['txt', 'md'] },
+      { name: 'Word', extensions: ['docx'] },
+    ],
   })
   if (!path) return false
   await invoke('save_text_file', { path, text })

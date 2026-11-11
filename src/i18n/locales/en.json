@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "AI Voice Input"
   },
   "nav": {
     "home": "Home",
+    "meeting": "Meetings",
     "ask": "Ask",
     "settings": "Settings",
     "history": "History",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Welcome",
-      "welcomeSub": "Set up OpenTypeless in a few steps",
+      "welcomeSub": "Set up Speech in a few steps",
       "speechRecognition": "Speech Recognition",
       "speechRecognitionSub": "Choose a speech recognition model",
       "aiPolish": "AI Polish",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless asks for access only when a feature needs it.",
+      "subtitle": "Speech asks for access only when a feature needs it.",
       "microphone": "Microphone",
       "microphoneDesc": "Capture your voice.",
       "textOutput": "Text output",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Set up a polish model in Settings first",
       "template_too_large": "The template file is too large",
       "template_empty": "The template file is empty",
-      "template_unreadable": "The template could not be opened. It needs to be a text file"
+      "template_unreadable": "The template could not be opened. It needs to be a text file",
+      "ask": "No answer came back",
+      "system_audio_unsupported": "This system version cannot record the computer's sound"
     },
     "live": "Live text",
-    "listening": "Listening. Text arrives about every half minute",
+    "listening": "Listening. Text arrives every fifteen seconds or so",
     "finishing": "Recognizing the last {{seconds}} seconds",
     "saveAudio": "Save audio",
     "again": "Transcribe whole recording again",
@@ -823,6 +826,35 @@
     "importTemplate": "Import template",
     "removeTemplate": "Remove template",
     "minutesFileName": "Meeting minutes.md",
-    "defaultTemplate": "# Meeting minutes\n\n## Topics\n\n## Decisions\n\n## Discussion points\n\n## Action items\nName the owner and the deadline for each\n\n## Open questions"
+    "defaultTemplate": "# Meeting minutes\n\n## Topics\n\n## Decisions\n\n## Discussion points\n\n## Action items\nName the owner and the deadline for each\n\n## Open questions",
+    "notes": "My notes",
+    "notesPlaceholder": "Jot down what matters as you go. The minutes will be built around these points",
+    "voices": "{{count}} voices remembered",
+    "voicesList": "Remembered voices",
+    "forgetVoice": "Forget {{name}}'s voice",
+    "past": "Past meetings {{count}}",
+    "pastList": "Past meetings",
+    "deleteMeeting": "Delete this meeting",
+    "ask": "Ask about this meeting, e.g. who owns the export issue",
+    "askButton": "Ask",
+    "asking": "Answering…",
+    "chaptersTemplateName": "By chapter",
+    "chaptersTemplate": "# Meeting minutes\n\n## Chapters\nSplit the meeting into chapters in the order discussed. Give each its start time, a title and two or three sentences\n\n## Decisions\n\n## Action items\nName the owner and the deadline for each",
+    "systemSound": "Include computer sound",
+    "tabText": "Text",
+    "tabMinutes": "Minutes",
+    "translate": "Translate live (through the polish model)",
+    "translateTo": "Translate into",
+    "translateFailed": "A piece could not be translated. Check the polish model in Settings.",
+    "options": "Options",
+    "all": "All meetings",
+    "empty": "No meetings yet. Start recording, or drop in an audio or video file.",
+    "play": "Play",
+    "pause": "Pause",
+    "position": "Position",
+    "titlePlaceholder": "Name this meeting",
+    "more": "More",
+    "deleteThis": "Delete meeting",
+    "people": "{{count}} speakers"
   }
 }

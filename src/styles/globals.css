@@ -11,6 +11,13 @@
   --color-text-secondary: #596068;
   --color-text-tertiary: #8a9199;
 
+  /* One colour a speaker in a meeting, so a name never reads as part of the words. */
+  --speaker-1: #0b7d70;
+  --speaker-2: #b4530a;
+  --speaker-3: #3b5bdb;
+  --speaker-4: #b0387a;
+  --speaker-5: #6b4fc4;
+  --speaker-6: #4d7c0f;
   --color-accent: #0e9384;
   --color-accent-hover: #0b7d70;
   --color-accent-light: #e2f4f1;
@@ -91,6 +98,12 @@ body,
   --color-bg-tertiary: #2d3035;
   --color-bg-elevated: #232528;
 
+  --speaker-1: #4fd1bd;
+  --speaker-2: #f0a45d;
+  --speaker-3: #8da2fb;
+  --speaker-4: #f081b8;
+  --speaker-5: #b39df5;
+  --speaker-6: #a3d15c;
   --color-text-primary: #eceef0;
   --color-text-secondary: #a4aab1;
   --color-text-tertiary: #737a82;
@@ -654,4 +667,69 @@ body,
 
 .dark .segment-active {
   background: var(--color-bg-tertiary);
+}
+
+/* ─── Wordmark: the six letters of the name, Bodoni Moda italic (SIL OFL, see assets/fonts) ─── */
+@font-face {
+  font-family: 'Speech Wordmark';
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/wordmark.woff2') format('woff2');
+}
+.wordmark {
+  font-family: 'Speech Wordmark', 'Didot', 'Bodoni 72', Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* The S in the recording capsule: brushed metal with a band of light passing over it. */
+.capsule-mark {
+  font-family: 'Speech Wordmark', 'Didot', 'Bodoni 72', Georgia, serif;
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1;
+  padding: 0 2px 1px 0;
+  color: transparent;
+  background-image: linear-gradient(
+    105deg,
+    #8d8f96 0%,
+    #c9cbd1 22%,
+    #ffffff 38%,
+    #e9d9b0 46%,
+    #a6a8af 60%,
+    #d7d9de 80%,
+    #8d8f96 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: capsule-mark-sheen 3.6s ease-in-out infinite;
+}
+.capsule-mark-still {
+  animation: none;
+  background-position: 40% 0;
+}
+@keyframes capsule-mark-sheen {
+  0% {
+    background-position: 100% 0;
+  }
+  55%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .capsule-mark {
+    animation: none;
+    background-position: 40% 0;
+  }
+}
+
+/* The bar a meeting's sound is moved along. */
+.meeting-audio-bar {
+  height: 4px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
 }

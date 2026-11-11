@@ -248,13 +248,15 @@ mod tests {
 
 static TRANSCRIBING_FILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-fn file_options(
+async fn file_options(
+    dictionary: &crate::storage::DictionaryStore,
     speaker_label: Option<String>,
     model_id: Option<String>,
 ) -> crate::file_transcribe::Options {
     crate::file_transcribe::Options {
         speaker_label: speaker_label.filter(|label| !label.trim().is_empty()),
         model_id,
+        vocabulary: crate::recent::engine_vocabulary(&dictionary.words().await),
     }
 }
 
@@ -278,11 +280,14 @@ pub async fn transcribe_file(
     path: String,
     speaker_label: Option<String>,
     model_id: Option<String>,
+    dictionary: tauri::State<'_, crate::storage::DictionaryStore>,
 ) -> Result<String, String> {
+    let options = file_options(&dictionary, speaker_label, model_id).await;
     if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
         return Err("busy".to_string());
     }
-    let options = file_options(speaker_label, model_id);
+    let by_speaker = options.speaker_label.is_some();
+    let names_to = app.clone();
     let result = tokio::task::spawn_blocking(move || {
         crate::file_transcribe::transcribe(std::path::Path::new(&path), &options, |stage| {
             report_stage(&app, stage)
@@ -292,6 +297,9 @@ pub async fn transcribe_file(
     .map_err(|error| error.to_string())
     .and_then(|result| result);
     TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
+    if by_speaker && result.is_ok() {
+        let _ = names_to.emit("meeting:names", crate::voiceprints::names());
+    }
     result
 }
 
@@ -302,17 +310,31 @@ pub async fn meeting_record_start(
     app: tauri::AppHandle,
     input_device: String,
     by_speaker: bool,
+    system_sound: bool,
     model_id: Option<String>,
+    dictionary: tauri::State<'_, crate::storage::DictionaryStore>,
 ) -> Result<(), String> {
+    let vocabulary = crate::recent::engine_vocabulary(&dictionary.words().await);
     if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
         return Err("busy".to_string());
     }
-    crate::meeting_record::start(input_device, by_speaker, model_id, move |outcome| {
-        let _ = match outcome {
-            Ok(segment) => app.emit("meeting:segment", segment),
-            Err(error) => app.emit("meeting:error", error),
-        };
-    })
+    crate::meeting_record::start(
+        input_device,
+        by_speaker,
+        system_sound,
+        model_id,
+        vocabulary,
+        move |outcome| {
+            let _ = match outcome {
+                Ok(crate::meeting_record::Heard::Said(segment)) => {
+                    let _ = app.emit("meeting:names", crate::voiceprints::names());
+                    app.emit("meeting:segment", segment)
+                }
+                Ok(crate::meeting_record::Heard::Guess(text)) => app.emit("meeting:interim", text),
+                Err(error) => app.emit("meeting:error", error),
+            };
+        },
+    )
     .await
 }
 
@@ -341,6 +363,32 @@ pub fn meeting_record_level() -> Option<MeetingLevel> {
 pub async fn meeting_record_stop(discard: bool) -> Result<Option<String>, String> {
     crate::meeting_record::stop(discard).await?;
     Ok(crate::meeting_record::kept_recording().map(|path| path.to_string_lossy().into_owned()))
+}
+
+/// Remembers the voice of a speaker of the meeting in hand under a name, so that the
+/// same person gets the name in later meetings. Returns the remembered names.
+#[tauri::command]
+pub fn speaker_remember(speaker: u32, name: String) -> Result<Vec<String>, String> {
+    crate::voiceprints::remember(speaker, &name)
+}
+
+/// Learns from the names the meeting in hand ended with: each named speaker's voice
+/// becomes one more sample of that person.
+#[tauri::command]
+pub fn speaker_confirm(
+    names: std::collections::HashMap<u32, String>,
+) -> Result<Vec<String>, String> {
+    crate::voiceprints::confirm(&names)
+}
+
+#[tauri::command]
+pub fn speaker_voices() -> Vec<String> {
+    crate::voiceprints::remembered()
+}
+
+#[tauri::command]
+pub fn speaker_forget(name: String) -> Result<Vec<String>, String> {
+    crate::voiceprints::forget(&name)
 }
 
 /// Copies the latest meeting's audio to where the user asked.
@@ -435,5 +483,10 @@ async fn install_speaker_models(app: &tauri::AppHandle, dir: &Path) -> Result<()
 /// Writes text to the place the user just chose in the save dialog.
 #[tauri::command]
 pub fn save_text_file(path: String, text: String) -> Result<(), String> {
-    std::fs::write(path, text).map_err(|error| error.to_string())
+    let bytes = if path.to_lowercase().ends_with(".docx") {
+        crate::docx::docx(&text)
+    } else {
+        text.into_bytes()
+    };
+    std::fs::write(path, bytes).map_err(|error| error.to_string())
 }

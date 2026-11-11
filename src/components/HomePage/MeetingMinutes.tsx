@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   copyText,
   importMinutesTemplate,
+  meetingAsk,
   meetingMinutes,
   minutesTemplates,
   removeMinutesTemplate,
@@ -12,6 +13,8 @@ import {
 import { LogoSelect } from '../Settings/shared/LogoSelect'
 
 const BUILT_IN = ''
+// No file can carry this name, so it cannot collide with an imported template.
+const CHAPTERS = '\u0000chapters'
 const KNOWN_ERRORS = [
   'llm_not_configured',
   'template_too_large',
@@ -21,13 +24,25 @@ const KNOWN_ERRORS = [
 
 /** Turns a meeting's text into minutes after a template, the built-in one or one the
  * user imported. */
-export function MeetingMinutes({ transcript }: { transcript: string }) {
+export function MeetingMinutes({
+  transcript,
+  notes,
+  minutes,
+  onMinutes,
+}: {
+  transcript: string
+  notes: string
+  minutes: string | null
+  onMinutes: (minutes: string) => void
+}) {
   const { t } = useTranslation()
   const [templates, setTemplates] = useState<MinutesTemplate[]>([])
   const [chosen, setChosen] = useState(BUILT_IN)
-  const [minutes, setMinutes] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [question, setQuestion] = useState('')
+  const [answer, setAnswer] = useState<string | null>(null)
+  const [asking, setAsking] = useState(false)
 
   useEffect(() => {
     void Promise.resolve(minutesTemplates())
@@ -43,13 +58,24 @@ export function MeetingMinutes({ transcript }: { transcript: string }) {
   const write = () => {
     if (working) return
     const template =
-      templates.find((entry) => entry.name === chosen)?.text ?? t('meeting.defaultTemplate')
+      templates.find((entry) => entry.name === chosen)?.text ??
+      t(chosen === CHAPTERS ? 'meeting.chaptersTemplate' : 'meeting.defaultTemplate')
     setWorking(true)
     setError(null)
-    Promise.resolve(meetingMinutes(transcript, template))
-      .then((text) => setMinutes(text ?? ''))
+    Promise.resolve(meetingMinutes(transcript, template, notes))
+      .then((text) => onMinutes(text ?? ''))
       .catch((reason) => fail(reason, 'minutes'))
       .finally(() => setWorking(false))
+  }
+
+  const ask = () => {
+    if (asking || !question.trim()) return
+    setAsking(true)
+    setError(null)
+    Promise.resolve(meetingAsk(transcript, question.trim()))
+      .then((text) => setAnswer(text ?? ''))
+      .catch((reason) => fail(reason, 'ask'))
+      .finally(() => setAsking(false))
   }
 
   const add = () => {
@@ -73,7 +99,7 @@ export function MeetingMinutes({ transcript }: { transcript: string }) {
       .catch(() => {})
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
+    <div className="mt-3">
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-[190px]">
           <LogoSelect
@@ -82,6 +108,7 @@ export function MeetingMinutes({ transcript }: { transcript: string }) {
             value={chosen}
             options={[
               { value: BUILT_IN, label: t('meeting.defaultTemplateName') },
+              { value: CHAPTERS, label: t('meeting.chaptersTemplateName') },
               ...templates.map((entry) => ({ value: entry.name, label: entry.name })),
             ]}
             onChange={setChosen}
@@ -90,7 +117,7 @@ export function MeetingMinutes({ transcript }: { transcript: string }) {
         <button type="button" onClick={add} className="btn-quiet">
           {t('meeting.importTemplate')}
         </button>
-        {chosen !== BUILT_IN && (
+        {chosen !== BUILT_IN && chosen !== CHAPTERS && (
           <button type="button" onClick={remove} className="btn-quiet">
             {t('meeting.removeTemplate')}
           </button>
@@ -100,6 +127,29 @@ export function MeetingMinutes({ transcript }: { transcript: string }) {
         </button>
       </div>
       <p className="mt-2 text-[12px] text-text-tertiary">{t('meeting.minutesNote')}</p>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          ask()
+        }}
+      >
+        <input
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          aria-label={t('meeting.ask')}
+          placeholder={t('meeting.ask')}
+          className="h-9 min-w-0 flex-1 rounded-[8px] border border-border bg-bg-primary px-3 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
+        />
+        <button type="submit" disabled={asking} className="btn-quiet">
+          {asking ? t('meeting.asking') : t('meeting.askButton')}
+        </button>
+      </form>
+      {answer !== null && (
+        <p role="status" className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed">
+          {answer}
+        </p>
+      )}
       {error && <p className="mt-2 text-[12px] text-error">{t(error)}</p>}
       {minutes !== null && (
         <div className="mt-3 space-y-2">

@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "AI 음성 입력"
   },
   "nav": {
     "home": "홈",
+    "meeting": "회의",
     "ask": "질문",
     "settings": "설정",
     "history": "기록",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "환영합니다",
-      "welcomeSub": "몇 단계만으로 OpenTypeless를 설정하세요",
+      "welcomeSub": "몇 단계만으로 Speech를 설정하세요",
       "speechRecognition": "음성 인식",
       "speechRecognitionSub": "STT 서비스를 설정하세요",
       "aiPolish": "AI 다듬기",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless는 기능에 필요할 때만 접근 권한을 요청합니다.",
+      "subtitle": "Speech는 기능에 필요할 때만 접근 권한을 요청합니다.",
       "microphone": "마이크",
       "microphoneDesc": "음성을 녹음합니다.",
       "textOutput": "텍스트 출력",
@@ -805,10 +806,12 @@
       "llm_not_configured": "먼저 설정에서 다듬기 모델을 설정하세요",
       "template_too_large": "템플릿 파일이 너무 큽니다",
       "template_empty": "템플릿 파일이 비어 있습니다",
-      "template_unreadable": "템플릿을 열 수 없습니다. 텍스트 파일이어야 합니다"
+      "template_unreadable": "템플릿을 열 수 없습니다. 텍스트 파일이어야 합니다",
+      "ask": "답변을 받지 못했습니다",
+      "system_audio_unsupported": "이 시스템 버전에서는 컴퓨터 소리를 녹음할 수 없습니다"
     },
     "live": "실시간 텍스트",
-    "listening": "듣는 중입니다. 텍스트는 약 30초마다 나옵니다",
+    "listening": "듣는 중입니다. 텍스트는 약 15초마다 나옵니다",
     "finishing": "마지막 {{seconds}}초를 인식하는 중",
     "saveAudio": "녹음 저장",
     "again": "녹음 전체 다시 받아쓰기",
@@ -823,6 +826,35 @@
     "importTemplate": "템플릿 가져오기",
     "removeTemplate": "템플릿 삭제",
     "minutesFileName": "회의록.md",
-    "defaultTemplate": "# 회의록\n\n## 안건\n\n## 결정 사항\n\n## 논의 요점\n\n## 할 일\n각 항목에 담당자와 기한을 적기\n\n## 미결 사항"
+    "defaultTemplate": "# 회의록\n\n## 안건\n\n## 결정 사항\n\n## 논의 요점\n\n## 할 일\n각 항목에 담당자와 기한을 적기\n\n## 미결 사항",
+    "notes": "내 메모",
+    "notesPlaceholder": "회의 중에 요점을 적어 두면 회의록이 그 내용을 중심으로 작성됩니다",
+    "voices": "기억한 목소리 {{count}}개",
+    "voicesList": "기억한 목소리",
+    "forgetVoice": "{{name}}의 목소리 잊기",
+    "past": "지난 회의 {{count}}",
+    "pastList": "지난 회의",
+    "deleteMeeting": "이 회의 삭제",
+    "ask": "이 회의에 대해 질문하기 (예: 내보내기 문제는 누가 맡나요)",
+    "askButton": "질문",
+    "asking": "답변 중…",
+    "chaptersTemplateName": "챕터별",
+    "chaptersTemplate": "# 회의록\n\n## 챕터\n논의 순서대로 챕터를 나누고 각각 시작 시간, 제목, 두세 문장의 내용을 적기\n\n## 결정 사항\n\n## 할 일\n각 항목에 담당자와 기한을 적기",
+    "systemSound": "컴퓨터 소리도 녹음",
+    "tabText": "텍스트",
+    "tabMinutes": "회의록",
+    "translate": "실시간 번역(다듬기 모델 사용)",
+    "translateTo": "번역 언어",
+    "translateFailed": "번역하지 못한 부분이 있습니다. 다듬기 모델 설정을 확인하세요.",
+    "options": "옵션",
+    "all": "모든 회의",
+    "empty": "아직 회의가 없습니다. 녹음을 시작하거나 오디오·비디오 파일을 끌어다 놓으세요.",
+    "play": "재생",
+    "pause": "일시정지",
+    "position": "재생 위치",
+    "titlePlaceholder": "회의 이름 지정",
+    "more": "더 보기",
+    "deleteThis": "회의 삭제",
+    "people": "{{count}}명"
   }
 }

@@ -3,10 +3,12 @@
 <plist version="1.0">
 <dict>
     <key>NSMicrophoneUsageDescription</key>
-    <string>OpenTypeless needs microphone access to capture voice input for speech-to-text.</string>
+    <string>Speech needs microphone access to capture voice input for speech-to-text.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>OpenTypeless uses Apple Speech to transcribe your voice input when you choose the Apple Speech provider.</string>
+    <string>Speech uses Apple Speech to transcribe your voice input when you choose the Apple Speech provider.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Speech records the sound this computer plays when you choose to include it in a meeting recording, so the other side of a call is written out too.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>OpenTypeless needs automation access to detect the active application for context-aware text output.</string>
+    <string>Speech needs automation access to detect the active application for context-aware text output.</string>
 </dict>
 </plist>

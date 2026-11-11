@@ -25,7 +25,7 @@ function getCapsuleState(pipelineState: string, hasError: boolean, hasNotice: bo
   return pipelineState
 }
 
-function getCapsuleShellSize(capsuleState: string) {
+export function getCapsuleShellSize(capsuleState: string, translating: boolean) {
   switch (capsuleState) {
     case 'idle':
       return { width: 36, height: 36 }
@@ -37,6 +37,8 @@ function getCapsuleShellSize(capsuleState: string) {
     case 'ask_thinking':
       return { width: 168, height: 36 }
     case 'recording':
+      // The language chip appears only when translating; without it the capsule hugs its contents.
+      return { width: translating ? 184 : 126, height: 36 }
     case 'transcribing':
     case 'polishing':
     case 'notice':
@@ -56,6 +58,7 @@ export function Capsule() {
   const setContextMenuReady = useAppStore((s) => s.setContextMenuReady)
   const translationTargetMenuOpen = useAppStore((s) => s.translationTargetMenuOpen)
   const setTranslationTargetMenuOpen = useAppStore((s) => s.setTranslationTargetMenuOpen)
+  const activeVoiceMode = useAppStore((s) => s.activeVoiceMode)
   const { stopRecording, isRecording } = useRecording()
 
   const dragStart = useRef<{ x: number; y: number } | null>(null)
@@ -66,7 +69,7 @@ export function Capsule() {
   const hasError = pipelineError !== null
   const hasNotice = useAppStore((s) => s.capsuleNotice !== null)
   const capsuleState = getCapsuleState(pipelineState, hasError, hasNotice)
-  const capsuleShellSize = getCapsuleShellSize(capsuleState)
+  const capsuleShellSize = getCapsuleShellSize(capsuleState, activeVoiceMode === 'translate')
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return

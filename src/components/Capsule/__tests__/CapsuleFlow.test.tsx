@@ -195,7 +195,7 @@ describe('Capsule flow states', () => {
     expect(useAppStore.getState().config.translation.active_target).toBe('ja')
   })
 
-  it('keeps the capsule shell at 200 by 36 and closes the target menu on Escape', async () => {
+  it('keeps the capsule shell at 184 by 36 and closes the target menu on Escape', async () => {
     useAppStore.setState({
       pipelineState: 'recording',
       activeVoiceMode: 'translate',
@@ -217,7 +217,7 @@ describe('Capsule flow states', () => {
     )
 
     const shell = container.querySelector('.jelly-capsule-active') as HTMLElement
-    expect(shell.style.width).toBe('200px')
+    expect(shell.style.width).toBe('184px')
     expect(shell.style.height).toBe('36px')
   })
 })

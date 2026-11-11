@@ -135,6 +135,8 @@ pub struct Options {
     pub speaker_label: Option<String>,
     /// The model to recognize with. The dictation model when absent or not installed.
     pub model_id: Option<String>,
+    /// Words from the user's dictionary the model should expect.
+    pub vocabulary: Vec<String>,
 }
 
 /// What a caller hears while a recording is being worked on.
@@ -254,7 +256,14 @@ pub fn transcribe_pcm(
         }
         None => None,
     };
-    recognize(&supervisor, &model, speakers.as_ref(), pcm, progress)
+    recognize(
+        &supervisor,
+        &model,
+        speakers.as_ref(),
+        &options.vocabulary,
+        pcm,
+        progress,
+    )
 }
 
 struct SpeakerModels {
@@ -268,15 +277,17 @@ fn recognize(
     supervisor: &crate::local_stt::WorkerSupervisor,
     model: &Path,
     speakers: Option<&SpeakerModels>,
+    vocabulary: &[String],
     pcm: &[f32],
     mut progress: impl FnMut(Stage),
 ) -> Result<String, String> {
     let turns = match speakers {
         Some(models) => {
             progress(Stage::Speakers);
-            let found = supervisor
+            let (found, voices) = supervisor
                 .diarize(&models.segmentation, &models.voice, pcm, &models.scratch)
                 .map_err(|error| error.to_string())?;
+            crate::voiceprints::hear(voices, true);
             Some(crate::speakers::merge_turns(&found))
         }
         None => None,
@@ -289,7 +300,7 @@ fn recognize(
     });
     for (index, (turn, piece)) in planned.iter().enumerate() {
         let text = supervisor
-            .transcribe(model, &pcm[piece.clone()], Vec::new(), None)
+            .transcribe(model, &pcm[piece.clone()], vocabulary.to_vec(), None)
             .map_err(|error| error.to_string())?;
         let text = text.trim();
         if !text.is_empty() {
@@ -388,7 +399,15 @@ mod tests {
         };
         let pcm = decode(&var("OT_FILE")).unwrap();
         let started = std::time::Instant::now();
-        let text = recognize(&supervisor, &var("OT_MODEL"), Some(&speakers), &pcm, |_| {}).unwrap();
+        let text = recognize(
+            &supervisor,
+            &var("OT_MODEL"),
+            Some(&speakers),
+            &[],
+            &pcm,
+            |_| {},
+        )
+        .unwrap();
         println!(
             "audio {:.0}s took {:.1}s\n{text}",
             pcm.len() as f32 / RATE as f32,

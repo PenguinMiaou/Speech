@@ -1,4 +1,4 @@
-import { Home, Settings, History } from 'lucide-react'
+import { Home, Settings, History, AudioLines } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
@@ -8,8 +8,9 @@ import { UpdateBanner } from './UpdateBanner'
 
 const baseNavItems: { id: Route; labelKey: string; icon: typeof Home }[] = [
   { id: 'home', labelKey: 'nav.home', icon: Home },
-  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
+  { id: 'meeting', labelKey: 'nav.meeting', icon: AudioLines },
   { id: 'history', labelKey: 'nav.history', icon: History },
+  { id: 'settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 interface Props {
@@ -26,8 +27,8 @@ export function MainLayout({ children }: Props) {
       <aside className="w-[200px] flex flex-col border-r border-border jelly-surface-flat shrink-0">
         {/* Logo */}
         <div className="px-5 pt-5 pb-4" data-tauri-drag-region>
-          <h1 className="text-[15px] font-semibold tracking-tight">{t('app.name')}</h1>
-          <p className="text-[11px] text-text-tertiary mt-0.5">{t('app.tagline')}</p>
+          <h1 className="wordmark text-[26px] leading-none">{t('app.name')}</h1>
+          <p className="text-[11px] text-text-tertiary mt-1.5">{t('app.tagline')}</p>
         </div>
 
         {/* Main Nav */}

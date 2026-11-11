@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "Entrada de voz con IA"
   },
   "nav": {
     "home": "Inicio",
+    "meeting": "Reuniones",
     "ask": "Preguntar",
     "settings": "Configuración",
     "history": "Historial",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Bienvenido",
-      "welcomeSub": "Configura OpenTypeless en unos pocos pasos",
+      "welcomeSub": "Configura Speech en unos pocos pasos",
       "speechRecognition": "Reconocimiento de voz",
       "speechRecognitionSub": "Configura tu servicio STT",
       "aiPolish": "Pulido con IA",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless solo pide acceso cuando una función lo necesita.",
+      "subtitle": "Speech solo pide acceso cuando una función lo necesita.",
       "microphone": "Micrófono",
       "microphoneDesc": "Captura tu voz.",
       "textOutput": "Salida de texto",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Configura antes un modelo de pulido en Ajustes",
       "template_too_large": "El archivo de plantilla es demasiado grande",
       "template_empty": "El archivo de plantilla está vacío",
-      "template_unreadable": "No se pudo abrir la plantilla. Debe ser un archivo de texto"
+      "template_unreadable": "No se pudo abrir la plantilla. Debe ser un archivo de texto",
+      "ask": "No llegó ninguna respuesta",
+      "system_audio_unsupported": "Esta versión del sistema no puede grabar el sonido del ordenador"
     },
     "live": "Texto en directo",
-    "listening": "Escuchando. El texto llega cada medio minuto aproximadamente",
+    "listening": "Escuchando. El texto llega cada quince segundos aproximadamente",
     "finishing": "Reconociendo los últimos {{seconds}} segundos",
     "saveAudio": "Guardar audio",
     "again": "Transcribir de nuevo toda la grabación",
@@ -823,6 +826,35 @@
     "importTemplate": "Importar plantilla",
     "removeTemplate": "Quitar plantilla",
     "minutesFileName": "Acta de la reunión.md",
-    "defaultTemplate": "# Acta de la reunión\n\n## Temas\n\n## Decisiones\n\n## Puntos tratados\n\n## Tareas\nIndica el responsable y el plazo de cada una\n\n## Cuestiones pendientes"
+    "defaultTemplate": "# Acta de la reunión\n\n## Temas\n\n## Decisiones\n\n## Puntos tratados\n\n## Tareas\nIndica el responsable y el plazo de cada una\n\n## Cuestiones pendientes",
+    "notes": "Mis notas",
+    "notesPlaceholder": "Apunta lo importante sobre la marcha. El acta se centrará en estos puntos",
+    "voices": "{{count}} voces recordadas",
+    "voicesList": "Voces recordadas",
+    "forgetVoice": "Olvidar la voz de {{name}}",
+    "past": "Reuniones anteriores {{count}}",
+    "pastList": "Reuniones anteriores",
+    "deleteMeeting": "Eliminar esta reunión",
+    "ask": "Pregunta sobre la reunión, p. ej. quién lleva el problema de exportación",
+    "askButton": "Preguntar",
+    "asking": "Respondiendo…",
+    "chaptersTemplateName": "Por capítulos",
+    "chaptersTemplate": "# Acta de la reunión\n\n## Capítulos\nDivide la reunión en capítulos en el orden tratado. Indica en cada uno la hora de inicio, un título y dos o tres frases\n\n## Decisiones\n\n## Tareas\nIndica el responsable y el plazo de cada una",
+    "systemSound": "Incluir el sonido del ordenador",
+    "tabText": "Texto",
+    "tabMinutes": "Acta",
+    "translate": "Traducir en directo (con el modelo de pulido)",
+    "translateTo": "Traducir a",
+    "translateFailed": "No se pudo traducir un fragmento. Revisa el modelo de pulido en Ajustes.",
+    "options": "Opciones",
+    "all": "Todas las reuniones",
+    "empty": "Aún no hay reuniones. Empieza a grabar o suelta un archivo de audio o vídeo.",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "position": "Posición",
+    "titlePlaceholder": "Pon nombre a la reunión",
+    "more": "Más",
+    "deleteThis": "Eliminar reunión",
+    "people": "{{count}} participantes"
   }
 }

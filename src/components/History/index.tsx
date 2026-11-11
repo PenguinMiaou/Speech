@@ -183,7 +183,7 @@ export function History() {
                         {entry.output_status && outputStatusLabel(entry.output_status) && (
                           <p className="text-[11px] text-warning mt-1 leading-snug break-words">
                             {outputStatusLabel(entry.output_status)}
-                            {entry.output_error ? ` · ${entry.output_error}` : ''}
+                            {entry.output_error ? `  ${entry.output_error}` : ''}
                           </p>
                         )}
                       </div>

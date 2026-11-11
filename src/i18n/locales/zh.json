@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "AI 语音输入"
   },
   "nav": {
     "home": "首页",
+    "meeting": "会议",
     "ask": "问答",
     "settings": "设置",
     "history": "历史记录",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "欢迎",
-      "welcomeSub": "几步完成 OpenTypeless 设置",
+      "welcomeSub": "几步完成 Speech 设置",
       "speechRecognition": "语音识别",
       "speechRecognitionSub": "选择语音识别模型",
       "aiPolish": "AI 润色",
@@ -111,7 +112,7 @@
       "tryItSub": "读一句话，看看口误和分点是怎么被规整好的"
     },
     "permissions": {
-      "subtitle": "OpenTypeless 只会在功能需要时请求权限。",
+      "subtitle": "Speech 只会在功能需要时请求权限。",
       "microphone": "麦克风",
       "microphoneDesc": "用于录下你的语音。",
       "textOutput": "文本输出",
@@ -805,10 +806,12 @@
       "llm_not_configured": "先在设置里配置好润色模型",
       "template_too_large": "模板文件太大",
       "template_empty": "模板文件是空的",
-      "template_unreadable": "模板文件打不开，需要是文本文件"
+      "template_unreadable": "模板文件打不开，需要是文本文件",
+      "ask": "没有得到回答",
+      "system_audio_unsupported": "这台电脑的系统版本录不了电脑声音"
     },
     "live": "实时文字",
-    "listening": "正在听，文字大约每半分钟出一段",
+    "listening": "正在听，文字每隔十几秒出一段",
     "finishing": "正在识别最后 {{seconds}} 秒",
     "saveAudio": "存录音",
     "again": "整段重新转写",
@@ -823,6 +826,35 @@
     "importTemplate": "导入模板",
     "removeTemplate": "删除模板",
     "minutesFileName": "会议纪要.md",
-    "defaultTemplate": "# 会议纪要\n\n## 议题\n\n## 结论\n\n## 讨论要点\n\n## 待办事项\n每条写明负责人和期限\n\n## 未决问题"
+    "defaultTemplate": "# 会议纪要\n\n## 议题\n\n## 结论\n\n## 讨论要点\n\n## 待办事项\n每条写明负责人和期限\n\n## 未决问题",
+    "notes": "我的笔记",
+    "notesPlaceholder": "会中随手记几句要点，生成纪要时会以它们为重点",
+    "voices": "已记住 {{count}} 个声音",
+    "voicesList": "已记住的声音",
+    "forgetVoice": "忘掉 {{name}} 的声音",
+    "past": "历史会议 {{count}}",
+    "pastList": "历史会议",
+    "deleteMeeting": "删除这场会议",
+    "ask": "问这场会议，比如：谁负责导出的问题",
+    "askButton": "提问",
+    "asking": "正在回答…",
+    "chaptersTemplateName": "按章节",
+    "chaptersTemplate": "# 会议纪要\n\n## 章节速览\n按讨论顺序分章节，每章写开始时间、标题和两三句内容\n\n## 结论\n\n## 待办事项\n每条写明负责人和期限",
+    "systemSound": "同时录电脑声音",
+    "tabText": "文字",
+    "tabMinutes": "纪要",
+    "translate": "实时翻译（经润色模型）",
+    "translateTo": "翻译成",
+    "translateFailed": "这一段没能翻译，请检查润色模型的设置",
+    "options": "选项",
+    "all": "全部会议",
+    "empty": "还没有会议。开始录音，或者把录音、录屏拖进来。",
+    "play": "播放",
+    "pause": "暂停",
+    "position": "播放位置",
+    "titlePlaceholder": "给会议起个名字",
+    "more": "更多",
+    "deleteThis": "删除会议",
+    "people": "{{count}} 人"
   }
 }

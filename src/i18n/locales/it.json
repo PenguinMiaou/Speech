@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "Input vocale AI"
   },
   "nav": {
     "home": "Home",
+    "meeting": "Riunioni",
     "ask": "Chiedi",
     "settings": "Impostazioni",
     "history": "Cronologia",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Benvenuto",
-      "welcomeSub": "Configura OpenTypeless in pochi passi",
+      "welcomeSub": "Configura Speech in pochi passi",
       "speechRecognition": "Riconoscimento vocale",
       "speechRecognitionSub": "Configura il tuo servizio STT",
       "aiPolish": "Rifinitura IA",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless chiede accesso solo quando una funzione lo richiede.",
+      "subtitle": "Speech chiede accesso solo quando una funzione lo richiede.",
       "microphone": "Microfono",
       "microphoneDesc": "Acquisisci la tua voce.",
       "textOutput": "Output testo",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Configura prima un modello di rifinitura nelle impostazioni",
       "template_too_large": "Il file del modello è troppo grande",
       "template_empty": "Il file del modello è vuoto",
-      "template_unreadable": "Impossibile aprire il modello. Deve essere un file di testo"
+      "template_unreadable": "Impossibile aprire il modello. Deve essere un file di testo",
+      "ask": "Non è arrivata nessuna risposta",
+      "system_audio_unsupported": "Questa versione del sistema non può registrare l’audio del computer"
     },
     "live": "Testo in diretta",
-    "listening": "In ascolto. Il testo arriva circa ogni mezzo minuto",
+    "listening": "In ascolto. Il testo arriva circa ogni quindici secondi",
     "finishing": "Riconoscimento degli ultimi {{seconds}} secondi",
     "saveAudio": "Salva audio",
     "again": "Trascrivi di nuovo tutta la registrazione",
@@ -823,6 +826,35 @@
     "importTemplate": "Importa modello",
     "removeTemplate": "Rimuovi modello",
     "minutesFileName": "Verbale della riunione.md",
-    "defaultTemplate": "# Verbale della riunione\n\n## Argomenti\n\n## Decisioni\n\n## Punti discussi\n\n## Azioni\nIndica responsabile e scadenza di ciascuna\n\n## Questioni aperte"
+    "defaultTemplate": "# Verbale della riunione\n\n## Argomenti\n\n## Decisioni\n\n## Punti discussi\n\n## Azioni\nIndica responsabile e scadenza di ciascuna\n\n## Questioni aperte",
+    "notes": "I miei appunti",
+    "notesPlaceholder": "Annota ciò che conta mentre ascolti. Il verbale sarà costruito su questi punti",
+    "voices": "{{count}} voci ricordate",
+    "voicesList": "Voci ricordate",
+    "forgetVoice": "Dimentica la voce di {{name}}",
+    "past": "Riunioni passate {{count}}",
+    "pastList": "Riunioni passate",
+    "deleteMeeting": "Elimina questa riunione",
+    "ask": "Chiedi qualcosa sulla riunione, es. chi segue il problema dell’esportazione",
+    "askButton": "Chiedi",
+    "asking": "Risposta in corso…",
+    "chaptersTemplateName": "Per capitoli",
+    "chaptersTemplate": "# Verbale della riunione\n\n## Capitoli\nDividi la riunione in capitoli nell’ordine della discussione. Per ognuno l’ora di inizio, un titolo e due o tre frasi\n\n## Decisioni\n\n## Azioni\nIndica responsabile e scadenza di ciascuna",
+    "systemSound": "Includi l’audio del computer",
+    "tabText": "Testo",
+    "tabMinutes": "Verbale",
+    "translate": "Traduci dal vivo (con il modello di rifinitura)",
+    "translateTo": "Traduci in",
+    "translateFailed": "Non è stato possibile tradurre un passaggio. Controlla il modello di rifinitura nelle Impostazioni.",
+    "options": "Opzioni",
+    "all": "Tutte le riunioni",
+    "empty": "Ancora nessuna riunione. Avvia una registrazione o trascina qui un file audio o video.",
+    "play": "Riproduci",
+    "pause": "Pausa",
+    "position": "Posizione",
+    "titlePlaceholder": "Dai un nome alla riunione",
+    "more": "Altro",
+    "deleteThis": "Elimina riunione",
+    "people": "{{count}} partecipanti"
   }
 }

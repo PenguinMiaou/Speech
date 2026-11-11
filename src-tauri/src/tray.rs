@@ -35,7 +35,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "设置",
             history: "历史记录",
             account: "账户",
-            about: "关于 OpenTypeless",
+            about: "关于 Speech",
             quit: "退出",
         },
         "ja" => TrayLabels {
@@ -48,7 +48,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "設定",
             history: "履歴",
             account: "アカウント",
-            about: "OpenTypeless について",
+            about: "Speech について",
             quit: "終了",
         },
         "ko" => TrayLabels {
@@ -61,7 +61,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "설정",
             history: "기록",
             account: "계정",
-            about: "OpenTypeless 정보",
+            about: "Speech 정보",
             quit: "종료",
         },
         "fr" => TrayLabels {
@@ -74,7 +74,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Paramètres",
             history: "Historique",
             account: "Compte",
-            about: "À propos d'OpenTypeless",
+            about: "À propos de Speech",
             quit: "Quitter",
         },
         "de" => TrayLabels {
@@ -87,7 +87,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Einstellungen",
             history: "Verlauf",
             account: "Konto",
-            about: "Über OpenTypeless",
+            about: "Über Speech",
             quit: "Beenden",
         },
         "es" => TrayLabels {
@@ -100,7 +100,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Configuración",
             history: "Historial",
             account: "Cuenta",
-            about: "Acerca de OpenTypeless",
+            about: "Acerca de Speech",
             quit: "Salir",
         },
         "pt" => TrayLabels {
@@ -113,7 +113,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Configurações",
             history: "Histórico",
             account: "Conta",
-            about: "Sobre o OpenTypeless",
+            about: "Sobre o Speech",
             quit: "Sair",
         },
         "ru" => TrayLabels {
@@ -126,7 +126,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Настройки",
             history: "История",
             account: "Аккаунт",
-            about: "О программе OpenTypeless",
+            about: "О программе Speech",
             quit: "Выход",
         },
         "it" => TrayLabels {
@@ -139,7 +139,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Impostazioni",
             history: "Cronologia",
             account: "Account",
-            about: "Informazioni su OpenTypeless",
+            about: "Informazioni su Speech",
             quit: "Esci",
         },
         _ => TrayLabels {
@@ -152,7 +152,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             settings: "Settings",
             history: "History",
             account: "Account",
-            about: "About OpenTypeless",
+            about: "About Speech",
             quit: "Quit",
         },
     }

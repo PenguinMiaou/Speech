@@ -6,7 +6,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-pub const RELEASES_URL: &str = "https://github.com/PenguinMiaou/opentypeless-local/releases";
+pub const RELEASES_URL: &str = "https://github.com/PenguinMiaou/Speech/releases";
 pub const MANIFEST_NAME: &str = "update-manifest.json";
 
 /// One program file of a release.

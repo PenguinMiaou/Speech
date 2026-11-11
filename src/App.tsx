@@ -23,6 +23,7 @@ import { History } from './components/History'
 import { Onboarding } from './components/Onboarding'
 import { MainLayout } from './components/MainLayout'
 import { HomePage } from './components/HomePage'
+import { MeetingPage } from './components/HomePage/MeetingPage'
 import { AskPanel } from './components/AskPanel'
 import { ToastContainer } from './components/Toast'
 
@@ -182,6 +183,7 @@ function MainApp() {
   return (
     <MainLayout>
       {route === 'home' && <HomePage />}
+      {route === 'meeting' && <MeetingPage />}
       {route === 'settings' && <Settings />}
       {route === 'history' && <History />}
       <ToastContainer />

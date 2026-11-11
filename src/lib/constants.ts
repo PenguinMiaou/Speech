@@ -13,11 +13,11 @@ export const UI_LANGUAGES = [
   { value: 'it', label: 'Italiano' },
 ] as const
 
-export const APP_NAME = 'OpenTypeless'
+export const APP_NAME = 'Speech'
 export const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? `v${packageInfo.version}`
 export const CLIENT_VERSION_HEADER = 'X-OpenTypeless-Version'
 export const APP_VERSION_HEADER_VALUE = APP_VERSION.replace(/^v/i, '')
-export const APP_REPO_URL = 'https://github.com/PenguinMiaou/opentypeless-local'
+export const APP_REPO_URL = 'https://github.com/PenguinMiaou/Speech'
 export const APP_LICENSE_URL = 'https://github.com/tover0314-w/opentypeless/blob/main/LICENSE'
 
 export const CUSTOM_WHISPER_PROVIDER = 'custom-whisper' as const

@@ -14,9 +14,11 @@ use crate::speakers::SpeakerTurn;
 const RATE: usize = 16_000;
 /// The most audio that may wait to be recognized, should recognition fall behind.
 const LONGEST_SAMPLES: usize = 3 * 60 * 60 * RATE;
-/// A window is cut at the quietest moment between these two lengths.
-const EARLIEST_CUT: usize = 20 * RATE;
-const WINDOW: usize = 30 * RATE;
+/// A window is cut at the quietest moment between these two lengths. On real meetings,
+/// speakers are told apart as steadily in 20-second windows as in 30-second ones, and the
+/// text arrives sooner.
+const EARLIEST_CUT: usize = 12 * RATE;
+const WINDOW: usize = 20 * RATE;
 /// The quietest moment is looked for in steps of a fifth of a second.
 const STEP: usize = RATE / 5;
 /// A last window shorter than this holds no word.
@@ -95,8 +97,27 @@ fn finish_wav(path: &Path) -> std::io::Result<()> {
     file.write_all(&wav_header(data as u32))
 }
 
+/// The most of the computer's own sound that waits for the microphone to catch up.
+const SYSTEM_BACKLOG: usize = 2 * RATE;
+
+/// The microphone's bytes with the computer's own sound added, sample by sample. The
+/// microphone keeps the time: the computer's sound only arrives while something plays.
+pub fn with_system_sound(
+    microphone: &[u8],
+    system: &mut std::collections::VecDeque<i16>,
+) -> Vec<u8> {
+    let mut mixed = Vec::with_capacity(microphone.len());
+    for pair in microphone.chunks_exact(2) {
+        let sample = i16::from_le_bytes([pair[0], pair[1]]);
+        let sum = sample.saturating_add(system.pop_front().unwrap_or(0));
+        mixed.extend_from_slice(&sum.to_le_bytes());
+    }
+    mixed
+}
+
 struct Recording {
     capture: AudioCaptureHandle,
+    system: Option<crate::system_audio::SystemAudioHandle>,
     waiting: Arc<Mutex<Waiting>>,
     collector: tokio::task::JoinHandle<()>,
     worker: std::thread::JoinHandle<()>,
@@ -173,6 +194,7 @@ fn recognize_window(
     supervisor: &crate::local_stt::WorkerSupervisor,
     model: &std::path::Path,
     speakers: Option<&SpeakerModels>,
+    vocabulary: &[String],
     window: &[i16],
     offset_ms: u64,
     first: bool,
@@ -182,8 +204,8 @@ fn recognize_window(
         .map(|sample| *sample as f32 / 32_768.0)
         .collect();
     let turns = match speakers {
-        Some(models) => Some(crate::speakers::merge_turns(
-            &supervisor
+        Some(models) => {
+            let (found, voices) = supervisor
                 .speakers_window(
                     &models.segmentation,
                     &models.voice,
@@ -191,14 +213,16 @@ fn recognize_window(
                     &models.scratch,
                     first,
                 )
-                .map_err(|error| error.to_string())?,
-        )),
+                .map_err(|error| error.to_string())?;
+            crate::voiceprints::hear(voices, first);
+            Some(crate::speakers::merge_turns(&found))
+        }
         None => None,
     };
     let mut said = Vec::new();
     for (turn, piece) in crate::file_transcribe::plan(&pcm, turns.as_deref()) {
         let text = supervisor
-            .transcribe(model, &pcm[piece], Vec::new(), None)
+            .transcribe(model, &pcm[piece], vocabulary.to_vec(), None)
             .map_err(|error| error.to_string())?;
         let text = text.trim();
         if !text.is_empty() {
@@ -209,14 +233,62 @@ fn recognize_window(
 }
 
 /// Recognizes window after window until the recording has ended and nothing waits.
+/// How much new audio there must be before the unsettled words are guessed at again.
+const GUESS_EVERY: usize = 5 * RATE / 2;
+/// A guess that takes longer than this is no use; the machine then waits for settled words.
+const SLOWEST_GUESS: std::time::Duration = std::time::Duration::from_secs(6);
+
+/// What the recorder reports: words that are settled, or a guess at the words still coming.
+pub enum Heard {
+    Said(Segment),
+    Guess(String),
+}
+
+/// When to guess at the words that are not settled yet. A machine that needs long for a
+/// guess makes fewer of them, and one that needs very long makes none.
+struct Guessing {
+    guessed_at: usize,
+    every: usize,
+    off: bool,
+}
+
+impl Default for Guessing {
+    fn default() -> Self {
+        Self {
+            guessed_at: 0,
+            every: GUESS_EVERY,
+            off: false,
+        }
+    }
+}
+
+impl Guessing {
+    fn due(&self, unsettled: usize) -> bool {
+        !self.off && unsettled >= RATE && unsettled >= self.guessed_at + self.every
+    }
+
+    fn took(&mut self, unsettled: usize, elapsed: std::time::Duration) {
+        self.guessed_at = unsettled;
+        self.off = elapsed > SLOWEST_GUESS;
+        let twice = (elapsed.as_secs_f64() * 2.0 * RATE as f64) as usize;
+        self.every = twice.max(GUESS_EVERY);
+    }
+
+    fn settled(&mut self) {
+        self.guessed_at = 0;
+    }
+}
+
 fn work(
     waiting: Arc<Mutex<Waiting>>,
     supervisor: Arc<crate::local_stt::WorkerSupervisor>,
     model: std::path::PathBuf,
     speakers: Option<SpeakerModels>,
-    mut report: impl FnMut(Result<Segment, String>),
+    vocabulary: Vec<String>,
+    mut report: impl FnMut(Result<Heard, String>),
 ) {
     let mut first = true;
+    let mut guessing = Guessing::default();
     loop {
         let (window, offset_ms) = {
             let mut waiting = locked(&waiting);
@@ -229,8 +301,26 @@ fn work(
                 }
                 None if waiting.finishing => return,
                 None => {
+                    let unsettled = waiting.pending.len();
+                    let heard = guessing.due(unsettled).then(|| waiting.pending.clone());
                     drop(waiting);
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    let Some(heard) = heard else {
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                        continue;
+                    };
+                    let started = std::time::Instant::now();
+                    let loud = heard
+                        .iter()
+                        .any(|sample| sample.unsigned_abs() >= SILENT_PEAK);
+                    if loud {
+                        let pcm: Vec<f32> = heard.iter().map(|s| *s as f32 / 32_768.0).collect();
+                        match supervisor.transcribe(&model, &pcm, vocabulary.clone(), None) {
+                            Ok(text) => report(Ok(Heard::Guess(text.trim().to_string()))),
+                            // Settled words still come; only the guesses stop.
+                            Err(_) => guessing.off = true,
+                        }
+                    }
+                    guessing.took(unsettled, started.elapsed());
                     continue;
                 }
             }
@@ -243,11 +333,14 @@ fn work(
             &supervisor,
             &model,
             speakers.as_ref(),
+            &vocabulary,
             &window,
             offset_ms,
             first,
         ) {
-            Ok(segments) => segments.into_iter().for_each(|segment| report(Ok(segment))),
+            Ok(segments) => segments
+                .into_iter()
+                .for_each(|segment| report(Ok(Heard::Said(segment)))),
             Err(error) => {
                 let mut waiting = locked(&waiting);
                 waiting.dropped = true;
@@ -257,6 +350,7 @@ fn work(
             }
         }
         first = false;
+        guessing.settled();
     }
 }
 
@@ -286,8 +380,10 @@ pub fn is_recording() -> bool {
 pub async fn start(
     input_device: String,
     by_speaker: bool,
+    system_sound: bool,
     model_id: Option<String>,
-    report: impl FnMut(Result<Segment, String>) + Send + 'static,
+    vocabulary: Vec<String>,
+    report: impl FnMut(Result<Heard, String>) + Send + 'static,
 ) -> Result<(), String> {
     if is_recording() {
         return Err("busy".to_string());
@@ -318,6 +414,27 @@ pub async fn start(
         .wait_until_ready()
         .await
         .map_err(|error| error.to_string())?;
+    // The computer's own sound, for the far side of an online meeting.
+    let heard: Arc<Mutex<std::collections::VecDeque<i16>>> = Arc::default();
+    let system = if system_sound {
+        let (handle, mut sound) = crate::system_audio::start()?;
+        let heard = heard.clone();
+        tokio::spawn(async move {
+            while let Some(bytes) = sound.recv().await {
+                let mut heard = heard.lock().unwrap_or_else(|error| error.into_inner());
+                heard.extend(
+                    bytes
+                        .chunks_exact(2)
+                        .map(|pair| i16::from_le_bytes([pair[0], pair[1]])),
+                );
+                let extra = heard.len().saturating_sub(SYSTEM_BACKLOG);
+                heard.drain(..extra);
+            }
+        });
+        Some(handle)
+    } else {
+        None
+    };
     let waiting = Arc::new(Mutex::new(Waiting::default()));
     let sink = waiting.clone();
     // A recording that cannot be kept on disk is still written out as text.
@@ -328,6 +445,12 @@ pub async fn start(
     });
     let collector = tokio::spawn(async move {
         while let Some(bytes) = audio.recv().await {
+            let bytes = if system_sound {
+                let mut heard = heard.lock().unwrap_or_else(|error| error.into_inner());
+                with_system_sound(&bytes, &mut heard)
+            } else {
+                bytes
+            };
             if let Some(writer) = file.as_mut() {
                 let even = bytes.len() & !1;
                 if writer.write_all(&bytes[..even]).is_err() {
@@ -341,9 +464,11 @@ pub async fn start(
         }
     });
     let queue = waiting.clone();
-    let worker = std::thread::spawn(move || work(queue, supervisor, model, speakers, report));
+    let worker =
+        std::thread::spawn(move || work(queue, supervisor, model, speakers, vocabulary, report));
     *active() = Some(Recording {
         capture,
+        system,
         waiting,
         collector,
         worker,
@@ -367,16 +492,28 @@ pub fn level() -> Option<(u64, f32, u64)> {
 
 /// Ends the recording and waits until what was recorded has been recognized. With
 /// `discard` the audio still waiting is dropped instead, and so is the file on disk.
+/// Waits for the task that takes in the audio to end, and ends it when it does not.
+async fn settled(task: &mut tokio::task::JoinHandle<()>, patience: std::time::Duration) {
+    // The capture thread closes the channel once it has handed over what it still held.
+    if tokio::time::timeout(patience, &mut *task).await.is_ok() {
+        // It has ended, and a task that has ended must not be waited for again.
+        return;
+    }
+    task.abort();
+    // An aborted task drops its writer, which hands the file what it still held.
+    let _ = task.await;
+}
+
 pub async fn stop(discard: bool) -> Result<(), String> {
     let Some(mut recording) = active().take() else {
         return Err("not_recording".to_string());
     };
     recording.capture.stop();
-    // The capture thread closes the channel once it has handed over what it still held.
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), &mut recording.collector).await;
-    recording.collector.abort();
-    // An aborted task drops its writer, which hands the file what it still held.
-    let _ = (&mut recording.collector).await;
+    if let Some(mut system) = recording.system.take() {
+        // Ending it waits for the audio system, which must not hold up this thread.
+        let _ = tokio::task::spawn_blocking(move || system.stop()).await;
+    }
+    settled(&mut recording.collector, std::time::Duration::from_secs(3)).await;
     match recording_path() {
         Some(_) if discard => delete_recording(),
         Some(path) => {
@@ -401,6 +538,47 @@ pub async fn stop(discard: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guesses_come_as_the_unsettled_audio_grows() {
+        let mut guessing = Guessing::default();
+        assert!(!guessing.due(RATE / 2), "too little to guess at");
+        assert!(guessing.due(3 * RATE));
+        guessing.took(3 * RATE, std::time::Duration::from_millis(400));
+        assert!(!guessing.due(4 * RATE), "nothing much new yet");
+        assert!(guessing.due(3 * RATE + GUESS_EVERY));
+    }
+
+    #[test]
+    fn a_slow_machine_guesses_less_often_and_a_very_slow_one_not_at_all() {
+        let mut guessing = Guessing::default();
+        guessing.took(3 * RATE, std::time::Duration::from_secs(3));
+        assert!(!guessing.due(3 * RATE + GUESS_EVERY));
+        assert!(guessing.due(3 * RATE + 6 * RATE));
+        guessing.took(9 * RATE, std::time::Duration::from_secs(7));
+        assert!(!guessing.due(19 * RATE));
+    }
+
+    #[test]
+    fn guessing_starts_over_once_words_are_settled() {
+        let mut guessing = Guessing::default();
+        guessing.took(10 * RATE, std::time::Duration::from_millis(400));
+        guessing.settled();
+        assert!(guessing.due(GUESS_EVERY));
+    }
+
+    #[tokio::test]
+    async fn waiting_for_a_task_that_has_already_ended_does_not_panic() {
+        let mut ended = tokio::spawn(async {});
+        settled(&mut ended, std::time::Duration::from_secs(1)).await;
+    }
+
+    #[tokio::test]
+    async fn a_task_that_does_not_end_is_ended() {
+        let mut stuck = tokio::spawn(std::future::pending::<()>());
+        settled(&mut stuck, std::time::Duration::from_millis(10)).await;
+        assert!(stuck.is_finished());
+    }
 
     #[test]
     fn bytes_become_samples_and_stop_at_the_limit() {
@@ -463,8 +641,11 @@ mod tests {
             supervisor,
             var("OT_MODEL"),
             Some(speakers),
+            Vec::new(),
             |outcome| {
-                let segment = outcome.unwrap();
+                let Heard::Said(segment) = outcome.unwrap() else {
+                    return;
+                };
                 println!(
                     "[{:>5.1}s] speaker {:?} at {:>3}s: {}",
                     started.elapsed().as_secs_f32(),
@@ -480,6 +661,20 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_computers_sound_is_added_to_the_microphones_and_silence_where_it_has_none() {
+        let bytes = |samples: &[i16]| -> Vec<u8> {
+            samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect()
+        };
+        let mut system = std::collections::VecDeque::from([100, i16::MAX]);
+        let mixed = with_system_sound(&bytes(&[1, 5, 7]), &mut system);
+        assert_eq!(mixed, bytes(&[101, i16::MAX, 7]));
+        assert!(system.is_empty());
+    }
+
     fn tone(seconds: usize, loud: i16) -> Vec<i16> {
         (0..seconds * RATE)
             .map(|i| if i % 2 == 0 { loud } else { -loud })
@@ -488,17 +683,17 @@ mod tests {
 
     #[test]
     fn nothing_is_cut_until_a_full_window_waits() {
-        assert_eq!(cut_point(&tone(29, 5_000), false), None);
+        assert_eq!(cut_point(&tone(19, 5_000), false), None);
         assert_eq!(cut_point(&[], true), None);
     }
 
     #[test]
     fn a_window_is_cut_in_the_pause_nearest_its_end() {
-        let mut samples = tone(24, 5_000);
+        let mut samples = tone(15, 5_000);
         samples.extend(tone(1, 0));
         samples.extend(tone(10, 5_000));
         let cut = cut_point(&samples, false).unwrap();
-        assert!((24 * RATE..25 * RATE).contains(&cut), "{cut}");
+        assert!((15 * RATE..16 * RATE).contains(&cut), "{cut}");
     }
 
     #[test]

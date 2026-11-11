@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "Entrada de Voz com IA"
   },
   "nav": {
     "home": "Início",
+    "meeting": "Reuniões",
     "ask": "Perguntar",
     "settings": "Configurações",
     "history": "Histórico",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Bem-vindo",
-      "welcomeSub": "Configure o OpenTypeless em alguns passos",
+      "welcomeSub": "Configure o Speech em alguns passos",
       "speechRecognition": "Reconhecimento de Fala",
       "speechRecognitionSub": "Configure seu serviço de STT",
       "aiPolish": "Polimento por IA",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless só pede acesso quando um recurso precisa.",
+      "subtitle": "Speech só pede acesso quando um recurso precisa.",
       "microphone": "Microfone",
       "microphoneDesc": "Capture sua voz.",
       "textOutput": "Saída de texto",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Configure primeiro um modelo de revisão nas definições",
       "template_too_large": "O ficheiro do modelo é demasiado grande",
       "template_empty": "O ficheiro do modelo está vazio",
-      "template_unreadable": "Não foi possível abrir o modelo. Tem de ser um ficheiro de texto"
+      "template_unreadable": "Não foi possível abrir o modelo. Tem de ser um ficheiro de texto",
+      "ask": "Não chegou nenhuma resposta",
+      "system_audio_unsupported": "Esta versão do sistema não consegue gravar o som do computador"
     },
     "live": "Texto ao vivo",
-    "listening": "A ouvir. O texto chega a cada meio minuto, aproximadamente",
+    "listening": "A ouvir. O texto chega a cada quinze segundos, aproximadamente",
     "finishing": "A reconhecer os últimos {{seconds}} segundos",
     "saveAudio": "Guardar áudio",
     "again": "Transcrever de novo toda a gravação",
@@ -823,6 +826,35 @@
     "importTemplate": "Importar modelo",
     "removeTemplate": "Remover modelo",
     "minutesFileName": "Ata da reunião.md",
-    "defaultTemplate": "# Ata da reunião\n\n## Temas\n\n## Decisões\n\n## Pontos discutidos\n\n## Tarefas\nIndicar o responsável e o prazo de cada uma\n\n## Questões em aberto"
+    "defaultTemplate": "# Ata da reunião\n\n## Temas\n\n## Decisões\n\n## Pontos discutidos\n\n## Tarefas\nIndicar o responsável e o prazo de cada uma\n\n## Questões em aberto",
+    "notes": "As minhas notas",
+    "notesPlaceholder": "Aponte o que importa durante a reunião. A ata será construída à volta destes pontos",
+    "voices": "{{count}} vozes memorizadas",
+    "voicesList": "Vozes memorizadas",
+    "forgetVoice": "Esquecer a voz de {{name}}",
+    "past": "Reuniões anteriores {{count}}",
+    "pastList": "Reuniões anteriores",
+    "deleteMeeting": "Eliminar esta reunião",
+    "ask": "Pergunte sobre a reunião, p. ex. quem trata do problema da exportação",
+    "askButton": "Perguntar",
+    "asking": "A responder…",
+    "chaptersTemplateName": "Por capítulos",
+    "chaptersTemplate": "# Ata da reunião\n\n## Capítulos\nDividir a reunião em capítulos pela ordem da discussão. Em cada um, a hora de início, um título e duas ou três frases\n\n## Decisões\n\n## Tarefas\nIndicar o responsável e o prazo de cada uma",
+    "systemSound": "Incluir o som do computador",
+    "tabText": "Texto",
+    "tabMinutes": "Ata",
+    "translate": "Traduzir ao vivo (pelo modelo de revisão)",
+    "translateTo": "Traduzir para",
+    "translateFailed": "Não foi possível traduzir um trecho. Verifique o modelo de revisão nas Configurações.",
+    "options": "Opções",
+    "all": "Todas as reuniões",
+    "empty": "Ainda não há reuniões. Comece a gravar ou solte um arquivo de áudio ou vídeo.",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "position": "Posição",
+    "titlePlaceholder": "Dê um nome à reunião",
+    "more": "Mais",
+    "deleteThis": "Excluir reunião",
+    "people": "{{count}} participantes"
   }
 }

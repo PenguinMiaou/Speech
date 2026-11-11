@@ -37,9 +37,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>
       ({
-        'app.name': 'OpenTypeless',
+        'app.name': 'Speech',
         'app.tagline': 'AI Voice Input',
         'nav.home': 'Home',
+        'nav.meeting': 'Meetings',
         'nav.ask': 'Ask',
         'nav.settings': 'Settings',
         'nav.history': 'History',
@@ -74,5 +75,16 @@ describe('MainLayout', () => {
     )
     expect(screen.queryByText('Upgrade')).not.toBeInTheDocument()
     expect(screen.queryByText('Account')).not.toBeInTheDocument()
+  })
+
+  it('lists meetings between home and history', () => {
+    render(<MainLayout>content</MainLayout>)
+    const names = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))
+    expect(names).toEqual(['Home', 'Meetings', 'History', 'Settings'])
+  })
+
+  it('sets the app name in the wordmark face', () => {
+    render(<MainLayout>content</MainLayout>)
+    expect(screen.getByRole('heading', { name: 'Speech' }).className).toContain('wordmark')
   })
 })

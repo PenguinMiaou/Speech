@@ -13,6 +13,11 @@ describe('desktop route parsing', () => {
     expect(parseHash()).toBe('home')
   })
 
+  it('opens the meeting page from its own link', () => {
+    window.location.hash = '#/meeting'
+    expect(parseHash()).toBe('meeting')
+  })
+
   it('keeps direct recovery links inside Settings', () => {
     window.location.hash = '#/settings?pane=stt'
     expect(parseHash()).toBe('settings')

@@ -43,6 +43,10 @@ pub trait Engine {
         embedding_model: &str,
         pcm: &[f32],
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
+    /// The voices of the speakers the last speaker request found.
+    fn last_voices(&mut self) -> Vec<ot_stt_protocol::SpeakerVoice> {
+        Vec::new()
+    }
     /// Tells who spoke when in the next window of a running recording.
     fn speakers_window(
         &mut self,
@@ -69,11 +73,20 @@ fn read_pcm<R: Read>(reader: &mut R, bytes: u32) -> io::Result<Vec<f32>> {
         .collect())
 }
 
+/// Reads raw 32-bit samples without holding the file's bytes and the samples at once: a
+/// three-hour recording is 690 MB either way.
 fn read_pcm_file(path: &str) -> io::Result<Vec<f32>> {
-    Ok(std::fs::read(path)?
-        .chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect())
+    let file = std::fs::File::open(path)?;
+    let mut pcm = Vec::with_capacity((file.metadata()?.len() / 4) as usize);
+    let mut reader = io::BufReader::with_capacity(1 << 16, file);
+    let mut sample = [0u8; 4];
+    loop {
+        match reader.read_exact(&mut sample) {
+            Ok(()) => pcm.push(f32::from_le_bytes(sample)),
+            Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(pcm),
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 fn error(code: &str, message: impl Into<String>) -> Response {
@@ -101,7 +114,10 @@ pub fn serve<R: Read, W: Write, E: Engine>(
                 Ok(pcm) => {
                     match engine.speakers_window(&segmentation_model, &embedding_model, &pcm, first)
                     {
-                        Ok(turns) => Response::Speakers { turns },
+                        Ok(turns) => Response::Speakers {
+                            turns,
+                            voices: engine.last_voices(),
+                        },
                         Err(e) => error(&e.code, e.message),
                     }
                 }
@@ -111,17 +127,14 @@ pub fn serve<R: Read, W: Write, E: Engine>(
                 segmentation_model,
                 embedding_model,
                 pcm_path,
-            } => match std::fs::read(&pcm_path) {
-                Ok(raw) => {
-                    let pcm: Vec<f32> = raw
-                        .chunks_exact(4)
-                        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                        .collect();
-                    match engine.diarize(&segmentation_model, &embedding_model, &pcm) {
-                        Ok(turns) => Response::Speakers { turns },
-                        Err(e) => error(&e.code, e.message),
-                    }
-                }
+            } => match read_pcm_file(&pcm_path) {
+                Ok(pcm) => match engine.diarize(&segmentation_model, &embedding_model, &pcm) {
+                    Ok(turns) => Response::Speakers {
+                        turns,
+                        voices: engine.last_voices(),
+                    },
+                    Err(e) => error(&e.code, e.message),
+                },
                 Err(e) => error("audio_unreadable", e.to_string()),
             },
             Request::IsolateBegin {
@@ -318,7 +331,7 @@ mod tests {
 
         let mut reader = Cursor::new(output);
         let speaker = |response| match response {
-            Some(Response::Speakers { turns }) => (turns[0].speaker, turns[0].end_ms),
+            Some(Response::Speakers { turns, .. }) => (turns[0].speaker, turns[0].end_ms),
             other => panic!("{other:?}"),
         };
         assert_eq!(
@@ -358,7 +371,8 @@ mod tests {
                     start_ms: 0,
                     end_ms: 3,
                     speaker: 1
-                }]
+                }],
+                voices: vec![]
             })
         );
         assert!(matches!(

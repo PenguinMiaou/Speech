@@ -38,7 +38,7 @@ export function TokenUsageCard() {
   ] as const
 
   return (
-    <div className="surface px-5 py-4">
+    <div className="border-b border-border pb-4">
       <h3 className="mb-3 text-[13px] font-medium text-text-secondary">{t('home.tokens.title')}</h3>
       <div className="grid grid-cols-3 gap-3">
         {spans.map(([label, span]) => (

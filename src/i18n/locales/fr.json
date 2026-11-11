@@ -1,10 +1,11 @@
 {
   "app": {
-    "name": "OpenTypeless",
+    "name": "Speech",
     "tagline": "Saisie vocale IA"
   },
   "nav": {
     "home": "Accueil",
+    "meeting": "Réunions",
     "ask": "Demander",
     "settings": "Paramètres",
     "history": "Historique",
@@ -99,7 +100,7 @@
     },
     "steps": {
       "welcome": "Bienvenue",
-      "welcomeSub": "Configurez OpenTypeless en quelques étapes",
+      "welcomeSub": "Configurez Speech en quelques étapes",
       "speechRecognition": "Reconnaissance vocale",
       "speechRecognitionSub": "Configurez votre service STT",
       "aiPolish": "Amélioration IA",
@@ -111,7 +112,7 @@
       "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
     },
     "permissions": {
-      "subtitle": "OpenTypeless demande l’accès seulement quand une fonction en a besoin.",
+      "subtitle": "Speech demande l’accès seulement quand une fonction en a besoin.",
       "microphone": "Microphone",
       "microphoneDesc": "Capturer votre voix.",
       "textOutput": "Sortie texte",
@@ -805,10 +806,12 @@
       "llm_not_configured": "Configurez d’abord un modèle de mise en forme dans les réglages",
       "template_too_large": "Le fichier de modèle est trop volumineux",
       "template_empty": "Le fichier de modèle est vide",
-      "template_unreadable": "Impossible d’ouvrir le modèle. Il doit s’agir d’un fichier texte"
+      "template_unreadable": "Impossible d’ouvrir le modèle. Il doit s’agir d’un fichier texte",
+      "ask": "Aucune réponse n’est arrivée",
+      "system_audio_unsupported": "Cette version du système ne peut pas enregistrer le son de l’ordinateur"
     },
     "live": "Texte en direct",
-    "listening": "À l’écoute. Le texte arrive environ toutes les trente secondes",
+    "listening": "À l’écoute. Le texte arrive environ toutes les quinze secondes",
     "finishing": "Reconnaissance des {{seconds}} dernières secondes",
     "saveAudio": "Enregistrer l’audio",
     "again": "Retranscrire tout l’enregistrement",
@@ -823,6 +826,35 @@
     "importTemplate": "Importer un modèle",
     "removeTemplate": "Retirer le modèle",
     "minutesFileName": "Compte rendu de réunion.md",
-    "defaultTemplate": "# Compte rendu de réunion\n\n## Sujets\n\n## Décisions\n\n## Points discutés\n\n## Actions\nIndiquer le responsable et l’échéance de chacune\n\n## Questions ouvertes"
+    "defaultTemplate": "# Compte rendu de réunion\n\n## Sujets\n\n## Décisions\n\n## Points discutés\n\n## Actions\nIndiquer le responsable et l’échéance de chacune\n\n## Questions ouvertes",
+    "notes": "Mes notes",
+    "notesPlaceholder": "Notez l’essentiel au fil de la réunion. Le compte rendu s’appuiera sur ces points",
+    "voices": "{{count}} voix mémorisées",
+    "voicesList": "Voix mémorisées",
+    "forgetVoice": "Oublier la voix de {{name}}",
+    "past": "Réunions passées {{count}}",
+    "pastList": "Réunions passées",
+    "deleteMeeting": "Supprimer cette réunion",
+    "ask": "Posez une question sur la réunion, p. ex. qui suit le problème d’export",
+    "askButton": "Demander",
+    "asking": "Réponse en cours…",
+    "chaptersTemplateName": "Par chapitres",
+    "chaptersTemplate": "# Compte rendu de réunion\n\n## Chapitres\nDécouper la réunion en chapitres dans l’ordre des discussions. Pour chacun, l’heure de début, un titre et deux ou trois phrases\n\n## Décisions\n\n## Actions\nIndiquer le responsable et l’échéance de chacune",
+    "systemSound": "Inclure le son de l’ordinateur",
+    "tabText": "Texte",
+    "tabMinutes": "Compte rendu",
+    "translate": "Traduire en direct (via le modèle de correction)",
+    "translateTo": "Traduire en",
+    "translateFailed": "Un passage n’a pas pu être traduit. Vérifiez le modèle de correction dans les réglages.",
+    "options": "Options",
+    "all": "Toutes les réunions",
+    "empty": "Aucune réunion pour l’instant. Lancez un enregistrement ou déposez un fichier audio ou vidéo.",
+    "play": "Lire",
+    "pause": "Pause",
+    "position": "Position",
+    "titlePlaceholder": "Nommer cette réunion",
+    "more": "Plus",
+    "deleteThis": "Supprimer la réunion",
+    "people": "{{count}} intervenants"
   }
 }

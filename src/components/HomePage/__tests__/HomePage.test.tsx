@@ -31,11 +31,11 @@ describe('HomePage', () => {
     expect(heading.textContent).toContain('end')
   })
 
-  it('shows the four figures in one band and the meeting card', () => {
+  it('shows the four figures in one band and leaves meetings to their own page', () => {
     render(<HomePage />)
     const band = screen.getByRole('group', { name: 'home.figures' })
     expect(band.querySelectorAll('dt')).toHaveLength(4)
-    expect(screen.getByTestId('meeting')).toBeTruthy()
+    expect(screen.queryByTestId('meeting')).toBeNull()
     expect(screen.getByTestId('tokens')).toBeTruthy()
   })
 
