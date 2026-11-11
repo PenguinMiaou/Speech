@@ -236,6 +236,42 @@ describe('LlmConnectionForm', () => {
     expect(mockStore.updateConfig).toHaveBeenCalledWith({ llm_model: 'llama-3.3-70b-versatile' })
   })
 
+  it('times every model when the list is opened and shows the time beside it', async () => {
+    mockStore.llmModels = ['qwen/qwen3.8-27b', 'llama-3.3-70b-versatile', 'ep-unknown']
+    vi.mocked(benchLlmConnection).mockImplementation(async (_key, _provider, _url, model) => {
+      if (model === 'ep-unknown') throw new Error('HTTP 404')
+      return { latencyMs: model.startsWith('qwen') ? 180 : 420, reasoningActive: false }
+    })
+    render(<LlmConnectionForm />)
+    await waitFor(() => expect(readCredential).toHaveBeenCalled())
+    expect(benchLlmConnection).not.toHaveBeenCalled()
+
+    openModelList()
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+        'qwen/qwen3.8-27b180ms',
+        'llama-3.3-70b-versatile420ms',
+        'ep-unknown—',
+      ]),
+    )
+    expect(benchLlmConnection).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not time a model again when the list is opened a second time', async () => {
+    mockStore.llmModels = ['qwen/qwen3.8-27b', 'llama-3.3-70b-versatile']
+    render(<LlmConnectionForm />)
+    await waitFor(() => expect(readCredential).toHaveBeenCalled())
+    openModelList()
+    await waitFor(() => expect(screen.getAllByText('120ms')).toHaveLength(2))
+
+    openModelList()
+    openModelList()
+
+    expect(screen.getAllByText('120ms')).toHaveLength(2)
+    expect(benchLlmConnection).toHaveBeenCalledTimes(2)
+  })
+
   it('filters the model list and accepts a typed name that is not listed', () => {
     mockStore.llmModels = ['qwen/qwen3.8-27b', 'llama-3.3-70b-versatile']
     render(<LlmConnectionForm />)

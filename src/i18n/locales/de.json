@@ -863,6 +863,8 @@
     "unpolish": "Bereinigung rückgängig machen",
     "polishFailed": "Der Text konnte nicht bereinigt werden",
     "addLanguage": "Sprache hinzufügen",
-    "removeLanguage": "{{name}} entfernen"
+    "removeLanguage": "{{name}} entfernen",
+    "pauseRecording": "Aufnahme anhalten",
+    "resume": "Aufnahme fortsetzen"
   }
 }

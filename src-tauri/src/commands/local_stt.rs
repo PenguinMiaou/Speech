@@ -348,6 +348,13 @@ pub async fn meeting_record_start(
     .await
 }
 
+/// Pauses the meeting recording or goes on with it. What is said during a pause is not
+/// recorded.
+#[tauri::command]
+pub fn meeting_record_pause(paused: bool) -> bool {
+    crate::meeting_record::pause(paused)
+}
+
 /// Changes the languages the running meeting is held in: three at most, none to let the
 /// model tell.
 #[tauri::command]

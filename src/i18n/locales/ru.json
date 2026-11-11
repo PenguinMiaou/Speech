@@ -863,6 +863,8 @@
     "unpolish": "Отменить правку",
     "polishFailed": "Не удалось привести текст в порядок",
     "addLanguage": "Добавить язык",
-    "removeLanguage": "Убрать {{name}}"
+    "removeLanguage": "Убрать {{name}}",
+    "pauseRecording": "Приостановить запись",
+    "resume": "Продолжить запись"
   }
 }

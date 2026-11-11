@@ -54,6 +54,10 @@ struct Waiting {
     taken: usize,
     finishing: bool,
     dropped: bool,
+    /// While set, what the microphone hears is neither kept nor written out.
+    paused: bool,
+    /// Set when the recording pauses: what waits is recognized without waiting for more.
+    settle: bool,
 }
 
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -394,7 +398,8 @@ fn work(
         };
         let (window, offset_ms) = {
             let mut waiting = locked(&waiting);
-            match cut_point(&waiting.pending, waiting.finishing) {
+            let closing = waiting.finishing || std::mem::take(&mut waiting.settle);
+            match cut_point(&waiting.pending, closing) {
                 Some(cut) => {
                     let window: Vec<i16> = waiting.pending.drain(..cut).collect();
                     let offset_ms = (waiting.taken * 1000 / RATE) as u64;
@@ -503,6 +508,19 @@ pub fn is_recording() -> bool {
     active().is_some()
 }
 
+/// Pauses the running recording, or goes on with it. Nothing said during a pause is
+/// kept. Returns whether a recording was there to pause.
+pub fn pause(paused: bool) -> bool {
+    let active = active();
+    let Some(recording) = active.as_ref() else {
+        return false;
+    };
+    let mut waiting = locked(&recording.waiting);
+    waiting.paused = paused;
+    waiting.settle = paused;
+    true
+}
+
 /// Changes the languages the running recording is held in.
 pub fn set_languages(languages: Vec<String>) {
     if let Some(recording) = active().as_ref() {
@@ -602,13 +620,19 @@ pub async fn start(
             } else {
                 bytes
             };
+            // The lock is held while the file is written, so that a pause leaves the same
+            // audio out of the file and out of the text, and the times in the text stay
+            // the times in the file.
+            let mut waiting = locked(&sink);
+            if waiting.paused {
+                continue;
+            }
             if let Some(writer) = file.as_mut() {
                 let even = bytes.len() & !1;
                 if writer.write_all(&bytes[..even]).is_err() {
                     file = None;
                 }
             }
-            let mut waiting = locked(&sink);
             if !waiting.dropped {
                 collect(&mut waiting.pending, &bytes, LONGEST_SAMPLES);
             }

@@ -863,6 +863,8 @@
     "unpolish": "Desfazer a arrumação",
     "polishFailed": "Não foi possível arrumar o texto",
     "addLanguage": "Adicionar um idioma",
-    "removeLanguage": "Remover {{name}}"
+    "removeLanguage": "Remover {{name}}",
+    "pauseRecording": "Pausar a gravação",
+    "resume": "Continuar a gravação"
   }
 }

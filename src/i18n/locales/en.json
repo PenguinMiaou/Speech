@@ -863,6 +863,8 @@
     "unpolish": "Undo tidy-up",
     "polishFailed": "The text could not be tidied up",
     "addLanguage": "Add a language",
-    "removeLanguage": "Remove {{name}}"
+    "removeLanguage": "Remove {{name}}",
+    "pauseRecording": "Pause recording",
+    "resume": "Go on recording"
   }
 }

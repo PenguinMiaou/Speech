@@ -863,6 +863,8 @@
     "unpolish": "Annuler la mise au propre",
     "polishFailed": "Le texte n’a pas pu être mis au propre",
     "addLanguage": "Ajouter une langue",
-    "removeLanguage": "Retirer {{name}}"
+    "removeLanguage": "Retirer {{name}}",
+    "pauseRecording": "Mettre en pause",
+    "resume": "Reprendre l’enregistrement"
   }
 }

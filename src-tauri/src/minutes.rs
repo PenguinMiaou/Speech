@@ -152,7 +152,9 @@ pub fn minutes_messages(
         (
             " The person who asked for the minutes took their own notes during the meeting: \
 these are the points that matter most to them. Keep every one of them, and fill each in \
-with what the meeting said about it.",
+with what the meeting said about it. A note that begins with a time in square brackets was \
+written at that moment of the meeting: what was being said around that time is what the \
+note is about.",
             format!("\n\n<own_notes>\n{own_notes}\n</own_notes>"),
         )
     };

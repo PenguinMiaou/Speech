@@ -869,6 +869,11 @@ export function meetingRecordStart(
   })
 }
 
+/** Pauses the meeting recording or goes on with it. Nothing said during a pause is kept. */
+export function meetingRecordPause(paused: boolean): Promise<boolean> {
+  return invoke('meeting_record_pause', { paused })
+}
+
 /** Changes the languages the meeting being recorded is held in. */
 export function meetingLanguages(languages: string[]): Promise<void> {
   return invoke('meeting_languages', { languages })

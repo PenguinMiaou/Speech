@@ -863,6 +863,8 @@
     "unpolish": "整える前に戻す",
     "polishFailed": "全文を整えられませんでした",
     "addLanguage": "言語を追加",
-    "removeLanguage": "{{name}} を外す"
+    "removeLanguage": "{{name}} を外す",
+    "pauseRecording": "録音を一時停止",
+    "resume": "録音を再開"
   }
 }

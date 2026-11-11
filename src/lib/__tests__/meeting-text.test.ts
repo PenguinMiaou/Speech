@@ -6,6 +6,8 @@ import {
   renameSpeakers,
   speakersIn,
   spokenLines,
+  stampNote,
+  stampedNotes,
   transcriptLines,
   withLines,
   withParagraphText,
@@ -131,6 +133,24 @@ describe('meeting text', () => {
       '说话人 1  00:00\n我们用 Tauri。\n\n说话人 2  00:04\n好。',
     )
     expect(withLines(text, at, ['', undefined])).toBe(text)
+  })
+
+  it('marks a note with the time its line was begun at', () => {
+    expect(stampNote('预', 1, 65)).toEqual({ value: '[01:05] 预', caret: 9 })
+    // The line already has its time, and typing on does not add another.
+    expect(stampNote('[01:05] 预算', 10, 90)).toEqual({ value: '[01:05] 预算', caret: 10 })
+    expect(stampNote('[01:05] 预算\n排', 12, 130)).toEqual({
+      value: '[01:05] 预算\n[02:10] 排',
+      caret: 20,
+    })
+    expect(stampNote('', 0, 5)).toEqual({ value: '', caret: 0 })
+  })
+
+  it('finds the notes that can be looked up in the recording', () => {
+    expect(stampedNotes('[01:05] 预算\n没有时间的一行\n[1:02:10] 排期\n[00:07] ')).toEqual([
+      { seconds: 65, time: '01:05', text: '预算' },
+      { seconds: 3730, time: '1:02:10', text: '排期' },
+    ])
   })
 
   it('takes a line that only looks like a heading as words', () => {

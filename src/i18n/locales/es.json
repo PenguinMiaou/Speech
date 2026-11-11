@@ -863,6 +863,8 @@
     "unpolish": "Deshacer el pulido",
     "polishFailed": "No se pudo pulir el texto",
     "addLanguage": "Añadir un idioma",
-    "removeLanguage": "Quitar {{name}}"
+    "removeLanguage": "Quitar {{name}}",
+    "pauseRecording": "Pausar la grabación",
+    "resume": "Seguir grabando"
   }
 }

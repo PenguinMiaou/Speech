@@ -8,6 +8,8 @@ import {
   Ellipsis,
   FolderOpen,
   Mic,
+  Pause,
+  Play,
   SlidersHorizontal,
   Sparkles,
   Square,
@@ -28,6 +30,7 @@ import {
   meetingPolish,
   meetingsList,
   meetingRecordLevel,
+  meetingRecordPause,
   meetingRecordStart,
   meetingRecordStop,
   onFileDropped,
@@ -59,6 +62,8 @@ import {
   speakerColor,
   speakersIn,
   spokenLines,
+  stampNote,
+  stampedNotes,
   withLines,
 } from '../../lib/meeting-text'
 import {
@@ -187,6 +192,8 @@ export function MeetingCard() {
   const [position, setPosition] = useState(0)
   /** The text of the file being transcribed, as far as it is written out. */
   const [soFar, setSoFar] = useState('')
+  const [paused, setPaused] = useState(false)
+  const notesRef = useRef<HTMLTextAreaElement>(null)
   const [download, setDownload] = useState<number | null>(null)
   const [voices, setVoices] = useState<string[]>([])
   const [tab, setTab] = useState('text')
@@ -347,6 +354,7 @@ export function MeetingCard() {
       translateTo: translate ? target : null,
     })
     setUnpolished(null)
+    setPaused(false)
     setLevel({ seconds: 0, volume: 0, waiting: 0 })
     enter('recording')
     Promise.resolve(
@@ -356,6 +364,13 @@ export function MeetingCard() {
       setError(`meeting.error.${code ?? 'microphone'}`)
       enter('idle')
     })
+  }
+
+  const pause = () => {
+    if (now() !== 'recording') return
+    const next = !paused
+    setPaused(next)
+    void Promise.resolve(meetingRecordPause(next)).catch(() => setPaused(!next))
   }
 
   const stop = (discard: boolean) => {
@@ -435,8 +450,22 @@ export function MeetingCard() {
   const result = written === null ? null : renameSpeakers(written, label, names)
   const notesBox = (
     <textarea
+      ref={notesRef}
       value={notes}
-      onChange={(event) => set({ notes: event.target.value })}
+      onChange={(event) => {
+        if (now() !== 'recording') {
+          set({ notes: event.target.value })
+          return
+        }
+        // A note taken while the meeting runs carries the moment it was begun at.
+        const typed = stampNote(event.target.value, event.target.selectionStart, level.seconds)
+        set({ notes: typed.value })
+        if (typed.value !== event.target.value) {
+          window.requestAnimationFrame(() =>
+            notesRef.current?.setSelectionRange(typed.caret, typed.caret),
+          )
+        }
+      }}
       onBlur={persist}
       rows={3}
       aria-label={t('meeting.notes')}
@@ -585,8 +614,12 @@ export function MeetingCard() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-2 text-[20px] font-semibold tabular-nums">
               <span
-                className="h-2.5 w-2.5 rounded-full bg-error transition-transform"
-                style={{ transform: `scale(${1 + Math.min(level.volume, 1) * 1.2})` }}
+                className={`h-2.5 w-2.5 rounded-full transition-transform ${
+                  paused ? 'bg-text-tertiary' : 'bg-error'
+                }`}
+                style={{
+                  transform: `scale(${paused ? 1 : 1 + Math.min(level.volume, 1) * 1.2})`,
+                }}
               />
               {clock(level.seconds)}
             </span>
@@ -600,6 +633,16 @@ export function MeetingCard() {
                   className="btn-quiet px-2.5"
                 >
                   <Trash2 size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={pause}
+                  aria-pressed={paused}
+                  aria-label={t(paused ? 'meeting.resume' : 'meeting.pauseRecording')}
+                  title={t(paused ? 'meeting.resume' : 'meeting.pauseRecording')}
+                  className="btn-quiet px-2.5"
+                >
+                  {paused ? <Play size={16} /> : <Pause size={16} />}
                 </button>
                 <button type="button" onClick={() => stop(false)} className="btn-record">
                   <Square size={13} fill="currentColor" />
@@ -979,6 +1022,25 @@ export function MeetingCard() {
                 src={audioSource(kept)}
                 onPosition={setPosition}
               />
+            )}
+            {kept && stampedNotes(notes).length > 0 && (
+              <ul
+                className="m-0 flex list-none flex-col gap-1 border-l-2 border-border p-0 pl-3"
+                aria-label={t('meeting.notes')}
+              >
+                {stampedNotes(notes).map((note, index) => (
+                  <li key={index}>
+                    <button
+                      type="button"
+                      onClick={() => player.current?.seek(note.seconds, true)}
+                      className="flex cursor-pointer gap-3 border-none bg-transparent p-0 text-left text-[13px] text-text-primary hover:text-accent"
+                    >
+                      <span className="tabular-nums text-text-tertiary">{note.time}</span>
+                      {note.text}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
             {speakerNumbers.length > 0 && (
               <div className="flex flex-wrap gap-2">

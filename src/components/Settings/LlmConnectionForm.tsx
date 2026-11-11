@@ -17,6 +17,13 @@ import { benchLlmConnection, fetchLlmModels, readCredential, setCredential } fro
 import { LlmLogo } from './LlmLogo'
 import { FIELD_CLASS, OPTION_CLASS, POPOVER_CLASS, useDismiss } from './shared/popover'
 
+/** How many models are timed at once, and how many of a list at most. */
+const TIMED_AT_ONCE = 4
+const MOST_TIMED = 40
+
+/** What timing a model came to: milliseconds, or that it did not answer. */
+type Timing = number | 'failed'
+
 function errorText(error: unknown): string | null {
   if (error instanceof Error) return error.message
   return typeof error === 'string' ? error : null
@@ -97,6 +104,31 @@ export function LlmConnectionForm() {
       fetchTimer.current = null
     }
   }, [canReachService, models.length, refreshModels])
+
+  // Times belong to one service, key and format, and are thrown away when any of them changes.
+  const [timings, setTimings] = useState<Record<string, Timing>>({})
+  const timed = useRef({ connection: '', asked: new Set<string>() })
+  const connection = [provider, baseUrl, apiFormat, apiKey].join('\n')
+  useEffect(() => {
+    timed.current = { connection, asked: new Set() }
+    setTimings({})
+  }, [connection])
+
+  const timeModel = useCallback(
+    async (model: string) => {
+      const round = timed.current
+      if (round.connection !== connection || round.asked.has(model)) return
+      round.asked.add(model)
+      let timing: Timing = 'failed'
+      try {
+        timing = (await benchLlmConnection(apiKey, provider, baseUrl, model, apiFormat)).latencyMs
+      } catch {
+        // A model that does not answer is shown as such.
+      }
+      if (timed.current === round) setTimings((all) => ({ ...all, [model]: timing }))
+    },
+    [apiFormat, apiKey, baseUrl, connection, provider],
+  )
 
   const resetConnection = () => {
     setTestStatus('idle')
@@ -277,6 +309,8 @@ export function LlmConnectionForm() {
           <ModelPicker
             value={config.llm_model}
             models={models}
+            timings={timings}
+            onTime={canReachService ? timeModel : undefined}
             onChange={(model) => {
               updateConfig({ llm_model: model })
               setLatencyMs(null)
@@ -419,10 +453,14 @@ function BaseUrlField({
 function ModelPicker({
   value,
   models,
+  timings,
+  onTime,
   onChange,
 }: {
   value: string
   models: string[]
+  timings: Record<string, Timing>
+  onTime?: (model: string) => Promise<void>
   onChange: (model: string) => void
 }) {
   const { t } = useTranslation()
@@ -441,6 +479,21 @@ function ModelPicker({
   const shown = typed
     ? models.filter((model) => model.toLowerCase().includes(typed.toLowerCase()))
     : models
+
+  // Opening the list times the models in it, a few at a time, and closing it stops.
+  const listed = shown.slice(0, MOST_TIMED).join('\n')
+  useEffect(() => {
+    if (!open || !onTime || !listed) return
+    const waiting = listed.split('\n')
+    let going = true
+    const work = async () => {
+      while (going && waiting.length > 0) await onTime(waiting.shift() as string)
+    }
+    for (let each = 0; each < TIMED_AT_ONCE; each++) void work()
+    return () => {
+      going = false
+    }
+  }, [open, onTime, listed])
 
   const commit = (model: string) => {
     onChange(model)
@@ -504,7 +557,11 @@ function ModelPicker({
                   className={`${OPTION_CLASS} ${index === active ? 'bg-bg-secondary' : ''}`}
                 >
                   <LlmLogo id={llmLogoForModel(model)} />
-                  <span className="min-w-0 truncate">{model}</span>
+                  <span className="min-w-0 flex-1 truncate text-left">{model}</span>
+                  <ModelTiming
+                    timing={timings[model]}
+                    waiting={Boolean(onTime) && index < MOST_TIMED}
+                  />
                 </button>
               ))}
             </div>
@@ -516,5 +573,18 @@ function ModelPicker({
         </div>
       )}
     </div>
+  )
+}
+
+function ModelTiming({ timing, waiting }: { timing: Timing | undefined; waiting: boolean }) {
+  if (timing === undefined) {
+    return waiting ? (
+      <Loader2 size={11} className="flex-shrink-0 animate-spin text-text-tertiary" />
+    ) : null
+  }
+  return (
+    <span className="flex-shrink-0 text-[11px] tabular-nums text-text-tertiary">
+      {timing === 'failed' ? '—' : `${timing}ms`}
+    </span>
   )
 }

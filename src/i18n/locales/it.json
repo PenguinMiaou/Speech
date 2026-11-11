@@ -863,6 +863,8 @@
     "unpolish": "Annulla la sistemazione",
     "polishFailed": "Non è stato possibile sistemare il testo",
     "addLanguage": "Aggiungi una lingua",
-    "removeLanguage": "Rimuovi {{name}}"
+    "removeLanguage": "Rimuovi {{name}}",
+    "pauseRecording": "Metti in pausa",
+    "resume": "Riprendi la registrazione"
   }
 }

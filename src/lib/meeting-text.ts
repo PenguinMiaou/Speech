@@ -79,6 +79,35 @@ export function withLines(text: string, at: number[], lines: (string | undefined
   return all.join('\n')
 }
 
+const STAMP = /^\[(\d[\d:]*)\] ?/
+
+/** A note being typed during a meeting, with the line the caret is in marked with the
+ * time it was begun at, so that the note can later be found in the recording. A line that
+ * is empty or already has its time is left alone. */
+export function stampNote(
+  value: string,
+  caret: number,
+  seconds: number,
+): { value: string; caret: number } {
+  const start = value.lastIndexOf('\n', caret - 1) + 1
+  const stop = value.indexOf('\n', start)
+  const line = value.slice(start, stop < 0 ? undefined : stop)
+  if (line.trim() === '' || STAMP.test(line)) return { value, caret }
+  const stamp = `[${clock(seconds)}] `
+  return { value: value.slice(0, start) + stamp + value.slice(start), caret: caret + stamp.length }
+}
+
+/** The notes that carry the time they were written at, with that time in seconds. */
+export function stampedNotes(notes: string): { seconds: number; time: string; text: string }[] {
+  return notes.split('\n').flatMap((line) => {
+    const found = STAMP.exec(line)
+    const text = found ? line.slice(found[0].length).trim() : ''
+    if (!found || !text) return []
+    const seconds = found[1].split(':').reduce((total, part) => total * 60 + Number(part), 0)
+    return [{ seconds, time: found[1], text }]
+  })
+}
+
 export function clock(seconds: number): string {
   const two = (value: number) => String(value).padStart(2, '0')
   const hours = Math.floor(seconds / 3600)

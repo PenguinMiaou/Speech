@@ -207,6 +207,39 @@ describe('MeetingCard', () => {
     )
   })
 
+  it('pauses the recording and goes on with it', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordPause).mockResolvedValue(true)
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.pauseRecording' }))
+    expect(tauri.meetingRecordPause).toHaveBeenLastCalledWith(true)
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.resume' }))
+    expect(tauri.meetingRecordPause).toHaveBeenLastCalledWith(false)
+    expect(screen.getByRole('button', { name: 'meeting.pauseRecording' })).toBeTruthy()
+  })
+
+  it('marks a note taken during the meeting with its moment, to find it in the sound', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 65, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue('/data/meeting-recording.wav')
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const { container } = render(<MeetingCard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.record' }))
+    await screen.findByText('01:05')
+    act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
+    fireEvent.change(screen.getByLabelText('meeting.notes'), { target: { value: 'budget' } })
+    expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe(
+      '[01:05] budget',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
+    fireEvent.click(await screen.findByRole('button', { name: /budget/ }))
+    expect(container.querySelector('audio')?.currentTime).toBe(65)
+    play.mockRestore()
+  })
+
   it('takes corrections to the text of a meeting that has ended', async () => {
     vi.mocked(tauri.transcribeFile).mockResolvedValue('meeting.speakerLabel 1  00:00\nwe use Tori')
     vi.mocked(tauri.meetingLearn).mockResolvedValue([])
@@ -489,7 +522,7 @@ describe('MeetingCard', () => {
     expect(tauri.meetingMinutes).toHaveBeenCalledWith(
       'what was said',
       'meeting.defaultTemplate',
-      'cut the budget',
+      expect.stringMatching(/^\[00:0\d\] cut the budget$/),
     )
   })
 

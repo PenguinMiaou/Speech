@@ -1228,6 +1228,7 @@ pub fn run() {
             commands::minutes::meeting_polish,
             commands::minutes::meeting_title,
             commands::local_stt::meeting_languages,
+            commands::local_stt::meeting_record_pause,
             commands::minutes::meeting_learn,
             commands::minutes::minutes_templates,
             commands::minutes::minutes_template_import,

@@ -863,6 +863,8 @@
     "unpolish": "撤销整理",
     "polishFailed": "全文没有整理成功",
     "addLanguage": "添加语言",
-    "removeLanguage": "去掉 {{name}}"
+    "removeLanguage": "去掉 {{name}}",
+    "pauseRecording": "暂停录音",
+    "resume": "继续录音"
   }
 }
