@@ -120,8 +120,39 @@ describe('MeetingCard', () => {
     expect(screen.queryByText('the first minute')).toBeNull()
   })
 
+  it('turns several dropped files into text one after another, each a meeting of its own', async () => {
+    const done: ((text: string) => void)[] = []
+    vi.mocked(tauri.transcribeFile).mockReset()
+    vi.mocked(tauri.transcribeFile).mockImplementation(
+      () => new Promise<string>((resolve) => done.push(resolve)),
+    )
+    vi.mocked(tauri.meetingSave).mockClear()
+    await ready()
+    act(() => drop(['/tmp/one.mp3', '/tmp/two.mp3']))
+    expect(vi.mocked(tauri.transcribeFile)).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText('meeting.waiting').textContent).toBe('1')
+    await act(async () => done[0]('first text'))
+    await waitFor(() => expect(vi.mocked(tauri.transcribeFile)).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(tauri.transcribeFile).mock.calls[1][0]).toBe('/tmp/two.mp3')
+    await act(async () => done[1]('second text'))
+    await screen.findByText('second text')
+    const saved = vi.mocked(tauri.meetingSave).mock.calls.map(([meeting]) => meeting.transcript)
+    expect(saved).toEqual(expect.arrayContaining(['first text', 'second text']))
+  })
+
+  it('goes on with the next file when one cannot be turned into text, and says so', async () => {
+    vi.mocked(tauri.transcribeFile).mockReset()
+    vi.mocked(tauri.transcribeFile)
+      .mockRejectedValueOnce('file_not_audio')
+      .mockResolvedValueOnce('second text')
+    await ready()
+    act(() => drop(['/tmp/one.txt', '/tmp/two.mp3']))
+    await screen.findByText('second text')
+    expect(screen.getByText('meeting.error.someFailed')).toBeTruthy()
+  })
+
   it('transcribes a file picked with the button', async () => {
-    vi.mocked(tauri.pickMediaFile).mockResolvedValue('/tmp/picked.mp4')
+    vi.mocked(tauri.pickMediaFile).mockResolvedValue(['/tmp/picked.mp4'])
     vi.mocked(tauri.transcribeFile).mockResolvedValue('picked text')
     await ready()
     fireEvent.click(screen.getByRole('button', { name: 'meeting.chooseFile' }))
@@ -302,6 +333,26 @@ describe('MeetingCard', () => {
     expect(window.localStorage.getItem('meeting.polishAfter')).toBe('1')
   })
 
+  it('downloads the model that times words the first time exact times are switched on', async () => {
+    let finish: () => void = () => {}
+    vi.mocked(tauri.wordTimesStatus).mockResolvedValue({
+      installed: false,
+      downloading: false,
+      total_bytes: 239_549_735,
+    })
+    vi.mocked(tauri.onWordTimesProgress).mockResolvedValue(() => {})
+    vi.mocked(tauri.installWordTimes).mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
+    const toggle = screen.getByRole('switch', { name: 'meeting.wordTimes' })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+    expect(tauri.installWordTimes).toHaveBeenCalled()
+    expect(screen.getByText(/meeting.downloadingModel/)).toBeTruthy()
+    await act(async () => finish())
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+  })
+
   it('downloads the speaker models the first time speakers are switched on', async () => {
     let finish: () => void = () => {}
     vi.mocked(tauri.installSpeakerModels).mockReturnValue(
@@ -478,6 +529,52 @@ describe('MeetingCard', () => {
     expect(saved.id).toMatch(/^m-\d+$/)
   })
 
+  it('finds past meetings by what was said in them', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: false },
+      { id: 'm-2', started_at: 1_700_000_100_000, preview: 'hiring plan', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingsSearch).mockResolvedValue([
+      {
+        id: 'm-2',
+        started_at: 1_700_000_100_000,
+        title: 'Weekly',
+        duration_s: 60,
+        found: '…we need two more engineers…',
+      },
+    ])
+    await ready()
+    expect(await screen.findByText('budget talk')).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText('meeting.search'), { target: { value: 'engineers' } })
+
+    expect(await screen.findByText('…we need two more engineers…')).toBeTruthy()
+    expect(tauri.meetingsSearch).toHaveBeenCalledWith('engineers')
+    expect(screen.queryByText('budget talk')).toBeNull()
+
+    fireEvent.change(screen.getByLabelText('meeting.search'), { target: { value: '' } })
+    expect(await screen.findByText('budget talk')).toBeTruthy()
+  })
+
+  it('asks a question of the past meetings together', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingsSearch).mockResolvedValue([])
+    vi.mocked(tauri.meetingsAsk).mockResolvedValue('Ann, in Weekly: two more engineers')
+    await ready()
+    await screen.findByText('budget talk')
+    expect(
+      (screen.getByRole('button', { name: 'meeting.askAll' }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+
+    fireEvent.change(screen.getByLabelText('meeting.search'), { target: { value: ' who hires? ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.askAll' }))
+
+    expect(await screen.findByText('Ann, in Weekly: two more engineers')).toBeTruthy()
+    expect(tauri.meetingsAsk).toHaveBeenCalledWith('who hires?')
+  })
+
   it('opens a past meeting with its notes and minutes, and deletes one', async () => {
     vi.mocked(tauri.meetingsList).mockResolvedValue([
       { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: true },
@@ -584,6 +681,19 @@ describe('MeetingCard', () => {
     expect(tauri.copyText).toHaveBeenCalledWith('hello')
     fireEvent.click(screen.getByRole('button', { name: 'meeting.save' }))
     expect(vi.mocked(tauri.saveTextFile).mock.calls[0][0]).toBe('hello')
+  })
+
+  it('offers a text with times as subtitles as well', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:10\nhello\n\nmeeting.speakerLabel 2  00:20\nhi',
+    )
+    vi.mocked(tauri.saveTextFile).mockResolvedValue(true)
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.save' }))
+    const others = vi.mocked(tauri.saveTextFile).mock.lastCall?.[2]
+    expect(others?.srt()).toContain('00:00:10,000 --> 00:00:20,000')
+    expect(others?.vtt().startsWith('WEBVTT')).toBe(true)
   })
 
   it('says why a file could not be turned into text', async () => {

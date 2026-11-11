@@ -1,11 +1,14 @@
 import { create } from 'zustand'
+import i18n from 'i18next'
 import {
   meetingAudioKeep,
   meetingLearn,
+  meetingRecover,
   meetingSave,
   meetingSpeakersAgain,
   meetingTitle,
   meetingTranslate,
+  meetingWordTimes,
   onMeetingError,
   onMeetingInterim,
   onMeetingNames,
@@ -18,10 +21,17 @@ import {
   addSegment,
   addTranslation,
   meetingText,
+  spansOf,
   speakersAgain,
+  timesOf,
+  whoIsMe,
+  withMarks,
   withParagraphText,
+  withSide,
   withSpeakers,
   type Paragraph,
+  type Sides,
+  type Times,
 } from '../lib/meeting-text'
 
 export type MeetingPhase = 'idle' | 'recording' | 'finishing' | 'working'
@@ -68,6 +78,12 @@ export interface MeetingState {
   titleFrom: string
   /** True while the speakers are told again from the whole sound. */
   sorting: boolean
+  /** How much each speaker said into the microphone and how much came from the computer. */
+  sides: Sides
+  /** The speaker taken to be the user, who was given the name for that. */
+  me: number | null
+  /** When the words under each heading of `text` were said; empty when not known. */
+  times: Times[]
 }
 
 /** A title as the app gave it to a meeting, to tell it later from one the user typed. */
@@ -95,6 +111,9 @@ export const initialMeeting: MeetingState = {
   translatingAt: null,
   titleFrom: '',
   sorting: false,
+  sides: {},
+  me: null,
+  times: [],
 }
 
 export const useMeetingStore = create<MeetingState>(() => initialMeeting)
@@ -127,6 +146,7 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
       names: state.names,
       title: state.title.trim(),
       duration_s: state.duration,
+      times: state.times,
     }),
   )
     .then(() => {
@@ -201,6 +221,85 @@ export function tellSpeakersAgain(speakerLabel: string): Promise<void> {
     .finally(() => useMeetingStore.setState({ sorting: false }))
 }
 
+/** Hears the meeting just recorded again for when each of its words was said, and keeps
+ * that with it. Without the model for it, or when the words were changed meanwhile,
+ * the times stay as they were. */
+export function timeWords(speakerLabel: string): Promise<void> {
+  const state = useMeetingStore.getState()
+  const { id, text } = state
+  if (!id || !state.recorded || !state.kept || !text) return Promise.resolve()
+  const spans = spansOf(text, speakerLabel, state.times, state.duration)
+  if (spans.length === 0) return Promise.resolve()
+  useMeetingStore.setState({ sorting: true })
+  return Promise.resolve(meetingWordTimes(id, spans))
+    .then((found) => {
+      const now = useMeetingStore.getState()
+      if (!found || now.id !== id || now.text !== text) return
+      const times = withMarks(text, speakerLabel, now.times, now.duration, found)
+      useMeetingStore.setState({ times })
+      return persistMeeting(speakerLabel)
+    })
+    .catch(() => {})
+    .finally(() => useMeetingStore.setState({ sorting: false }))
+}
+
+/** Where the notes of the recording still running are kept, in case it is cut short. */
+const NOTES_DRAFT = 'meeting.notesDraft'
+
+function notesDraft(): string {
+  try {
+    return localStorage.getItem(NOTES_DRAFT) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+let lookedForOne = false
+
+/** Brings back a recording that was cut short the last time the app ran, for instance by
+ * a crash: what was written down of it becomes the meeting in hand, with the notes typed
+ * during it, and its sound is kept with it. True when one was brought back. */
+export function recoverMeeting(speakerLabel: string): Promise<boolean> {
+  if (lookedForOne) return Promise.resolve(false)
+  lookedForOne = true
+  return Promise.resolve(meetingRecover())
+    .then((found) => {
+      if (!found || useMeetingStore.getState().phase !== 'idle') return false
+      const paragraphs = found.segments.reduce<Paragraph[]>(
+        (all, segment) => addSegment(all, segment),
+        [],
+      )
+      useMeetingStore.setState({
+        ...initialMeeting,
+        paragraphs,
+        // A recording nothing was written down of is still kept, to be transcribed again.
+        text: meetingText(paragraphs, speakerLabel) || '…',
+        recorded: true,
+        duration: found.seconds,
+        notes: notesDraft(),
+        times: timesOf(paragraphs),
+      })
+      return true
+    })
+    .catch(() => false)
+}
+
+/** The name the user's own voice goes by until they type another. */
+const myName = () => i18n.t('meeting.me')
+
+/** Counts which side a piece came from and names the speaker who turns out to be the
+ * user. A name that was typed, or known from the voice, stands. */
+function tellMe(segment: MeetingSegment) {
+  const state = useMeetingStore.getState()
+  const sides = withSide(state.sides, segment)
+  if (sides === state.sides) return
+  const me = whoIsMe(sides)
+  const names = { ...state.names }
+  if (state.me !== null && state.me !== me && names[state.me] === myName()) delete names[state.me]
+  if (me !== null && !names[me]?.trim()) names[me] = myName()
+  useMeetingStore.setState({ sides, me, names })
+}
+
 let translating: Promise<void> = Promise.resolve()
 
 /** Takes in one more piece of the meeting and, when asked to, has it translated. Pieces are
@@ -211,6 +310,7 @@ export function takeSegment(segment: MeetingSegment): Promise<void> {
   const paragraphs = addSegment(before, segment, editing === before.length - 1)
   if (paragraphs === before) return Promise.resolve()
   useMeetingStore.setState({ paragraphs, interim: '' })
+  tellMe(segment)
   const target = useMeetingStore.getState().translateTo
   if (!target) return Promise.resolve()
   const index = paragraphs.length - 1
@@ -276,8 +376,11 @@ export function listenToMeeting() {
       useMeetingStore.setState((state) => {
         const names = { ...state.names }
         for (const [number, name] of Object.entries(known ?? {})) {
-          // A name the user typed stands.
-          if (!names[Number(number)]?.trim()) names[Number(number)] = name
+          // A name the user typed stands; a voice that is known goes by its own name.
+          const has = names[Number(number)]?.trim()
+          if (!has || (Number(number) === state.me && has === myName())) {
+            names[Number(number)] = name
+          }
         }
         return { names }
       }),
@@ -287,3 +390,16 @@ export function listenToMeeting() {
     onMeetingError(() => useMeetingStore.setState({ error: 'meeting.error.failed' })),
   ).catch(() => {})
 }
+
+// The notes of a running recording are kept from moment to moment, so that a recording
+// that is cut short is brought back with them.
+let draftKept = ''
+useMeetingStore.subscribe((state) => {
+  if (state.phase !== 'recording' || state.notes === draftKept) return
+  draftKept = state.notes
+  try {
+    localStorage.setItem(NOTES_DRAFT, state.notes)
+  } catch {
+    // Without storage the notes are only lost if the recording is cut short.
+  }
+})

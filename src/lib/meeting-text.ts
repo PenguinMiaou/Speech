@@ -6,6 +6,71 @@ export interface Paragraph {
   text: string
   /** The same words in another language, when the meeting is translated as it goes. */
   translation?: string
+  /** Where the last words end; absent when that was not written down. */
+  endMs?: number
+  /** Where in the text each piece that joined the paragraph begins, and when it began. */
+  marks?: [number, number][]
+}
+
+/** When the words under one heading were said: where they end, how long the text was
+ * when it was marked, and the places in it whose time is known. */
+export interface Times {
+  end_ms: number
+  chars: number
+  marks: [number, number][]
+}
+
+/** The times of each paragraph, in order, to be kept with the meeting's text. */
+export function timesOf(paragraphs: Paragraph[]): Times[] {
+  return paragraphs.map((paragraph) => ({
+    end_ms: paragraph.endMs ?? 0,
+    chars: paragraph.text.length,
+    marks: paragraph.marks ?? [[0, paragraph.startMs]],
+  }))
+}
+
+/** The places whose time is known, fitted to a text `length` long and closed by its end.
+ * Null when the end is not known, and then nothing can be told between the marks. */
+function anchors(times: Times | undefined, length: number): [number, number][] | null {
+  const first = times?.marks[0]
+  if (!times || !first || length <= 0 || times.chars <= 0 || times.end_ms <= first[1]) return null
+  const fit = length / times.chars
+  return [
+    ...times.marks.map(([at, ms]): [number, number] => [at * fit, ms]),
+    [length, times.end_ms],
+  ]
+}
+
+/** When the word at `offset` of a text was said, in seconds; null when that is not known. */
+export function secondsAt(times: Times | undefined, length: number, offset: number): number | null {
+  const known = anchors(times, length)
+  if (!known) return null
+  const later = known.findIndex(([at]) => at > offset)
+  const next = later < 0 ? known.length - 1 : Math.max(1, later)
+  const [from, began] = known[next - 1]
+  const [to, ended] = known[next]
+  const part = to > from ? Math.min(1, Math.max(0, (offset - from) / (to - from))) : 1
+  return (began + (ended - began) * part) / 1000
+}
+
+/** How many characters of a text were said by `seconds`; null when that is not known. */
+export function charsSaid(
+  times: Times | undefined,
+  length: number,
+  seconds: number,
+): number | null {
+  const known = anchors(times, length)
+  if (!known) return null
+  const ms = seconds * 1000
+  if (ms >= known[known.length - 1][1]) return length
+  const next = Math.max(
+    1,
+    known.findIndex(([, at]) => at > ms),
+  )
+  const [from, began] = known[next - 1]
+  const [to, ended] = known[next]
+  const part = ended > began ? Math.max(0, (ms - began) / (ended - began)) : 0
+  return Math.floor(from + (to - from) * part)
 }
 
 function joined(before: string, after: string): string {
@@ -34,10 +99,26 @@ export function addSegment(
       : segment.speaker === 0 || segment.speaker === last?.speaker
   const goesOn =
     !closed && last && segment.start_ms - last.startMs < LONGEST_PARAGRAPH_MS && sameVoice
+  // A piece whose end was not written down leaves the paragraph without one.
+  const endMs = segment.end_ms && segment.end_ms > segment.start_ms ? segment.end_ms : undefined
   if (goesOn) {
-    return [...paragraphs.slice(0, -1), { ...last, text: joined(last.text, text) }]
+    const whole = joined(last.text, text)
+    const marks: [number, number][] = [
+      ...(last.marks ?? [[0, last.startMs]]),
+      [whole.length - text.length, segment.start_ms],
+    ]
+    return [...paragraphs.slice(0, -1), { ...last, text: whole, endMs, marks }]
   }
-  return [...paragraphs, { speaker: segment.speaker, startMs: segment.start_ms, text }]
+  return [
+    ...paragraphs,
+    {
+      speaker: segment.speaker,
+      startMs: segment.start_ms,
+      text,
+      endMs,
+      marks: [[0, segment.start_ms]],
+    },
+  ]
 }
 
 /** The paragraphs with a translated piece joined to the paragraph it was said in. */
@@ -175,6 +256,34 @@ export function transcriptLines(text: string, speakerLabel: string): TranscriptL
   })
 }
 
+/** How much each speaker said into the microphone and how much otherwise, in characters. */
+export type Sides = Record<number, { mine: number; theirs: number }>
+
+/** The sides with one more piece of the meeting counted, when it is known both who said
+ * it and whether it came in by the microphone alone. */
+export function withSide(sides: Sides, segment: MeetingSegment): Sides {
+  const said = segment.text.trim().length
+  if (!segment.speaker || segment.mine == null || said === 0) return sides
+  const had = sides[segment.speaker] ?? { mine: 0, theirs: 0 }
+  const now = segment.mine
+    ? { ...had, mine: had.mine + said }
+    : { ...had, theirs: had.theirs + said }
+  return { ...sides, [segment.speaker]: now }
+}
+
+/** Fewer characters than this do not tell whose voice the microphone hears. */
+const ENOUGH_TO_TELL = 15
+
+/** Which speaker is the user in a call: the only one heard mostly by the microphone,
+ * while someone else is heard from the computer. Null when that cannot be told, as in a
+ * room, where everyone is heard by the microphone. */
+export function whoIsMe(sides: Sides): number | null {
+  const all = Object.entries(sides)
+  const own = all.filter(([, side]) => side.mine >= ENOUGH_TO_TELL && side.mine >= side.theirs * 3)
+  const others = all.some(([, side]) => side.theirs > side.mine)
+  return own.length === 1 && others ? Number(own[0][0]) : null
+}
+
 /** A stretch of a recording one person speaks in, as the speaker models tell it. */
 export interface SpeakerTurn {
   start_ms: number
@@ -251,4 +360,129 @@ export function withSpeakers(
 /** The colour a speaker's name is set in. A voice too short to tell has none of its own. */
 export function speakerColor(speaker: number): string {
   return speaker > 0 ? `var(--speaker-${((speaker - 1) % 6) + 1})` : 'var(--color-text-secondary)'
+}
+
+/** A subtitle whose end is known neither from its times nor from what follows lasts this long. */
+const LAST_SUBTITLE_MS = 5000
+
+/** The meeting as subtitles, each piece with the times it was said between and the name
+ * of who said it. Empty for a text that carries no times. */
+export function subtitles(
+  text: string,
+  speakerLabel: string,
+  names: Record<number, string>,
+  times: Times[],
+  format: 'srt' | 'vtt',
+): string {
+  const lines = transcriptLines(text, speakerLabel)
+  const headings = lines.flatMap((line, index) => ('text' in line ? [] : [index]))
+  const stamp = (ms: number) => {
+    const two = (value: number) => String(Math.floor(value)).padStart(2, '0')
+    const rest = String(Math.floor(ms % 1000)).padStart(3, '0')
+    const clock = `${two(ms / 3_600_000)}:${two((ms / 60_000) % 60)}:${two((ms / 1000) % 60)}`
+    return `${clock}${format === 'srt' ? ',' : '.'}${rest}`
+  }
+  const startOf = (index: number) => {
+    const line = lines[index]
+    if ('text' in line) return 0
+    return line.time.split(':').reduce((total, part) => total * 60 + Number(part), 0) * 1000
+  }
+  const cues: { from: number; to: number; who: string; said: string }[] = []
+  headings.forEach((index, order) => {
+    const line = lines[index]
+    if ('text' in line) return
+    const until = headings[order + 1] ?? lines.length
+    const said = lines
+      .slice(index + 1, until)
+      .flatMap((each) => ('text' in each && each.text.trim() ? [each.text.trim()] : []))
+    if (said.length === 0) return
+    const who =
+      line.speaker === null
+        ? ''
+        : names[line.speaker]?.trim() ||
+          (line.speaker > 0 ? `${speakerLabel} ${line.speaker}` : speakerLabel)
+    const from = startOf(index)
+    const next = order + 1 < headings.length ? startOf(headings[order + 1]) : null
+    const known = times.length === headings.length ? times[order] : undefined
+    const places = said.length === 1 ? anchors(known, said[0].length) : null
+    if (!places) {
+      const end = known && known.end_ms > from ? known.end_ms : (next ?? from + LAST_SUBTITLE_MS)
+      cues.push({ from, to: Math.max(end, from + 1), who, said: said.join('\n') })
+      return
+    }
+    for (let piece = 0; piece + 1 < places.length; piece++) {
+      const words = said[0].slice(Math.round(places[piece][0]), Math.round(places[piece + 1][0]))
+      if (!words.trim()) continue
+      cues.push({ from: places[piece][1], to: places[piece + 1][1], who, said: words.trim() })
+    }
+  })
+  if (cues.length === 0) return ''
+  const written = cues.map((cue, order) => {
+    const span = `${stamp(cue.from)} --> ${stamp(cue.to)}`
+    if (format === 'vtt') return `${span}\n${cue.who ? `<v ${cue.who}>` : ''}${cue.said}`
+    return `${order + 1}\n${span}\n${cue.who ? `${cue.who}: ` : ''}${cue.said}`
+  })
+  return `${format === 'vtt' ? 'WEBVTT\n\n' : ''}${written.join('\n\n')}\n`
+}
+
+/** The words under one heading with where their sound begins and ends. */
+export interface Span {
+  start_ms: number
+  end_ms: number
+  text: string
+}
+
+/** The words under each heading of a text with where their sound begins and ends, as far
+ * as the kept times, the next heading and the length of the recording tell. */
+export function spansOf(
+  text: string,
+  speakerLabel: string,
+  times: Times[],
+  durationSeconds: number,
+): Span[] {
+  const lines = transcriptLines(text, speakerLabel)
+  const headings = lines.flatMap((line, index) => ('text' in line ? [] : [index]))
+  const told = (index: number) => {
+    const line = lines[index]
+    if ('text' in line) return 0
+    return line.time.split(':').reduce((total, part) => total * 60 + Number(part), 0) * 1000
+  }
+  return headings.map((index, order) => {
+    const known = times.length === headings.length ? times[order] : undefined
+    const start = known?.marks[0]?.[1] ?? told(index)
+    const next = headings[order + 1]
+    const until = next === undefined ? Math.max(durationSeconds * 1000, start) : told(next)
+    const under = lines.slice(index + 1, next).find((line) => 'text' in line && line.text.trim())
+    return {
+      start_ms: start,
+      end_ms: known && known.end_ms > start ? known.end_ms : Math.max(until, start),
+      text: under && 'text' in under ? under.text : '',
+    }
+  })
+}
+
+/** The times of a text with the places `found` in the words under each heading, in
+ * order. Where nothing was found the times stay as they were. */
+export function withMarks(
+  text: string,
+  speakerLabel: string,
+  times: Times[],
+  durationSeconds: number,
+  found: [number, number][][],
+): Times[] {
+  const spans = spansOf(text, speakerLabel, times, durationSeconds)
+  if (found.length !== spans.length) return times
+  return spans.map((span, order) => {
+    const had: Times =
+      times.length === spans.length
+        ? times[order]
+        : { end_ms: span.end_ms, chars: span.text.length, marks: [[0, span.start_ms]] }
+    const marks = found[order]
+    if (!marks?.length) return had
+    return {
+      end_ms: span.end_ms,
+      chars: span.text.length,
+      marks: marks[0][0] > 0 ? [[0, span.start_ms], ...marks] : marks,
+    }
+  })
 }

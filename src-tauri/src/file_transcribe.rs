@@ -188,9 +188,62 @@ pub fn recognize_in(
     let (text, heard) = ask(only)?;
     let elsewhere = languages.len() > 1 && heard.is_some_and(|code| !spoken_in(languages, &code));
     if elsewhere && !text.trim().is_empty() {
-        return ask(Some(languages[0].clone())).map(|(text, _)| text);
+        return ask(Some(languages[0].clone())).map(|(text, _)| without_loops(&text));
     }
-    Ok(text)
+    Ok(without_loops(&text))
+}
+
+/// The longest run of characters looked at as one thing said over and over.
+const LONGEST_LOOP: usize = 20;
+
+/// How often a run of `length` characters must follow itself to count as the recognizer
+/// being stuck. People do say a short word several times; they do not say a phrase
+/// three times running, or one sound eight times.
+fn stuck_after(length: usize) -> usize {
+    match length {
+        1 => 8,
+        2 | 3 => 4,
+        _ => 3,
+    }
+}
+
+/// The text with words the recognizer got stuck on said once. On noise or silence a
+/// recognizer sometimes writes the same words over and over; nobody said them that often.
+pub fn without_loops(text: &str) -> String {
+    let all: Vec<char> = text.chars().collect();
+    let mut kept = String::with_capacity(text.len());
+    let mut at = 0;
+    let mut cut = false;
+    'next: while at < all.len() {
+        for length in 1..=LONGEST_LOOP.min((all.len() - at) / 2) {
+            let unit = &all[at..at + length];
+            // Figures and marks do repeat: a number with many noughts is not a loop.
+            if !unit.iter().any(|character| character.is_alphabetic()) {
+                continue;
+            }
+            let mut times = 1;
+            while all[at + times * length..].starts_with(unit) {
+                times += 1;
+            }
+            if times >= stuck_after(length) {
+                kept.extend(unit);
+                at += times * length;
+                // The last time round may lack the space or mark the others end with.
+                let bare: Vec<char> = unit.iter().collect::<String>().trim_end().chars().collect();
+                if bare.len() < length && all[at..].starts_with(&bare) {
+                    at += bare.len();
+                }
+                cut = true;
+                continue 'next;
+            }
+        }
+        kept.push(all[at]);
+        at += 1;
+    }
+    if cut && text.trim_end().len() == text.len() {
+        kept.truncate(kept.trim_end().len());
+    }
+    kept
 }
 
 /// Runs `attempt` again after each of the `waits` until it succeeds. A recognizer that
@@ -422,6 +475,35 @@ fn recognize(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn words_the_recognizer_got_stuck_on_are_said_once() {
+        assert_eq!(without_loops("好的好的好的好的好的"), "好的");
+        assert_eq!(without_loops("嗯嗯嗯嗯嗯嗯嗯嗯嗯嗯"), "嗯");
+        assert_eq!(
+            without_loops("Thank you. Thank you. Thank you. Thank you."),
+            "Thank you."
+        );
+        assert_eq!(
+            without_loops("下周再说吧，再见再见再见再见再见。"),
+            "下周再说吧，再见。"
+        );
+    }
+
+    #[test]
+    fn words_said_twice_or_for_stress_are_kept() {
+        for said in [
+            "哈哈哈哈",
+            "很好很好很好",
+            "我们周五上线，我们周五测试",
+            "no no no, not that one",
+            "一二三四一二三四",
+            "一共 1000000000 元",
+            "然后…………………………",
+        ] {
+            assert_eq!(without_loops(said), said);
+        }
+    }
 
     #[test]
     fn a_meeting_is_held_in_three_languages_at_most() {

@@ -810,7 +810,9 @@
       "template_empty": "模板文件是空的",
       "template_unreadable": "模板文件打不开，需要是文本文件",
       "ask": "没有得到回答",
-      "system_audio_unsupported": "这台电脑的系统版本录不了电脑声音"
+      "system_audio_unsupported": "这台电脑的系统版本录不了电脑声音",
+      "someFailed": "有文件没能转成文字。",
+      "timesDownload": "模型没有下载成功"
     },
     "live": "实时文字",
     "listening": "正在听，文字每隔十几秒出一段",
@@ -868,6 +870,21 @@
     "removeLanguage": "去掉 {{name}}",
     "pauseRecording": "暂停录音",
     "resume": "继续录音",
-    "speakersAgain": "正在重新区分发言人"
+    "speakersAgain": "正在重新区分发言人",
+    "editMinutes": "编辑纪要",
+    "search": "搜索会议",
+    "askAll": "向所有会议提问",
+    "me": "我",
+    "waiting": "等待中的文件",
+    "wordTimes": "逐字时间（240 MB 模型）",
+    "downloadingModel": "正在下载模型 {{percent}}%",
+    "oneOnOneTemplateName": "一对一",
+    "oneOnOneTemplate": "# 一对一沟通\n\n## 聊了什么\n\n## 给出的反馈\n写明谁对谁说的\n\n## 各自要做的事\n每条写明负责人和期限\n\n## 下次继续聊",
+    "interviewTemplateName": "面试 / 访谈",
+    "interviewTemplate": "# 访谈记录\n\n## 访谈对象和主题\n\n## 问答\n每个问题写出回答要点和时间\n\n## 亮点\n\n## 疑虑\n\n## 下一步",
+    "talkTemplateName": "讲座 / 分享",
+    "talkTemplate": "# 笔记\n\n## 主题\n\n## 主要观点\n按讲述顺序，每条带时间\n\n## 提到的例子和数字\n\n## 听众提问和回答",
+    "standupTemplateName": "站会",
+    "standupTemplate": "# 站会\n\n每个发言的人写一节：\n\n## 姓名\n- 已完成\n- 接下来做\n- 卡在哪里\n\n## 共同事项\n结论和待办，每条写明负责人和期限"
   }
 }

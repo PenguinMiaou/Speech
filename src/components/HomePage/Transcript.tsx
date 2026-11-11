@@ -1,5 +1,11 @@
-import { Fragment } from 'react'
-import { speakerColor, transcriptLines } from '../../lib/meeting-text'
+import { Fragment, useEffect, useRef } from 'react'
+import {
+  charsSaid,
+  secondsAt,
+  speakerColor,
+  transcriptLines,
+  type Times,
+} from '../../lib/meeting-text'
 
 interface Props {
   text: string
@@ -13,6 +19,15 @@ interface Props {
   onEdit?: (line: number, before: string, after: string) => void
   /** Where the sound is, in seconds. Words said later than that are greyed. */
   position?: number
+  /** When the words under each heading were said, in order. With these a click goes to
+   * the word, and the paragraph being played shows how far the sound has got. */
+  times?: Times[]
+}
+
+/** The place in the words that was clicked, where the browser can tell. */
+function clickedAt(event: { clientX: number; clientY: number }, words: Node): number | null {
+  const at = document.caretRangeFromPoint?.(event.clientX, event.clientY)
+  return at && words.contains(at.startContainer) ? at.startOffset : null
 }
 
 function seconds(time: string): number {
@@ -21,8 +36,55 @@ function seconds(time: string): number {
 
 /** A meeting's text with each speaker's name in that speaker's colour, so that who speaks
  * stands apart from what is said. Selecting and copying gives the plain text. */
-export function Transcript({ text, names, speakerLabel, label, onSeek, onEdit, position }: Props) {
+export function Transcript({
+  text,
+  names,
+  speakerLabel,
+  label,
+  onSeek,
+  onEdit,
+  position,
+  times,
+}: Props) {
   const lines = transcriptLines(text, speakerLabel)
+  const headings = lines.filter((line) => !('text' in line)).length
+  // The times belong to the words right under each heading, while they answer the
+  // headings one for one.
+  let order = -1
+  const timed = lines.map((line, index) => {
+    if (!('text' in line)) order += 1
+    const under = index > 0 && !('text' in lines[index - 1])
+    return under && times?.length === headings ? times[order] : undefined
+  })
+  const root = useRef<HTMLDivElement>(null)
+  // The paragraph being played, and how many of its characters have been said.
+  let playing: { line: number; said: number } | null = null
+  if (position !== undefined && position > 0) {
+    lines.forEach((line, index) => {
+      if (!('text' in line) || !timed[index]) return
+      const said = charsSaid(timed[index], line.text.length, position)
+      const begun = (timed[index]?.marks[0]?.[1] ?? Infinity) <= position * 1000
+      if (said !== null && begun) playing = { line: index, said }
+    })
+  }
+  const { line: playingLine, said: playingSaid } = playing ?? { line: -1, said: 0 }
+  useEffect(() => {
+    // The words still to come are marked without touching the text, which may be in
+    // the middle of being changed.
+    const marks = globalThis.CSS?.highlights
+    if (!marks || typeof Highlight === 'undefined') return
+    const words = root.current?.querySelector(`[data-line="${playingLine}"]`)?.firstChild
+    const length = words?.textContent?.length ?? 0
+    if (!words || words.nodeType !== Node.TEXT_NODE || playingSaid >= length) {
+      marks.delete('ahead')
+      return
+    }
+    const ahead = document.createRange()
+    ahead.setStart(words, playingSaid)
+    ahead.setEnd(words, length)
+    marks.set('ahead', new Highlight(ahead))
+    return () => void marks.delete('ahead')
+  }, [playingLine, playingSaid, text])
   // When each line was said: the time in the heading above it.
   let said: number | null = null
   const starts = lines.map((line) => {
@@ -39,9 +101,12 @@ export function Transcript({ text, names, speakerLabel, label, onSeek, onEdit, p
         suppressContentEditableWarning
         spellCheck={false}
         data-line={index}
-        onClick={() => {
+        onClick={(event) => {
           // Dragging over words selects them; only a plain click moves the sound.
-          if (start !== null && window.getSelection()?.isCollapsed !== false) onSeek?.(start, false)
+          if (start === null || window.getSelection()?.isCollapsed === false) return
+          const at = clickedAt(event, event.currentTarget)
+          const exact = at === null ? null : secondsAt(timed[index], line.text.length, at)
+          onSeek?.(exact ?? start, false)
         }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
@@ -65,6 +130,7 @@ export function Transcript({ text, names, speakerLabel, label, onSeek, onEdit, p
   }
   return (
     <div
+      ref={root}
       role={onEdit ? 'group' : 'textbox'}
       aria-readonly={onEdit ? undefined : 'true'}
       aria-multiline="true"

@@ -810,7 +810,9 @@
       "template_empty": "Die Vorlagendatei ist leer",
       "template_unreadable": "Die Vorlage ließ sich nicht öffnen. Sie muss eine Textdatei sein",
       "ask": "Es kam keine Antwort",
-      "system_audio_unsupported": "Diese Systemversion kann den Computerton nicht aufnehmen"
+      "system_audio_unsupported": "Diese Systemversion kann den Computerton nicht aufnehmen",
+      "someFailed": "Einige Dateien konnten nicht in Text umgewandelt werden.",
+      "timesDownload": "Das Modell konnte nicht geladen werden"
     },
     "live": "Live-Text",
     "listening": "Hört zu. Text erscheint etwa alle fünfzehn Sekunden",
@@ -868,6 +870,21 @@
     "removeLanguage": "{{name}} entfernen",
     "pauseRecording": "Aufnahme anhalten",
     "resume": "Aufnahme fortsetzen",
-    "speakersAgain": "Sprecher werden neu unterschieden"
+    "speakersAgain": "Sprecher werden neu unterschieden",
+    "editMinutes": "Protokoll bearbeiten",
+    "search": "Besprechungen durchsuchen",
+    "askAll": "Alle Besprechungen fragen",
+    "me": "Ich",
+    "waiting": "Wartende Dateien",
+    "wordTimes": "Genaue Wortzeiten (Modell, 240 MB)",
+    "downloadingModel": "Modell wird geladen {{percent}}%",
+    "oneOnOneTemplateName": "Zweiergespräch",
+    "oneOnOneTemplate": "# Zweiergespräch\n\n## Worüber gesprochen wurde\n\n## Rückmeldungen\nWer wem was gesagt hat\n\n## Wer was tut\nJeweils mit Person und Termin\n\n## Beim nächsten Mal",
+    "interviewTemplateName": "Interview",
+    "interviewTemplate": "# Interview\n\n## Wer befragt wurde und wozu\n\n## Fragen und Antworten\nJede Frage mit dem Kern der Antwort und der Zeit\n\n## Stärken\n\n## Zweifel\n\n## Nächste Schritte",
+    "talkTemplateName": "Vortrag",
+    "talkTemplate": "# Notizen\n\n## Thema\n\n## Hauptpunkte\nIn der Reihenfolge des Vortrags, jeweils mit Zeit\n\n## Genannte Beispiele und Zahlen\n\n## Fragen aus dem Publikum und die Antworten",
+    "standupTemplateName": "Stand-up",
+    "standupTemplate": "# Stand-up\n\nFür jede Person, die gesprochen hat:\n\n## Name\n- Erledigt\n- Als Nächstes\n- Blockiert durch\n\n## Für alle\nBeschlüsse und Aufgaben, jeweils mit Person und Termin"
   }
 }

@@ -810,7 +810,9 @@
       "template_empty": "The template file is empty",
       "template_unreadable": "The template could not be opened. It needs to be a text file",
       "ask": "No answer came back",
-      "system_audio_unsupported": "This system version cannot record the computer's sound"
+      "system_audio_unsupported": "This system version cannot record the computer's sound",
+      "someFailed": "Some files could not be turned into text.",
+      "timesDownload": "The model could not be downloaded"
     },
     "live": "Live text",
     "listening": "Listening. Text arrives every fifteen seconds or so",
@@ -868,6 +870,21 @@
     "removeLanguage": "Remove {{name}}",
     "pauseRecording": "Pause recording",
     "resume": "Go on recording",
-    "speakersAgain": "Telling the speakers apart again"
+    "speakersAgain": "Telling the speakers apart again",
+    "editMinutes": "Edit minutes",
+    "search": "Search meetings",
+    "askAll": "Ask all meetings",
+    "me": "Me",
+    "waiting": "Files waiting",
+    "wordTimes": "Exact word times (240 MB model)",
+    "downloadingModel": "Downloading the model {{percent}}%",
+    "oneOnOneTemplateName": "One-on-one",
+    "oneOnOneTemplate": "# One-on-one\n\n## What was talked about\n\n## Feedback given\nWho said it to whom\n\n## What each will do\nEach with who and by when\n\n## To come back to next time",
+    "interviewTemplateName": "Interview",
+    "interviewTemplate": "# Interview\n\n## Who was interviewed, and about what\n\n## Questions and answers\nEach question with the gist of the answer and its time\n\n## Strong points\n\n## Doubts\n\n## Next steps",
+    "talkTemplateName": "Talk or lecture",
+    "talkTemplate": "# Notes\n\n## What it was about\n\n## Main points\nIn the order they were made, each with its time\n\n## Examples and figures given\n\n## Questions from the audience and the answers",
+    "standupTemplateName": "Stand-up",
+    "standupTemplate": "# Stand-up\n\nFor each person who spoke:\n\n## Name\n- Done\n- Doing next\n- Blocked by\n\n## For everyone\nDecisions and tasks, each with who and by when"
   }
 }

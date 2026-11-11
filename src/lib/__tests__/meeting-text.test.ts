@@ -2,18 +2,27 @@ import { describe, expect, it } from 'vitest'
 import {
   addSegment,
   addTranslation,
+  charsSaid,
   meetingText,
   renameSpeakers,
+  secondsAt,
   speakersAgain,
   speakersIn,
+  spansOf,
   spokenLines,
   stampNote,
   stampedNotes,
+  subtitles,
+  timesOf,
   transcriptLines,
+  whoIsMe,
   withLines,
+  withMarks,
   withParagraphText,
+  withSide,
   withSpeakers,
   type Paragraph,
+  type Sides,
 } from '../meeting-text'
 
 const said = (speaker: number | null, start_ms: number, text: string) => ({
@@ -27,7 +36,7 @@ describe('meeting text', () => {
     let paragraphs: Paragraph[] = []
     paragraphs = addSegment(paragraphs, said(1, 0, '你好'))
     paragraphs = addSegment(paragraphs, said(2, 4_000, '收到'))
-    expect(paragraphs).toEqual([
+    expect(paragraphs).toMatchObject([
       { speaker: 1, startMs: 0, text: '你好' },
       { speaker: 2, startMs: 4_000, text: '收到' },
     ])
@@ -36,13 +45,15 @@ describe('meeting text', () => {
   it('lets a speaker go on across two windows in one paragraph', () => {
     let paragraphs = addSegment([], said(1, 0, 'the first half'))
     paragraphs = addSegment(paragraphs, said(1, 12_000, 'and the rest'))
-    expect(paragraphs).toEqual([{ speaker: 1, startMs: 0, text: 'the first half and the rest' }])
+    expect(paragraphs).toMatchObject([
+      { speaker: 1, startMs: 0, text: 'the first half and the rest' },
+    ])
   })
 
   it('gives a voice too short to tell to whoever spoke last', () => {
     let paragraphs = addSegment([], said(2, 0, '我觉得可以'))
     paragraphs = addSegment(paragraphs, said(0, 5_000, '对'))
-    expect(paragraphs).toEqual([{ speaker: 2, startMs: 0, text: '我觉得可以对' }])
+    expect(paragraphs).toMatchObject([{ speaker: 2, startMs: 0, text: '我觉得可以对' }])
   })
 
   it('keeps each window its own paragraph when speakers are not told apart', () => {
@@ -55,7 +66,7 @@ describe('meeting text', () => {
   it('joins what follows soon when speakers are not told apart', () => {
     let paragraphs = addSegment([], said(null, 0, 'one'))
     paragraphs = addSegment(paragraphs, said(null, 8_000, 'two'))
-    expect(paragraphs).toEqual([{ speaker: null, startMs: 0, text: 'one two' }])
+    expect(paragraphs).toMatchObject([{ speaker: null, startMs: 0, text: 'one two' }])
   })
 
   it('reads a time on a line of its own as the moment the words under it were said', () => {
@@ -222,5 +233,175 @@ describe('meeting text', () => {
 
   it('takes a line that only looks like a heading as words', () => {
     expect(transcriptLines('说话人 2 说了很多', '说话人')).toEqual([{ text: '说话人 2 说了很多' }])
+  })
+})
+
+describe('telling which speaker is the user', () => {
+  const piece = (speaker: number | null, mine: boolean | null, text = '这一段话有十个字左右') => ({
+    speaker,
+    start_ms: 0,
+    text,
+    mine,
+  })
+  const after = (...pieces: ReturnType<typeof piece>[]) =>
+    pieces.reduce((sides, each) => withSide(sides, each), {} as Sides)
+
+  it('is the one heard by the microphone while the others come from the computer', () => {
+    const sides = after(piece(2, true), piece(1, false), piece(2, true), piece(1, false))
+    expect(whoIsMe(sides)).toBe(2)
+  })
+
+  it('is nobody when the computer plays no one, as in a room', () => {
+    expect(whoIsMe(after(piece(1, true), piece(2, true), piece(1, true)))).toBeNull()
+  })
+
+  it('is nobody when two people share the microphone', () => {
+    const sides = after(
+      piece(1, true),
+      piece(2, true),
+      piece(3, false),
+      piece(1, true),
+      piece(2, true),
+    )
+    expect(whoIsMe(sides)).toBeNull()
+  })
+
+  it('is nobody on a few words only', () => {
+    expect(whoIsMe(after(piece(2, true, '好的'), piece(1, false)))).toBeNull()
+  })
+
+  it('leaves out pieces whose side or speaker is not known', () => {
+    const sides = after(piece(null, true), piece(0, true), piece(1, null))
+    expect(sides).toEqual({})
+  })
+})
+
+describe('when the words inside a paragraph were said', () => {
+  const heard = [
+    { speaker: 1, start_ms: 0, end_ms: 4000, text: '周五上线' },
+    { speaker: 1, start_ms: 5000, end_ms: 8000, text: '先测试' },
+  ].reduce<Paragraph[]>((all, each) => addSegment(all, each), [])
+  const [times] = timesOf(heard)
+
+  it('is marked where each piece joined the paragraph', () => {
+    expect(heard).toHaveLength(1)
+    expect(times).toEqual({
+      end_ms: 8000,
+      chars: 7,
+      marks: [
+        [0, 0],
+        [4, 5000],
+      ],
+    })
+  })
+
+  it('gives a place in the words its time', () => {
+    expect(secondsAt(times, 7, 2)).toBe(2.5)
+    expect(secondsAt(times, 7, 4)).toBe(5)
+    expect(secondsAt(times, 7, 7)).toBe(8)
+  })
+
+  it('gives a time the words said by then', () => {
+    expect(charsSaid(times, 7, 2.5)).toBe(2)
+    expect(charsSaid(times, 7, 6.5)).toBe(5)
+    expect(charsSaid(times, 7, 60)).toBe(7)
+  })
+
+  it('still fits words whose length was changed since', () => {
+    expect(secondsAt(times, 14, 8)).toBe(5)
+    expect(charsSaid(times, 14, 5)).toBe(8)
+  })
+
+  it('has nothing to say of a piece whose end is not known', () => {
+    const old = addSegment([], { speaker: 1, start_ms: 3000, text: '周五上线' })
+    expect(secondsAt(timesOf(old)[0], 4, 2)).toBeNull()
+  })
+})
+
+describe('a meeting as subtitles', () => {
+  const text = 'Speaker 1  00:10\n周五上线先测试\n\nSpeaker 2  00:20\n好的\n\n01:05\nlast words'
+  const times = [
+    {
+      end_ms: 18000,
+      chars: 7,
+      marks: [
+        [0, 10000],
+        [4, 15000],
+      ] as [number, number][],
+    },
+    { end_ms: 21500, chars: 2, marks: [[0, 20000]] as [number, number][] },
+    { end_ms: 0, chars: 10, marks: [[0, 65000]] as [number, number][] },
+  ]
+
+  it('gives each piece its own lines with the times it was said between', () => {
+    expect(subtitles(text, 'Speaker', { 2: 'Lin' }, times, 'srt')).toBe(
+      [
+        '1\n00:00:10,000 --> 00:00:15,000\nSpeaker 1: 周五上线',
+        '2\n00:00:15,000 --> 00:00:18,000\nSpeaker 1: 先测试',
+        '3\n00:00:20,000 --> 00:00:21,500\nLin: 好的',
+        '4\n00:01:05,000 --> 00:01:10,000\nlast words',
+      ].join('\n\n') + '\n',
+    )
+  })
+
+  it('ends a piece whose end is not known where the next one begins', () => {
+    const written = subtitles(text, 'Speaker', {}, [], 'vtt')
+    expect(
+      written.startsWith('WEBVTT\n\n00:00:10.000 --> 00:00:20.000\n<v Speaker 1>周五上线先测试\n'),
+    ).toBe(true)
+    expect(written).toContain('00:00:20.000 --> 00:01:05.000\n<v Speaker 2>好的')
+  })
+
+  it('is empty for a text without times', () => {
+    expect(subtitles('just words', 'Speaker', {}, [], 'srt')).toBe('')
+  })
+})
+
+describe('the words of a meeting heard again for their times', () => {
+  const text = 'Speaker 1  00:10\n周五上线\n\nSpeaker 2  00:20\n好的\n\n01:05\nlast words'
+  const times = [
+    { end_ms: 18000, chars: 4, marks: [[0, 10400]] as [number, number][] },
+    { end_ms: 0, chars: 2, marks: [[0, 20000]] as [number, number][] },
+    { end_ms: 0, chars: 10, marks: [[0, 65000]] as [number, number][] },
+  ]
+
+  it('are given with where the sound of each paragraph begins and ends', () => {
+    expect(spansOf(text, 'Speaker', times, 70)).toEqual([
+      { start_ms: 10400, end_ms: 18000, text: '周五上线' },
+      { start_ms: 20000, end_ms: 65000, text: '好的' },
+      { start_ms: 65000, end_ms: 70000, text: 'last words' },
+    ])
+  })
+
+  it('go by the headings alone where no times were kept', () => {
+    expect(spansOf(text, 'Speaker', [], 0).map((span) => [span.start_ms, span.end_ms])).toEqual([
+      [10000, 20000],
+      [20000, 65000],
+      [65000, 65000],
+    ])
+  })
+
+  it('take the times found, and keep what they had where none were', () => {
+    const found: [number, number][][] = [
+      [
+        [1, 11000],
+        [3, 12000],
+      ],
+      [],
+      [[0, 65200]],
+    ]
+    expect(withMarks(text, 'Speaker', times, 70, found)).toEqual([
+      {
+        end_ms: 18000,
+        chars: 4,
+        marks: [
+          [0, 10400],
+          [1, 11000],
+          [3, 12000],
+        ],
+      },
+      times[1],
+      { end_ms: 70000, chars: 10, marks: [[0, 65200]] },
+    ])
   })
 })

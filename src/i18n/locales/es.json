@@ -810,7 +810,9 @@
       "template_empty": "El archivo de plantilla está vacío",
       "template_unreadable": "No se pudo abrir la plantilla. Debe ser un archivo de texto",
       "ask": "No llegó ninguna respuesta",
-      "system_audio_unsupported": "Esta versión del sistema no puede grabar el sonido del ordenador"
+      "system_audio_unsupported": "Esta versión del sistema no puede grabar el sonido del ordenador",
+      "someFailed": "Algunos archivos no se pudieron transcribir.",
+      "timesDownload": "No se pudo descargar el modelo"
     },
     "live": "Texto en directo",
     "listening": "Escuchando. El texto llega cada quince segundos aproximadamente",
@@ -868,6 +870,21 @@
     "removeLanguage": "Quitar {{name}}",
     "pauseRecording": "Pausar la grabación",
     "resume": "Seguir grabando",
-    "speakersAgain": "Distinguiendo de nuevo a los hablantes"
+    "speakersAgain": "Distinguiendo de nuevo a los hablantes",
+    "editMinutes": "Editar el acta",
+    "search": "Buscar reuniones",
+    "askAll": "Preguntar a todas las reuniones",
+    "me": "Yo",
+    "waiting": "Archivos en espera",
+    "wordTimes": "Tiempo exacto de cada palabra (modelo de 240 MB)",
+    "downloadingModel": "Descargando el modelo {{percent}}%",
+    "oneOnOneTemplateName": "Uno a uno",
+    "oneOnOneTemplate": "# Uno a uno\n\n## De qué se habló\n\n## Comentarios dados\nQuién se lo dijo a quién\n\n## Qué hará cada uno\nCon responsable y fecha\n\n## Para retomar la próxima vez",
+    "interviewTemplateName": "Entrevista",
+    "interviewTemplate": "# Entrevista\n\n## A quién se entrevistó y sobre qué\n\n## Preguntas y respuestas\nCada pregunta con lo esencial de la respuesta y su hora\n\n## Puntos fuertes\n\n## Dudas\n\n## Próximos pasos",
+    "talkTemplateName": "Charla o clase",
+    "talkTemplate": "# Notas\n\n## Tema\n\n## Puntos principales\nEn el orden en que se dijeron, cada uno con su hora\n\n## Ejemplos y cifras citados\n\n## Preguntas del público y respuestas",
+    "standupTemplateName": "Reunión diaria",
+    "standupTemplate": "# Reunión diaria\n\nPara cada persona que habló:\n\n## Nombre\n- Hecho\n- Siguiente\n- Bloqueado por\n\n## Para todos\nDecisiones y tareas, con responsable y fecha"
   }
 }

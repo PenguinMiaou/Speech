@@ -57,6 +57,13 @@ pub trait Engine {
         pcm: &[f32],
         first: bool,
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
+    /// Tells what is heard in `pcm` piece by piece, with the millisecond each begins at.
+    fn word_times(
+        &mut self,
+        model: &str,
+        tokens: &str,
+        pcm: &[f32],
+    ) -> Result<Vec<(String, u32)>, EngineError>;
 }
 
 pub fn not_isolating() -> EngineError {
@@ -135,6 +142,17 @@ pub fn serve<R: Read, W: Write, E: Engine>(
                         turns,
                         voices: engine.last_voices(),
                     },
+                    Err(e) => error(&e.code, e.message),
+                },
+                Err(e) => error("audio_unreadable", e.to_string()),
+            },
+            Request::WordTimes {
+                model,
+                tokens,
+                pcm_path,
+            } => match read_pcm_file(&pcm_path) {
+                Ok(pcm) => match engine.word_times(&model, &tokens, &pcm) {
+                    Ok(tokens) => Response::WordTimes { tokens },
                     Err(e) => error(&e.code, e.message),
                 },
                 Err(e) => error("audio_unreadable", e.to_string()),
@@ -240,6 +258,15 @@ mod tests {
     }
 
     impl Engine for FakeEngine {
+        fn word_times(
+            &mut self,
+            _model: &str,
+            _tokens: &str,
+            pcm: &[f32],
+        ) -> Result<Vec<(String, u32)>, EngineError> {
+            Ok(vec![("heard".into(), pcm.len() as u32)])
+        }
+
         fn speakers_window(
             &mut self,
             _segmentation_model: &str,
@@ -381,6 +408,37 @@ mod tests {
                     speaker: 1
                 }],
                 voices: vec![]
+            })
+        );
+        assert!(matches!(
+            read_frame::<_, Response>(&mut reader).unwrap(),
+            Some(Response::Error { code, .. }) if code == "audio_unreadable"
+        ));
+    }
+
+    #[test]
+    fn the_times_of_the_words_in_a_file_of_sound_are_told() {
+        let path = std::env::temp_dir().join(format!("ot-times-{}.pcm", std::process::id()));
+        let raw: Vec<u8> = [0.1f32, 0.2].iter().flat_map(|s| s.to_le_bytes()).collect();
+        std::fs::write(&path, raw).unwrap();
+        let request = |pcm_path: String| Request::WordTimes {
+            model: "timing.onnx".into(),
+            tokens: "tokens.txt".into(),
+            pcm_path,
+        };
+        let frames = [
+            (request(path.to_string_lossy().into_owned()), vec![]),
+            (request("/nonexistent/audio.pcm".into()), vec![]),
+        ];
+        let mut output = Vec::new();
+        serve(&mut input(&frames), &mut output, &mut FakeEngine::default()).unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        let mut reader = Cursor::new(output);
+        assert_eq!(
+            read_frame::<_, Response>(&mut reader).unwrap(),
+            Some(Response::WordTimes {
+                tokens: vec![("heard".into(), 2)]
             })
         );
         assert!(matches!(

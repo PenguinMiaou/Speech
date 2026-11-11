@@ -16,6 +16,8 @@ pub struct RealEngine {
     /// The voices heard so far in a recording still running, with the model files.
     live_speakers: Option<(String, crate::diarize::LiveSpeakers)>,
     voices: Vec<ot_stt_protocol::SpeakerVoice>,
+    /// The timing recognizer kept between requests, with the file it was opened from.
+    timer: Option<(String, crate::timing::Timer)>,
 }
 
 /// Which optional hints the loaded model can use.
@@ -117,6 +119,34 @@ impl Engine for RealEngine {
             )?;
         self.voices = voices;
         Ok(turns)
+    }
+
+    fn word_times(
+        &mut self,
+        model: &str,
+        tokens: &str,
+        pcm: &[f32],
+    ) -> Result<Vec<(String, u32)>, EngineError> {
+        if self
+            .timer
+            .as_ref()
+            .is_none_or(|(opened, _)| opened != model)
+        {
+            let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
+            let timer = crate::timing::Timer::load(model, tokens, threads).map_err(|message| {
+                EngineError {
+                    code: "timing_failed".into(),
+                    message,
+                }
+            })?;
+            self.timer = Some((model.to_string(), timer));
+        }
+        let (_, timer) = self.timer.as_ref().expect("loaded just above");
+        Ok(timer
+            .tokens(pcm)
+            .into_iter()
+            .map(|(token, seconds)| (token, (seconds.max(0.0) * 1000.0) as u32))
+            .collect())
     }
 
     fn isolate_end(&mut self) -> Result<Vec<f32>, EngineError> {

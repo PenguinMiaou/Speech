@@ -3,6 +3,7 @@ mod engine;
 mod eval;
 mod isolate;
 mod serve;
+mod timing;
 
 use std::io::{stdin, stdout, BufReader, BufWriter};
 use std::process::ExitCode;

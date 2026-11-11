@@ -810,7 +810,9 @@
       "template_empty": "テンプレートファイルが空です",
       "template_unreadable": "テンプレートを開けません。テキストファイルが必要です",
       "ask": "回答が得られませんでした",
-      "system_audio_unsupported": "このシステムのバージョンではパソコンの音を録音できません"
+      "system_audio_unsupported": "このシステムのバージョンではパソコンの音を録音できません",
+      "someFailed": "文字にできなかったファイルがあります。",
+      "timesDownload": "モデルをダウンロードできませんでした"
     },
     "live": "リアルタイムの文字",
     "listening": "聞き取り中。文字は約15秒ごとに出ます",
@@ -868,6 +870,21 @@
     "removeLanguage": "{{name}} を外す",
     "pauseRecording": "録音を一時停止",
     "resume": "録音を再開",
-    "speakersAgain": "話者を区別し直しています"
+    "speakersAgain": "話者を区別し直しています",
+    "editMinutes": "議事録を編集",
+    "search": "会議を検索",
+    "askAll": "すべての会議に質問",
+    "me": "自分",
+    "waiting": "待機中のファイル",
+    "wordTimes": "単語ごとの正確な時刻（240 MB のモデル）",
+    "downloadingModel": "モデルをダウンロード中 {{percent}}%",
+    "oneOnOneTemplateName": "1on1",
+    "oneOnOneTemplate": "# 1on1\n\n## 話したこと\n\n## フィードバック\n誰が誰に伝えたか\n\n## それぞれがやること\n担当者と期限を書く\n\n## 次回に続けること",
+    "interviewTemplateName": "面接・インタビュー",
+    "interviewTemplate": "# インタビュー記録\n\n## 相手とテーマ\n\n## 質問と回答\n質問ごとに回答の要点と時刻\n\n## 良かった点\n\n## 懸念\n\n## 次のステップ",
+    "talkTemplateName": "講演・講義",
+    "talkTemplate": "# ノート\n\n## テーマ\n\n## 主なポイント\n話された順に、それぞれ時刻を付ける\n\n## 挙げられた例と数字\n\n## 質疑応答",
+    "standupTemplateName": "スタンドアップ",
+    "standupTemplate": "# スタンドアップ\n\n発言した人ごとに：\n\n## 名前\n- やったこと\n- 次にやること\n- 困っていること\n\n## 全体\n決定事項とタスク、担当者と期限を書く"
   }
 }

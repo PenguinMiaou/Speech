@@ -810,7 +810,9 @@
       "template_empty": "Le fichier de modèle est vide",
       "template_unreadable": "Impossible d’ouvrir le modèle. Il doit s’agir d’un fichier texte",
       "ask": "Aucune réponse n’est arrivée",
-      "system_audio_unsupported": "Cette version du système ne peut pas enregistrer le son de l’ordinateur"
+      "system_audio_unsupported": "Cette version du système ne peut pas enregistrer le son de l’ordinateur",
+      "someFailed": "Certains fichiers n’ont pas pu être transcrits.",
+      "timesDownload": "Le modèle n’a pas pu être téléchargé"
     },
     "live": "Texte en direct",
     "listening": "À l’écoute. Le texte arrive environ toutes les quinze secondes",
@@ -868,6 +870,21 @@
     "removeLanguage": "Retirer {{name}}",
     "pauseRecording": "Mettre en pause",
     "resume": "Reprendre l’enregistrement",
-    "speakersAgain": "Nouvelle distinction des intervenants"
+    "speakersAgain": "Nouvelle distinction des intervenants",
+    "editMinutes": "Modifier le compte rendu",
+    "search": "Rechercher dans les réunions",
+    "askAll": "Interroger toutes les réunions",
+    "me": "Moi",
+    "waiting": "Fichiers en attente",
+    "wordTimes": "Temps exact de chaque mot (modèle de 240 Mo)",
+    "downloadingModel": "Téléchargement du modèle {{percent}}%",
+    "oneOnOneTemplateName": "Tête-à-tête",
+    "oneOnOneTemplate": "# Tête-à-tête\n\n## Sujets abordés\n\n## Retours donnés\nQui l’a dit à qui\n\n## Ce que chacun fera\nAvec le responsable et l’échéance\n\n## À reprendre la prochaine fois",
+    "interviewTemplateName": "Entretien",
+    "interviewTemplate": "# Entretien\n\n## Personne interrogée et sujet\n\n## Questions et réponses\nChaque question avec l’essentiel de la réponse et son heure\n\n## Points forts\n\n## Doutes\n\n## Suite",
+    "talkTemplateName": "Conférence",
+    "talkTemplate": "# Notes\n\n## Sujet\n\n## Points principaux\nDans l’ordre de l’exposé, chacun avec son heure\n\n## Exemples et chiffres cités\n\n## Questions du public et réponses",
+    "standupTemplateName": "Point quotidien",
+    "standupTemplate": "# Point quotidien\n\nPour chaque personne qui a parlé :\n\n## Nom\n- Fait\n- À faire ensuite\n- Bloqué par\n\n## Pour tous\nDécisions et tâches, avec le responsable et l’échéance"
   }
 }

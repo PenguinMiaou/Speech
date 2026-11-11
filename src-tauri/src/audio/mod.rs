@@ -1,6 +1,7 @@
 pub mod capture;
 pub mod devices;
 pub mod health;
+pub mod output;
 pub mod resample;
 pub mod silence;
 pub mod system_mute;

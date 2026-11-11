@@ -35,6 +35,7 @@ pub mod voice_intent;
 pub mod voice_isolation;
 pub mod voiceprints;
 mod window_state;
+pub mod word_times;
 
 pub use hotkey::{default_ask_shortcut, default_shortcut, parse_hotkey};
 pub use tray::{refresh_tray, TrayHandle};
@@ -1210,6 +1211,9 @@ pub fn run() {
             commands::local_stt::meeting_record_stop,
             commands::local_stt::speaker_models_status,
             commands::local_stt::speaker_models_install,
+            commands::local_stt::word_times_status,
+            commands::local_stt::word_times_install,
+            commands::local_stt::meeting_word_times,
             commands::local_stt::meeting_recording_save,
             commands::local_stt::meeting_recording_delete,
             commands::local_stt::speaker_remember,
@@ -1217,6 +1221,8 @@ pub fn run() {
             commands::local_stt::speaker_voices,
             commands::local_stt::speaker_forget,
             commands::meetings::meetings_list,
+            commands::meetings::meetings_search,
+            commands::minutes::meetings_ask,
             commands::meetings::meeting_get,
             commands::meetings::meeting_save,
             commands::meetings::meeting_delete,
@@ -1232,6 +1238,7 @@ pub fn run() {
             commands::local_stt::meeting_languages,
             commands::local_stt::meeting_record_pause,
             commands::local_stt::meeting_speakers_again,
+            commands::local_stt::meeting_recover,
             commands::local_stt::log_reveal,
             commands::minutes::meeting_learn,
             commands::minutes::minutes_templates,

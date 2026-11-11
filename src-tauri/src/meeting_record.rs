@@ -39,17 +39,28 @@ const SILENT_PEAK: u16 = 100;
 
 /// One paragraph of the meeting. `speaker` is absent when speakers are not told apart,
 /// and 0 for a voice too short to tell.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Segment {
     pub speaker: Option<u32>,
     pub start_ms: u64,
     pub text: String,
+    /// Where the words end. Zero when that is not known.
+    #[serde(default)]
+    pub end_ms: u64,
+    /// Whether the words came in by the microphone and not out of the computer: the
+    /// user's own side of a call. Absent when the computer's sound is not recorded, or
+    /// when it cannot be told.
+    #[serde(default)]
+    pub mine: Option<bool>,
 }
 
 #[derive(Default)]
 struct Waiting {
     /// Recorded and not yet recognized.
     pending: Vec<i16>,
+    /// The computer's own sound in what waits, sample for sample; empty when it is not
+    /// recorded. What waits less this is what the microphone alone heard.
+    theirs: Vec<i16>,
     /// Samples already handed to recognition.
     taken: usize,
     finishing: bool,
@@ -66,9 +77,75 @@ pub fn init(data_dir: &Path) {
     let _ = DATA_DIR.set(data_dir.to_path_buf());
 }
 
+const RECORDING: &str = "meeting-recording.wav";
+/// What was said in the recording still running, one paragraph to a line. It is there
+/// only while a recording runs, so that finding it at startup means one was cut short.
+const JOURNAL: &str = "meeting-recording.jsonl";
+/// A recording cut short before this many seconds is not worth bringing back.
+const SHORTEST_RECOVERED: u64 = 2;
+
 /// Where the latest meeting's audio is kept.
 fn recording_path() -> Option<PathBuf> {
-    DATA_DIR.get().map(|dir| dir.join("meeting-recording.wav"))
+    DATA_DIR.get().map(|dir| dir.join(RECORDING))
+}
+
+/// Writes one more paragraph of the running recording down on disk.
+fn write_down(dir: &Path, segment: &Segment) {
+    let Ok(mut line) = serde_json::to_string(segment) else {
+        return;
+    };
+    line.push('\n');
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(JOURNAL))
+    {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+/// A recording that the app did not live to end: what was written down of it, and how
+/// long its sound is.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Recovered {
+    pub segments: Vec<Segment>,
+    pub seconds: u64,
+}
+
+/// Finds a recording that was cut short, for instance by a crash or a power cut: its
+/// sound is made a whole file, and what was written down of it is handed back, once.
+pub fn recover() -> Option<Recovered> {
+    if is_recording() {
+        return None;
+    }
+    let found = recover_in(DATA_DIR.get()?)?;
+    crate::applog::note(
+        "meeting",
+        &format!(
+            "a recording cut short was found again: {} s, {} paragraphs",
+            found.seconds,
+            found.segments.len()
+        ),
+    );
+    Some(found)
+}
+
+fn recover_in(dir: &Path) -> Option<Recovered> {
+    let journal = dir.join(JOURNAL);
+    let written = std::fs::read_to_string(&journal).ok()?;
+    let _ = std::fs::remove_file(&journal);
+    let recording = dir.join(RECORDING);
+    finish_wav(&recording).ok()?;
+    let seconds = std::fs::metadata(&recording).ok()?.len().saturating_sub(44) / (RATE as u64 * 2);
+    if seconds < SHORTEST_RECOVERED {
+        return None;
+    }
+    // A last line the app did not finish writing is left out.
+    let segments = written
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect();
+    Some(Recovered { segments, seconds })
 }
 
 /// The latest meeting's audio, if it is still on disk.
@@ -115,19 +192,218 @@ fn finish_wav(path: &Path) -> std::io::Result<()> {
 /// The most of the computer's own sound that waits for the microphone to catch up.
 const SYSTEM_BACKLOG: usize = 2 * RATE;
 
-/// The microphone's bytes with the computer's own sound added, sample by sample. The
-/// microphone keeps the time: the computer's sound only arrives while something plays.
-pub fn with_system_sound(
+/// The microphone's bytes with the computer's own sound added, sample by sample, and the
+/// computer's part of each sample beside the sum. The microphone keeps the time: the
+/// computer's sound only arrives while something plays. With `echo`, a stretch in which
+/// the microphone heard nothing but the loudspeakers is turned down first.
+fn mixed_with(
     microphone: &[u8],
     system: &mut std::collections::VecDeque<i16>,
-) -> Vec<u8> {
-    let mut mixed = Vec::with_capacity(microphone.len());
-    for pair in microphone.chunks_exact(2) {
-        let sample = i16::from_le_bytes([pair[0], pair[1]]);
-        let sum = sample.saturating_add(system.pop_front().unwrap_or(0));
-        mixed.extend_from_slice(&sum.to_le_bytes());
+    echo: Option<&mut Echo>,
+) -> (Vec<u8>, Vec<i16>) {
+    let mut own: Vec<i16> = microphone
+        .chunks_exact(2)
+        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    let theirs: Vec<i16> = own
+        .iter()
+        .map(|_| system.pop_front().unwrap_or(0))
+        .collect();
+    if let Some(echo) = echo {
+        echo.quieten(&mut own, &theirs);
     }
-    mixed
+    let mixed = own
+        .iter()
+        .zip(&theirs)
+        .flat_map(|(own, other)| own.saturating_add(*other).to_le_bytes())
+        .collect();
+    (mixed, theirs)
+}
+
+/// How many pieces of the microphone are looked back on: half a second.
+const ECHO_SPAN: usize = 25;
+/// How many more pieces of the computer's sound are looked back on, for the time its
+/// sound takes out of the loudspeakers and into the microphone.
+const ECHO_LATE: usize = 10;
+/// How many pieces of the others talking it takes to learn how loud they reach the
+/// microphone, and over how many of the latest that is kept up.
+const ECHO_LEARNED: usize = 50;
+const ECHO_REMEMBERED: usize = 200;
+/// The microphone must be this many times louder than the loudspeakers make it at
+/// their loudest for the user to be speaking too.
+const OWN_BY: f64 = 2.5;
+/// How many pieces the user counts as still speaking after the last loud one, so that
+/// the quiet ends of words are kept.
+const OWN_HOLD: usize = 20;
+
+/// Tells when the microphone hears nothing but the computer's own sound coming out of
+/// the loudspeakers, so that the others are not recorded twice. It learns how loud the
+/// loudspeakers reach the microphone, and takes whatever is clearly louder for the user.
+#[derive(Default)]
+pub struct Echo {
+    far: std::collections::VecDeque<f64>,
+    near: std::collections::VecDeque<f64>,
+    /// The microphone's loudest piece of late over the loudspeakers' loudest, for the
+    /// latest pieces in which it heard the loudspeakers.
+    heard: std::collections::VecDeque<f64>,
+    /// What that comes to as a rule: how much of the loudspeakers reaches the microphone.
+    reach: Option<f64>,
+    held: usize,
+    /// How far the microphone is turned down at the end of the last piece.
+    down: Option<f32>,
+}
+
+/// What is left of the microphone where it hears only the loudspeakers. It is turned
+/// down and not off, so that words of the user's mistaken for the loudspeakers are
+/// still there to be recognized.
+const ECHO_LEFT: f32 = 0.25;
+
+fn mean_square(samples: &[i16]) -> f64 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    samples
+        .iter()
+        .map(|sample| f64::from(*sample) * f64::from(*sample))
+        .sum::<f64>()
+        / samples.len() as f64
+}
+
+/// How alike two runs of loudness rise and fall: 1 when one is the other made louder
+/// or quieter, 0 when they have nothing to do with each other.
+fn alike(one: &[f64], other: &[f64]) -> f64 {
+    let count = one.len().min(other.len()) as f64;
+    if count == 0.0 {
+        return 0.0;
+    }
+    let mean = |values: &[f64]| values.iter().sum::<f64>() / count;
+    let (mean_one, mean_other) = (mean(one), mean(other));
+    let (mut both, mut spread_one, mut spread_other) = (0.0, 0.0, 0.0);
+    for (a, b) in one.iter().zip(other) {
+        both += (a - mean_one) * (b - mean_other);
+        spread_one += (a - mean_one) * (a - mean_one);
+        spread_other += (b - mean_other) * (b - mean_other);
+    }
+    if spread_one <= 0.0 || spread_other <= 0.0 {
+        return 0.0;
+    }
+    both / (spread_one * spread_other).sqrt()
+}
+
+/// How alike the microphone and the computer's sound must rise and fall for the
+/// microphone to be hearing the loudspeakers.
+const FOLLOWS: f64 = 0.7;
+
+impl Echo {
+    /// Whether the microphone has of late risen and fallen as the computer's sound did,
+    /// at whatever delay the loudspeakers' sound reaches it.
+    fn follows(&self) -> bool {
+        if self.near.len() < ECHO_SPAN || self.far.len() < ECHO_SPAN + ECHO_LATE {
+            return false;
+        }
+        let near: Vec<f64> = self.near.iter().map(|loud| loud.sqrt()).collect();
+        let far: Vec<f64> = self.far.iter().map(|loud| loud.sqrt()).collect();
+        (0..=ECHO_LATE).any(|late| {
+            let from = ECHO_LATE - late;
+            alike(&near, &far[from..from + ECHO_SPAN]) >= FOLLOWS
+        })
+    }
+
+    /// Turns the microphone down where it holds nothing but the computer's sound,
+    /// gliding from one loudness to the other within the piece.
+    pub fn quieten(&mut self, microphone: &mut [i16], theirs: &[i16]) {
+        let to = if self.only_echo(microphone, theirs) {
+            ECHO_LEFT
+        } else {
+            1.0
+        };
+        let from = self.down.replace(to).unwrap_or(1.0);
+        if from == 1.0 && to == 1.0 {
+            return;
+        }
+        let count = microphone.len().max(1) as f32;
+        for (index, sample) in microphone.iter_mut().enumerate() {
+            let by = from + (to - from) * (index as f32 + 1.0) / count;
+            *sample = (f32::from(*sample) * by) as i16;
+        }
+    }
+
+    /// Whether this piece of the microphone holds nothing but the computer's sound.
+    fn only_echo(&mut self, microphone: &[i16], theirs: &[i16]) -> bool {
+        let now = mean_square(microphone);
+        self.near.push_back(now);
+        if self.near.len() > ECHO_SPAN {
+            self.near.pop_front();
+        }
+        self.far.push_back(mean_square(theirs));
+        if self.far.len() > ECHO_SPAN + ECHO_LATE {
+            self.far.pop_front();
+        }
+        let loudest =
+            |pieces: &std::collections::VecDeque<f64>| pieces.iter().copied().fold(0.0, f64::max);
+        // Whatever the microphone has of the loudspeakers was played within this span,
+        // so it is never louder than their loudest piece in it reaches the microphone.
+        let played = loudest(&self.far);
+        if played < TOO_QUIET {
+            self.held = self.held.saturating_sub(1);
+            return false;
+        }
+        // Learned only where the microphone rises and falls as the computer's sound
+        // does: there it hears the loudspeakers and little else. The user's own words
+        // do not follow the others', so they never pass for the loudspeakers.
+        if self.follows() {
+            self.heard.push_back(loudest(&self.near) / played);
+            if self.heard.len() > ECHO_REMEMBERED {
+                self.heard.pop_front();
+            }
+            if self.heard.len() >= ECHO_LEARNED && self.heard.len() % 10 == 0 {
+                let mut sorted: Vec<f64> = self.heard.iter().copied().collect();
+                sorted.sort_by(f64::total_cmp);
+                self.reach = Some(sorted[sorted.len() / 2]);
+            }
+        }
+        let Some(reach) = self.reach else {
+            return false;
+        };
+        if now > played * reach * OWN_BY {
+            self.held = OWN_HOLD;
+            return false;
+        }
+        if self.held > 0 {
+            self.held -= 1;
+            return false;
+        }
+        true
+    }
+}
+
+/// The computer's sound must be this many times weaker than the microphone's for words
+/// to count as the user's own: with loudspeakers the microphone hears the others too,
+/// but never louder than itself by this much.
+const MINE_BY: f64 = 8.0;
+/// Below this mean square neither side said anything to tell by.
+const TOO_QUIET: f64 = 100.0 * 100.0;
+
+/// Whether a stretch of the recording is the user's own side of a call: said into the
+/// microphone while the computer played next to nothing. `mixed` is the recording and
+/// `theirs` the computer's part of it. None when the computer's sound is not recorded
+/// or the stretch is too quiet to tell.
+pub fn is_mine(mixed: &[i16], theirs: &[i16]) -> Option<bool> {
+    if theirs.len() != mixed.len() || mixed.is_empty() {
+        return None;
+    }
+    let mut own = 0f64;
+    let mut other = 0f64;
+    for (sum, theirs) in mixed.iter().zip(theirs) {
+        let mine = *sum as f64 - *theirs as f64;
+        own += mine * mine;
+        other += (*theirs as f64) * (*theirs as f64);
+    }
+    let count = mixed.len() as f64;
+    if own / count < TOO_QUIET && other / count < TOO_QUIET {
+        return None;
+    }
+    Some(own > other * MINE_BY)
 }
 
 struct Recording {
@@ -246,6 +522,7 @@ pub fn window_segments(
                 speaker: None,
                 start_ms: offset_ms,
                 text,
+                ..Segment::default()
             }]
         };
     };
@@ -255,7 +532,9 @@ pub fn window_segments(
         .map(|(index, turn)| Segment {
             speaker: Some(turn.speaker),
             start_ms: offset_ms + turn.start_ms,
+            end_ms: offset_ms + turn.end_ms,
             text: text_of(Some(index)),
+            ..Segment::default()
         })
         .filter(|segment| !segment.text.is_empty())
         .collect()
@@ -271,15 +550,30 @@ struct Told {
     languages: Vec<String>,
 }
 
+/// A stretch of the recording to be recognized.
+struct Window<'a> {
+    sound: &'a [i16],
+    /// The computer's part of the sound, sample for sample; empty when it is not recorded.
+    theirs: &'a [i16],
+    /// Where the stretch begins in the recording.
+    offset_ms: u64,
+    /// True for the first stretch of a recording.
+    first: bool,
+}
+
 fn recognize_window(
     supervisor: &crate::local_stt::WorkerSupervisor,
     model: &std::path::Path,
     speakers: Option<&SpeakerModels>,
     told: &Told,
-    window: &[i16],
-    offset_ms: u64,
-    first: bool,
+    heard: Window,
 ) -> Result<Vec<Segment>, String> {
+    let Window {
+        sound: window,
+        theirs,
+        offset_ms,
+        first,
+    } = heard;
     let pcm: Vec<f32> = window
         .iter()
         .map(|sample| *sample as f32 / 32_768.0)
@@ -315,7 +609,20 @@ fn recognize_window(
             said.push((turn, text.to_string()));
         }
     }
-    Ok(window_segments(offset_ms, turns.as_deref(), &said))
+    let mut segments = window_segments(offset_ms, turns.as_deref(), &said);
+    let whole_ms = (window.len() * 1000 / RATE) as u64;
+    for segment in &mut segments {
+        if segment.end_ms == 0 {
+            segment.end_ms = offset_ms + whole_ms;
+        }
+        let sample =
+            |ms: u64| ((ms.saturating_sub(offset_ms)) as usize * RATE / 1000).min(window.len());
+        let (from, to) = (sample(segment.start_ms), sample(segment.end_ms));
+        if theirs.len() == window.len() && from < to {
+            segment.mine = is_mine(&window[from..to], &theirs[from..to]);
+        }
+    }
+    Ok(segments)
 }
 
 /// Recognizes window after window until the recording has ended and nothing waits.
@@ -396,15 +703,22 @@ fn work(
                 .unwrap_or_else(|error| error.into_inner())
                 .clone(),
         };
-        let (window, offset_ms) = {
+        let (window, theirs, offset_ms) = {
             let mut waiting = locked(&waiting);
             let closing = waiting.finishing || std::mem::take(&mut waiting.settle);
             match cut_point(&waiting.pending, closing) {
                 Some(cut) => {
+                    // The computer's part is cut along with the whole, or is not there.
+                    let theirs: Vec<i16> = if waiting.theirs.len() == waiting.pending.len() {
+                        waiting.theirs.drain(..cut).collect()
+                    } else {
+                        waiting.theirs.clear();
+                        Vec::new()
+                    };
                     let window: Vec<i16> = waiting.pending.drain(..cut).collect();
                     let offset_ms = (waiting.taken * 1000 / RATE) as u64;
                     waiting.taken += cut;
-                    (window, offset_ms)
+                    (window, theirs, offset_ms)
                 }
                 None if waiting.finishing => return,
                 None => {
@@ -452,9 +766,12 @@ fn work(
                     &model,
                     speakers.as_ref(),
                     &told,
-                    &window,
-                    offset_ms,
-                    first,
+                    Window {
+                        sound: &window,
+                        theirs: &theirs,
+                        offset_ms,
+                        first,
+                    },
                 )
             });
         match recognized {
@@ -463,6 +780,9 @@ fn work(
                 segments.into_iter().for_each(|segment| {
                     said.push_str(&segment.text);
                     said.push(' ');
+                    if let Some(dir) = DATA_DIR.get() {
+                        write_down(dir, &segment);
+                    }
                     report(Ok(Heard::Said(segment)))
                 })
             }
@@ -482,6 +802,7 @@ fn work(
                 let mut waiting = locked(&waiting);
                 waiting.dropped = true;
                 waiting.pending = Vec::new();
+                waiting.theirs = Vec::new();
                 crate::applog::note("meeting", &format!("recognition gave up at {offset_ms} ms"));
                 report(Err(error));
                 return;
@@ -580,6 +901,7 @@ pub async fn start(
     };
     let config = AudioConfig {
         input_device,
+        follow_devices: true,
         ..AudioConfig::default()
     };
     let (mut capture, mut audio) =
@@ -617,13 +939,37 @@ pub async fn start(
         file.write_all(&wav_header(0)).ok()?;
         Some(file)
     });
+    // From here until the recording ends in order, it can be found again if it is cut short.
+    if let Some(dir) = DATA_DIR.get() {
+        let _ = std::fs::write(dir.join(JOURNAL), "");
+    }
+    // With headphones the microphone hears nothing of the computer's sound. They may be
+    // put on or taken off while the meeting runs, so this is looked at again and again.
+    let worn = Arc::new(std::sync::atomic::AtomicBool::new(
+        system_sound && crate::audio::output::headphones(),
+    ));
+    if system_sound {
+        let worn = Arc::downgrade(&worn);
+        std::thread::spawn(move || {
+            while let Some(worn) = worn.upgrade() {
+                worn.store(
+                    crate::audio::output::headphones(),
+                    std::sync::atomic::Ordering::Relaxed,
+                );
+                drop(worn);
+                std::thread::sleep(std::time::Duration::from_secs(2));
+            }
+        });
+    }
+    let mut echo = Echo::default();
     let collector = tokio::spawn(async move {
         while let Some(bytes) = audio.recv().await {
-            let bytes = if system_sound {
+            let (bytes, theirs) = if system_sound {
                 let mut heard = heard.lock().unwrap_or_else(|error| error.into_inner());
-                with_system_sound(&bytes, &mut heard)
+                let loudspeakers = !worn.load(std::sync::atomic::Ordering::Relaxed);
+                mixed_with(&bytes, &mut heard, loudspeakers.then_some(&mut echo))
             } else {
-                bytes
+                (bytes, Vec::new())
             };
             // The lock is held while the file is written, so that a pause leaves the same
             // audio out of the file and out of the text, and the times in the text stay
@@ -639,7 +985,9 @@ pub async fn start(
                 }
             }
             if !waiting.dropped {
+                let room = LONGEST_SAMPLES.saturating_sub(waiting.pending.len());
                 collect(&mut waiting.pending, &bytes, LONGEST_SAMPLES);
+                waiting.theirs.extend(theirs.into_iter().take(room));
             }
         }
     });
@@ -716,12 +1064,18 @@ pub async fn stop(discard: bool) -> Result<(), String> {
         if discard {
             waiting.dropped = true;
             waiting.pending = Vec::new();
+            waiting.theirs = Vec::new();
         }
     }
-    tokio::task::spawn_blocking(move || recording.worker.join())
+    let ended = tokio::task::spawn_blocking(move || recording.worker.join())
         .await
-        .map_err(|error| error.to_string())?
-        .map_err(|_| "local_engine_unavailable".to_string())
+        .map_err(|error| error.to_string())
+        .and_then(|joined| joined.map_err(|_| "local_engine_unavailable".to_string()));
+    // Everything said has been handed over by now, so nothing is left to find again.
+    if let Some(dir) = DATA_DIR.get() {
+        let _ = std::fs::remove_file(dir.join(JOURNAL));
+    }
+    ended
 }
 
 #[cfg(test)]
@@ -779,6 +1133,250 @@ mod tests {
     }
 
     #[test]
+    fn a_recording_that_was_cut_short_is_found_again_with_what_was_said() {
+        let dir = std::env::temp_dir().join(format!("ot-recover-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(recover_in(&dir).is_none(), "nothing was being recorded");
+
+        // Five seconds of sound whose header was never given its length, and two
+        // paragraphs written down before the app went away.
+        let mut raw = wav_header(0).to_vec();
+        raw.extend(std::iter::repeat_n([0u8, 16], 5 * RATE).flatten());
+        std::fs::write(dir.join(RECORDING), raw).unwrap();
+        let said = |start_ms, text: &str| Segment {
+            speaker: Some(1),
+            start_ms,
+            text: text.to_string(),
+            ..Segment::default()
+        };
+        write_down(&dir, &said(0, "one"));
+        write_down(&dir, &said(3_000, "two"));
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(dir.join(JOURNAL))
+            .unwrap()
+            .write_all(b"{\"speaker\":1,\"start_")
+            .unwrap();
+
+        let found = recover_in(&dir).unwrap();
+        assert_eq!(found.seconds, 5);
+        assert_eq!(found.segments, vec![said(0, "one"), said(3_000, "two")]);
+        let header = std::fs::read(dir.join(RECORDING)).unwrap();
+        let length = u32::from_le_bytes(header[40..44].try_into().unwrap());
+        assert_eq!(length as usize, 5 * RATE * 2);
+        assert!(
+            recover_in(&dir).is_none(),
+            "a meeting is found again only once"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_recording_too_short_to_matter_is_not_brought_back() {
+        let dir = std::env::temp_dir().join(format!("ot-recover-short-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut raw = wav_header(0).to_vec();
+        raw.extend(std::iter::repeat_n([0u8, 16], RATE).flatten());
+        std::fs::write(dir.join(RECORDING), raw).unwrap();
+        std::fs::write(dir.join(JOURNAL), "").unwrap();
+        assert!(recover_in(&dir).is_none());
+        assert!(!dir.join(JOURNAL).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn words_said_into_the_microphone_while_the_computer_is_quiet_are_the_users_own() {
+        let loud: Vec<i16> = (0..RATE)
+            .map(|at| if at % 2 == 0 { 6_000 } else { -6_000 })
+            .collect();
+        let quiet = vec![0i16; RATE];
+        // The user speaks, and the computer plays nothing.
+        assert_eq!(is_mine(&loud, &quiet), Some(true));
+        // The others speak through headphones: the recording is the computer's sound.
+        assert_eq!(is_mine(&loud, &loud), Some(false));
+        // The others speak through loudspeakers, and the microphone hears them as well.
+        let both: Vec<i16> = loud.iter().map(|sample| sample + sample / 2).collect();
+        assert_eq!(is_mine(&both, &loud), Some(false));
+        // Nobody speaks, or the computer's sound is not recorded.
+        assert_eq!(is_mine(&quiet, &quiet), None);
+        assert_eq!(is_mine(&loud, &[]), None);
+    }
+
+    /// A voice-like sound that is the same every time: noise whose loudness changes
+    /// from piece to piece, with pauses, each voice in its own way.
+    fn voice(pieces: usize, loud: f64, seed: u32) -> Vec<i16> {
+        let mut state = seed;
+        let mut next = move || {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            f64::from(state >> 16) / 65_536.0
+        };
+        let mut samples = Vec::with_capacity(pieces * 320);
+        for _ in 0..pieces {
+            let level = next();
+            let level = if level < 0.25 { 0.0 } else { 0.2 + level };
+            for _ in 0..320 {
+                samples.push(((next() * 2.0 - 1.0) * loud * level) as i16);
+            }
+        }
+        samples
+    }
+
+    /// What the microphone hears of `theirs` out of the loudspeakers: later and weaker.
+    fn from_the_loudspeakers(theirs: &[i16]) -> Vec<i16> {
+        let late = 1_600;
+        (0..theirs.len())
+            .map(|index| {
+                if index < late {
+                    0
+                } else {
+                    (f64::from(theirs[index - late]) * 0.3) as i16
+                }
+            })
+            .collect()
+    }
+
+    /// How many of the pieces from `from` on were taken for the loudspeakers alone.
+    fn taken_out(
+        echo: &mut Echo,
+        microphone: &[i16],
+        theirs: &[i16],
+        from: usize,
+    ) -> (usize, usize) {
+        let mut out = 0;
+        let mut all = 0;
+        for (index, (own, other)) in microphone.chunks(320).zip(theirs.chunks(320)).enumerate() {
+            let only = echo.only_echo(own, other);
+            if index >= from {
+                all += 1;
+                out += usize::from(only);
+            }
+        }
+        (out, all)
+    }
+
+    #[test]
+    fn what_the_microphone_hears_only_from_the_loudspeakers_is_taken_out() {
+        let theirs = voice(500, 8_000.0, 1);
+        let microphone = from_the_loudspeakers(&theirs);
+        let (out, all) = taken_out(&mut Echo::default(), &microphone, &theirs, 150);
+        assert!(out * 10 >= all * 9, "{out} of {all}");
+    }
+
+    #[test]
+    fn nothing_is_taken_out_before_the_loudspeakers_are_known() {
+        let theirs = voice(40, 8_000.0, 1);
+        let microphone = from_the_loudspeakers(&theirs);
+        assert_eq!(
+            taken_out(&mut Echo::default(), &microphone, &theirs, 0).0,
+            0
+        );
+    }
+
+    #[test]
+    fn the_user_talking_over_the_others_is_kept() {
+        let theirs = voice(500, 8_000.0, 1);
+        let mut microphone = from_the_loudspeakers(&theirs);
+        // From the fourth second on the user talks too.
+        for (sample, own) in microphone
+            .iter_mut()
+            .zip(voice(500, 6_000.0, 7))
+            .skip(200 * 320)
+        {
+            *sample = sample.saturating_add(own);
+        }
+        let (out, all) = taken_out(&mut Echo::default(), &microphone, &theirs, 215);
+        assert_eq!(out, 0, "{out} of {all}");
+    }
+
+    #[test]
+    fn the_user_talking_while_the_computer_is_quiet_is_kept() {
+        let microphone = voice(300, 6_000.0, 7);
+        let theirs = vec![0; microphone.len()];
+        assert_eq!(
+            taken_out(&mut Echo::default(), &microphone, &theirs, 0).0,
+            0
+        );
+    }
+
+    #[test]
+    fn with_headphones_nobody_told_of_the_user_is_still_kept() {
+        let theirs = voice(500, 8_000.0, 1);
+        // The microphone hears nothing of the others, then the user over them.
+        let mut microphone = vec![0_i16; theirs.len()];
+        for (sample, own) in microphone
+            .iter_mut()
+            .zip(voice(500, 3_000.0, 7))
+            .skip(200 * 320)
+        {
+            *sample = own;
+        }
+        let (out, all) = taken_out(&mut Echo::default(), &microphone, &theirs, 215);
+        assert_eq!(out, 0, "{out} of {all}");
+    }
+
+    #[test]
+    fn a_stretch_that_is_only_the_loudspeakers_is_recorded_with_the_microphone_turned_down() {
+        let theirs = voice(400, 8_000.0, 1);
+        let microphone = from_the_loudspeakers(&theirs);
+        let mut echo = Echo::default();
+        let mut system: std::collections::VecDeque<i16> = theirs.iter().copied().collect();
+        let (mut heard, mut kept) = (0.0, 0.0);
+        for piece in microphone.chunks(320) {
+            let bytes: Vec<u8> = piece
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
+            let (mixed, part) = mixed_with(&bytes, &mut system, Some(&mut echo));
+            let own: Vec<i16> = mixed
+                .chunks_exact(2)
+                .zip(&part)
+                .map(|(pair, part)| i16::from_le_bytes([pair[0], pair[1]]) - part)
+                .collect();
+            if system.len() < 200 * 320 {
+                heard += mean_square(piece);
+                kept += mean_square(&own);
+            }
+        }
+        assert!(kept < heard * 0.1, "{kept} of {heard}");
+    }
+
+    #[test]
+    fn the_microphone_is_turned_down_without_a_jump() {
+        let mut echo = Echo {
+            reach: Some(1.0),
+            ..Echo::default()
+        };
+        let theirs = vec![8_000_i16; 320];
+        let mut microphone = vec![1_000_i16; 320];
+        echo.quieten(&mut microphone, &theirs);
+        assert!(microphone[0] > 990, "{}", microphone[0]);
+        assert_eq!(microphone[319], 250);
+        let mut next = vec![1_000_i16; 320];
+        echo.quieten(&mut next, &theirs);
+        assert!(next.iter().all(|sample| *sample == 250));
+    }
+
+    #[test]
+    fn mixing_keeps_the_computers_part_beside_the_sum() {
+        let mut system = std::collections::VecDeque::from(vec![100i16, 200]);
+        let microphone = [10i16, 20, 30]
+            .iter()
+            .flat_map(|s| s.to_le_bytes())
+            .collect::<Vec<_>>();
+        let (mixed, theirs) = mixed_with(&microphone, &mut system, None);
+        assert_eq!(theirs, vec![100, 200, 0]);
+        assert_eq!(
+            mixed,
+            [110i16, 220, 30]
+                .iter()
+                .flat_map(|s| s.to_le_bytes())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn the_kept_recording_is_a_file_other_programs_can_open() {
         let path = std::env::temp_dir().join(format!("ot-meeting-{}.wav", std::process::id()));
         let mut raw = wav_header(0).to_vec();
@@ -796,6 +1394,57 @@ mod tests {
     }
 
     /// Needs the built worker, a speech model, the two speaker models and a recording:
+    /// `OT_FAR OT_OWN`: two real recordings, one played by the loudspeakers and one said
+    /// by the user from the second minute on. Prints how much was taken out of each part.
+    #[test]
+    #[ignore]
+    fn takes_a_real_voice_out_of_the_loudspeakers() {
+        let read = |name: &str| -> Vec<i16> {
+            crate::file_transcribe::decode(&PathBuf::from(std::env::var(name).unwrap()))
+                .unwrap()
+                .iter()
+                .take(180 * RATE)
+                .map(|sample| (sample * 32_767.0) as i16)
+                .collect()
+        };
+        let theirs = read("OT_FAR");
+        let own = read("OT_OWN");
+        let mut microphone = from_the_loudspeakers(&theirs);
+        let from = 60 * RATE;
+        for (sample, own) in microphone.iter_mut().zip(&own).skip(from) {
+            *sample = sample.saturating_add(*own);
+        }
+        let mut echo = Echo::default();
+        let (mut alone, mut alone_out, mut over, mut over_out) = (0, 0, 0, 0);
+        let (mut said, mut said_down) = (0.0, 0.0);
+        for (index, (heard, other)) in microphone.chunks(320).zip(theirs.chunks(320)).enumerate() {
+            let only = echo.only_echo(heard, other);
+            let spoken = own
+                .get(index * 320..(index + 1) * 320)
+                .map(mean_square)
+                .unwrap_or(0.0);
+            if index * 320 < from {
+                // Counted only where the loudspeakers really reach the microphone.
+                if mean_square(heard) >= TOO_QUIET {
+                    alone += 1;
+                    alone_out += usize::from(only);
+                }
+            } else if spoken >= TOO_QUIET {
+                over += 1;
+                over_out += usize::from(only);
+                said += spoken;
+                if only {
+                    said_down += spoken;
+                }
+            }
+        }
+        println!("loudspeakers alone: {alone_out} of {alone} pieces turned down");
+        println!(
+            "user talking over them: {over_out} of {over} pieces turned down, {:.1}% of what the user's voice carried",
+            said_down / said * 100.0
+        );
+    }
+
     /// `OT_WORKER OT_MODEL OT_SEG OT_EMB OT_FILE`. Prints what a meeting would show.
     #[test]
     #[ignore]
@@ -864,7 +1513,7 @@ mod tests {
                 .collect()
         };
         let mut system = std::collections::VecDeque::from([100, i16::MAX]);
-        let mixed = with_system_sound(&bytes(&[1, 5, 7]), &mut system);
+        let mixed = mixed_with(&bytes(&[1, 5, 7]), &mut system, None).0;
         assert_eq!(mixed, bytes(&[101, i16::MAX, 7]));
         assert!(system.is_empty());
     }
@@ -962,7 +1611,8 @@ mod tests {
             vec![Segment {
                 speaker: None,
                 start_ms: 60_000,
-                text: "first second".into()
+                text: "first second".into(),
+                ..Segment::default()
             }]
         );
         assert!(window_segments(0, None, &[]).is_empty());
@@ -986,12 +1636,16 @@ mod tests {
                 Segment {
                     speaker: Some(1),
                     start_ms: 30_000,
-                    text: "你好".into()
+                    text: "你好".into(),
+                    end_ms: 34_000,
+                    ..Segment::default()
                 },
                 Segment {
                     speaker: Some(2),
                     start_ms: 34_000,
-                    text: "收到明白".into()
+                    text: "收到明白".into(),
+                    end_ms: 39_000,
+                    ..Segment::default()
                 },
             ]
         );

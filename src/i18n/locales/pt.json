@@ -810,7 +810,9 @@
       "template_empty": "O ficheiro do modelo está vazio",
       "template_unreadable": "Não foi possível abrir o modelo. Tem de ser um ficheiro de texto",
       "ask": "Não chegou nenhuma resposta",
-      "system_audio_unsupported": "Esta versão do sistema não consegue gravar o som do computador"
+      "system_audio_unsupported": "Esta versão do sistema não consegue gravar o som do computador",
+      "someFailed": "Alguns arquivos não puderam ser transcritos.",
+      "timesDownload": "Não foi possível baixar o modelo"
     },
     "live": "Texto ao vivo",
     "listening": "A ouvir. O texto chega a cada quinze segundos, aproximadamente",
@@ -868,6 +870,21 @@
     "removeLanguage": "Remover {{name}}",
     "pauseRecording": "Pausar a gravação",
     "resume": "Continuar a gravação",
-    "speakersAgain": "Distinguindo os oradores novamente"
+    "speakersAgain": "Distinguindo os oradores novamente",
+    "editMinutes": "Editar a ata",
+    "search": "Procurar reuniões",
+    "askAll": "Perguntar a todas as reuniões",
+    "me": "Eu",
+    "waiting": "Arquivos em espera",
+    "wordTimes": "Tempo exato de cada palavra (modelo de 240 MB)",
+    "downloadingModel": "Baixando o modelo {{percent}}%",
+    "oneOnOneTemplateName": "Um a um",
+    "oneOnOneTemplate": "# Um a um\n\n## Do que se falou\n\n## Feedback dado\nQuem disse a quem\n\n## O que cada um fará\nCom responsável e prazo\n\n## Para retomar na próxima vez",
+    "interviewTemplateName": "Entrevista",
+    "interviewTemplate": "# Entrevista\n\n## Quem foi entrevistado e sobre o quê\n\n## Perguntas e respostas\nCada pergunta com o essencial da resposta e a hora\n\n## Pontos fortes\n\n## Dúvidas\n\n## Próximos passos",
+    "talkTemplateName": "Palestra ou aula",
+    "talkTemplate": "# Notas\n\n## Tema\n\n## Pontos principais\nNa ordem em que foram ditos, cada um com a hora\n\n## Exemplos e números citados\n\n## Perguntas do público e respostas",
+    "standupTemplateName": "Reunião diária",
+    "standupTemplate": "# Reunião diária\n\nPara cada pessoa que falou:\n\n## Nome\n- Feito\n- A seguir\n- Bloqueado por\n\n## Para todos\nDecisões e tarefas, com responsável e prazo"
   }
 }

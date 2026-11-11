@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Copy,
   Download,
+  Files,
   Ellipsis,
   FolderOpen,
   Mic,
@@ -16,11 +17,14 @@ import {
   Trash2,
   Undo2,
   Users,
+  Search,
+  MessageCircleQuestion,
 } from 'lucide-react'
 import {
   copyText,
   forgetSpeaker,
   installSpeakerModels,
+  installWordTimes,
   listLocalModels,
   audioSource,
   meetingAudio,
@@ -29,7 +33,9 @@ import {
   meetingGet,
   meetingLanguages,
   meetingPolish,
+  meetingsAsk,
   meetingsList,
+  meetingsSearch,
   meetingRecordLevel,
   meetingRecordPause,
   meetingRecordStart,
@@ -38,11 +44,13 @@ import {
   onFileTranscribeProgress,
   onFileTranscribeWritten,
   onSpeakerModelsProgress,
+  onWordTimesProgress,
   pickMediaFile,
   rememberSpeaker,
   saveMeetingAudio,
   saveTextFile,
   speakerModelsStatus,
+  wordTimesStatus,
   speakerVoices,
   transcribeFile,
   type FileTranscribeProgress,
@@ -59,6 +67,8 @@ import { LogoSelect } from '../Settings/shared/LogoSelect'
 import {
   clock,
   meetingText,
+  subtitles,
+  timesOf,
   renameSpeakers,
   speakerColor,
   speakersIn,
@@ -73,7 +83,9 @@ import {
   listenToMeeting,
   nameFromMinutes,
   nameMeeting,
+  recoverMeeting,
   tellSpeakersAgain,
+  timeWords,
   persistMeeting,
   useMeetingStore,
   whenTranslated,
@@ -97,6 +109,7 @@ const TRANSLATE_KEY = 'meeting.translate'
 const TRANSLATE_TO_KEY = 'meeting.translateTo'
 const LANGUAGES_KEY = 'meeting.languages'
 const POLISH_KEY = 'meeting.polishAfter'
+const WORD_TIMES_KEY = 'meeting.wordTimes'
 
 function rememberedChoice(key: string, fallback: string): string {
   try {
@@ -161,8 +174,60 @@ export function MeetingCard() {
     translating,
     translatingAt,
     sorting,
+    times,
   } = useMeetingStore()
   const [past, setPast] = useState<MeetingSummary[]>([])
+  const [query, setQuery] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [answer, setAnswer] = useState<string | null>(null)
+  const askAll = () => {
+    const question = query.trim()
+    if (!question || asking) return
+    setAsking(true)
+    setAnswer(null)
+    set({ error: null })
+    Promise.resolve(meetingsAsk(question))
+      .then((said) => setAnswer(said ?? ''))
+      .catch((reason) =>
+        set({
+          error: String(reason).includes('llm_not_configured')
+            ? 'meeting.error.llm_not_configured'
+            : 'meeting.error.ask',
+        }),
+      )
+      .finally(() => setAsking(false))
+  }
+  /** The meetings that hold what is looked for; null while nothing is looked for. */
+  const [found, setFound] = useState<MeetingSummary[] | null>(null)
+  useEffect(() => {
+    const words = query.trim()
+    if (!words) {
+      setFound(null)
+      return
+    }
+    let wanted = true
+    const waited = setTimeout(() => {
+      void Promise.resolve(meetingsSearch(words))
+        .then((all) => {
+          if (!wanted) return
+          setFound(
+            (all ?? []).map((each) => ({
+              id: each.id,
+              started_at: each.started_at,
+              title: each.title,
+              duration_s: each.duration_s,
+              preview: each.found,
+              has_minutes: false,
+            })),
+          )
+        })
+        .catch(() => {})
+    }, 200)
+    return () => {
+      wanted = false
+      clearTimeout(waited)
+    }
+  }, [query])
   const [showOptions, setShowOptions] = useState(false)
   const [showMore, setShowMore] = useState(false)
   const player = useRef<AudioHandle>(null)
@@ -173,11 +238,22 @@ export function MeetingCard() {
       .catch(() => {})
   const persist = () => void persistMeeting(label).then(refreshPast)
   /** Keeps a meeting that has just been written out, then names it after what was said. */
+  /** Resolves once the meeting kept last has its name as well. */
+  const named = useRef<Promise<void>>(Promise.resolve())
   const keep = () => {
     const kept = persistMeeting(label)
-    void kept.then(() => nameMeeting(label)).then(refreshPast)
+    named.current = kept.then(() => nameMeeting(label)).then(refreshPast)
     return kept
   }
+  /** The files to be turned into text after the one in hand. */
+  const [waiting, setWaiting] = useState<string[]>([])
+  const waitingRef = useRef<string[]>([])
+  const queue = (paths: string[]) => {
+    waitingRef.current = paths
+    setWaiting(paths)
+  }
+  /** Set while several files are worked through, and once one of them has failed. */
+  const several = useRef({ running: false, failed: false })
   const set = useMeetingStore.setState
   const setText = (text: string | null) => set({ text })
   const setError = (error: string | null) => set({ error })
@@ -202,6 +278,15 @@ export function MeetingCard() {
   const [paused, setPaused] = useState(false)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [download, setDownload] = useState<number | null>(null)
+  /** The model that tells when each word was said: whether it is here, and wanted. */
+  const [timesInstalled, setTimesInstalled] = useState(false)
+  const [wordTimes, setWordTimes] = useState(false)
+  const [timesDownload, setTimesDownload] = useState<number | null>(null)
+  const exactTimes = useRef(false)
+  exactTimes.current = wordTimes && timesInstalled
+  /** After a recording: who spoke, told again from the whole, then the time of each word. */
+  const hearAgain = () =>
+    tellSpeakersAgain(label).then(() => (exactTimes.current ? timeWords(label) : undefined))
   const [voices, setVoices] = useState<string[]>([])
   const [tab, setTab] = useState('text')
   const [models, setModels] = useState<string[]>([])
@@ -237,17 +322,31 @@ export function MeetingCard() {
       title: '',
       duration: 0,
       kept: null,
+      times: [],
     })
     work
       .then((result) => {
         setText(result ?? '')
         keep()
+        // The next file begins a meeting of its own, so this one is named first.
+        return waitingRef.current.length > 0 ? named.current : undefined
       })
       .catch((reason) => {
         const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
         setError(`meeting.error.${code ?? 'failed'}`)
+        several.current.failed = several.current.running
       })
-      .finally(() => enter('idle'))
+      .finally(() => {
+        enter('idle')
+        const [next, ...rest] = waitingRef.current
+        if (next) {
+          queue(rest)
+          transcribeRef.current(next)
+        } else {
+          if (several.current.failed) setError('meeting.error.someFailed')
+          several.current = { running: false, failed: false }
+        }
+      })
   }
 
   const transcribe = (path: string) => {
@@ -256,16 +355,29 @@ export function MeetingCard() {
   }
   const transcribeRef = useRef(transcribe)
   transcribeRef.current = transcribe
+  /** Turns files into text one after another; files given while that goes on wait their turn. */
+  const transcribeAll = (paths: string[]) => {
+    if (paths.length === 0) return
+    if (now() === 'working') {
+      several.current.running = true
+      queue([...waitingRef.current, ...paths])
+    } else if (now() === 'idle') {
+      several.current = { running: paths.length > 1, failed: false }
+      queue(paths.slice(1))
+      transcribe(paths[0])
+    }
+  }
+  const transcribeAllRef = useRef(transcribeAll)
+  transcribeAllRef.current = transcribeAll
 
   useEffect(() => {
-    const dropped = Promise.resolve(
-      onFileDropped((paths) => {
-        if (paths.length > 0) transcribeRef.current(paths[0])
-      }),
-    )
+    const dropped = Promise.resolve(onFileDropped((paths) => transcribeAllRef.current(paths)))
     const reported = Promise.resolve(onFileTranscribeProgress(setProgress))
     const written = Promise.resolve(onFileTranscribeWritten(setSoFar))
     listenToMeeting()
+    void recoverMeeting(label).then((found) => {
+      if (found) void keep().then(hearAgain)
+    })
     const downloading = Promise.resolve(
       onSpeakerModelsProgress(({ downloaded, total }) =>
         setDownload(total > 0 ? Math.round((downloaded / total) * 100) : 0),
@@ -279,6 +391,18 @@ export function MeetingCard() {
         setSpeakers(status.installed && remembered(SPEAKERS_KEY, true))
       })
       .catch(() => {})
+    const timing = Promise.resolve(
+      onWordTimesProgress(({ downloaded, total }) =>
+        setTimesDownload(total > 0 ? Math.round((downloaded / total) * 100) : 0),
+      ),
+    )
+    void Promise.resolve(wordTimesStatus())
+      .then((status) => {
+        if (!status) return
+        setTimesInstalled(status.installed)
+        setWordTimes(status.installed && remembered(WORD_TIMES_KEY, true))
+      })
+      .catch(() => {})
     refreshPast()
     void Promise.resolve(speakerVoices())
       .then((all) => setVoices(all ?? []))
@@ -289,6 +413,7 @@ export function MeetingCard() {
       )
       .catch(() => {})
     return () => {
+      void timing.then((stop) => stop?.())
       void dropped.then((stop) => stop?.())
       void reported.then((stop) => stop?.())
       void written.then((stop) => stop?.())
@@ -312,6 +437,25 @@ export function MeetingCard() {
     const live = liveRef.current
     if (live && editing === null) live.scrollTop = live.scrollHeight
   }, [paragraphs, interim, editing])
+
+  const toggleWordTimes = (on: boolean) => {
+    if (!on || timesInstalled) {
+      setWordTimes(on)
+      remember(on, WORD_TIMES_KEY)
+      return
+    }
+    if (timesDownload !== null) return
+    setTimesDownload(0)
+    setError(null)
+    Promise.resolve(installWordTimes())
+      .then(() => {
+        setTimesInstalled(true)
+        setWordTimes(true)
+        remember(true, WORD_TIMES_KEY)
+      })
+      .catch(() => setError('meeting.error.timesDownload'))
+      .finally(() => setTimesDownload(null))
+  }
 
   const toggleSpeakers = (on: boolean) => {
     if (!on || speakersInstalled) {
@@ -359,6 +503,9 @@ export function MeetingCard() {
       interim: '',
       editing: null,
       translateTo: translate ? target : null,
+      sides: {},
+      me: null,
+      times: [],
     })
     setUnpolished(null)
     setPaused(false)
@@ -390,10 +537,11 @@ export function MeetingCard() {
       .then(() => {
         if (discard) return
         // From here on the meeting is its text, which the user can go on correcting.
-        const said = meetingText(useMeetingStore.getState().paragraphs, label)
-        set({ recorded: true, text: said, editing: null })
+        const heard = useMeetingStore.getState().paragraphs
+        const said = meetingText(heard, label)
+        set({ recorded: true, text: said, editing: null, times: timesOf(heard) })
         // Heard whole, the meeting tells its speakers apart better than window by window.
-        void keep().then(() => tellSpeakersAgain(label))
+        void keep().then(hearAgain)
         if (polishAfter) polish(said)
       })
       .catch(() => setError('meeting.error.failed'))
@@ -411,7 +559,7 @@ export function MeetingCard() {
 
   const choose = () =>
     void Promise.resolve(pickMediaFile())
-      .then((path) => path && transcribe(path))
+      .then((paths) => transcribeAll(paths ?? []))
       .catch(() => {})
 
   const percent =
@@ -438,6 +586,7 @@ export function MeetingCard() {
           voicesAtHand: false,
           title: meeting.title ?? '',
           duration: meeting.duration_s ?? 0,
+          times: meeting.times ?? [],
         })
         void Promise.resolve(meetingAudio(meeting.id))
           .then((kept) => useMeetingStore.getState().id === meeting.id && setKept(kept ?? null))
@@ -456,6 +605,14 @@ export function MeetingCard() {
   const written = text ?? (recorded ? meetingText(paragraphs, label) : null)
   const speakerNumbers = written ? speakersIn(written, label) : []
   const result = written === null ? null : renameSpeakers(written, label, names)
+  // A text that carries times can also be saved as subtitles.
+  const timedText = written !== null && subtitles(written, label, names, times, 'srt') !== ''
+  const asSubtitles = timedText
+    ? {
+        srt: () => subtitles(written, label, names, times, 'srt'),
+        vtt: () => subtitles(written, label, names, times, 'vtt'),
+      }
+    : undefined
   const notesBox = (
     <textarea
       ref={notesRef}
@@ -534,6 +691,7 @@ export function MeetingCard() {
       title: '',
       duration: 0,
       kept: null,
+      times: [],
     })
   }
   const removeThis = () => {
@@ -705,7 +863,7 @@ export function MeetingCard() {
             </button>
             <button
               type="button"
-              onClick={() => void saveTextFile(result ?? '', t('meeting.fileName'))}
+              onClick={() => void saveTextFile(result ?? '', t('meeting.fileName'), asSubtitles)}
               aria-label={t('meeting.save')}
               title={t('meeting.save')}
               className="btn-quiet px-2.5"
@@ -806,7 +964,17 @@ export function MeetingCard() {
               }}
               label={t('meeting.polishAfter')}
             />
+            <Toggle
+              checked={wordTimes && timesInstalled}
+              onChange={toggleWordTimes}
+              label={t('meeting.wordTimes')}
+            />
             <MeetingLanguages chosen={languages} onChange={changeLanguages} />
+            {timesDownload !== null && (
+              <span className="text-[12px] text-text-secondary">
+                {t('meeting.downloadingModel', { percent: timesDownload })}
+              </span>
+            )}
             {download !== null && (
               <span className="text-[12px] text-text-secondary">
                 {t('meeting.downloadingSpeakers', { percent: download })}
@@ -939,6 +1107,14 @@ export function MeetingCard() {
                 : percent !== null && progress
                   ? t('meeting.working', { done: progress.done, total: progress.total })
                   : t('meeting.reading')}
+              {waiting.length > 0 && (
+                <span className="ml-3 inline-flex items-center gap-1 text-text-tertiary">
+                  <Files size={13} />
+                  <span aria-label={t('meeting.waiting')} title={t('meeting.waiting')}>
+                    {waiting.length}
+                  </span>
+                </span>
+              )}
             </p>
             {percent !== null && (
               <div
@@ -970,13 +1146,48 @@ export function MeetingCard() {
 
       {error && <p className="m-0 text-[12px] text-error">{t(error)}</p>}
 
+      {list && past.length > 0 && (
+        <label className="flex items-center gap-2 border-b border-border pb-2 text-text-tertiary">
+          <Search size={14} className="flex-shrink-0" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setAnswer(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) askAll()
+            }}
+            aria-label={t('meeting.search')}
+            placeholder={t('meeting.search')}
+            className="h-7 min-w-0 flex-1 border-none bg-transparent text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
+          />
+          <button
+            type="button"
+            onClick={askAll}
+            disabled={!query.trim() || asking}
+            aria-label={t('meeting.askAll')}
+            aria-busy={asking}
+            title={t('meeting.askAll')}
+            className="btn-quiet px-2 disabled:opacity-40"
+          >
+            <MessageCircleQuestion size={15} className={asking ? 'animate-pulse' : undefined} />
+          </button>
+        </label>
+      )}
+      {list && answer !== null && (
+        <p role="status" className="m-0 whitespace-pre-wrap text-[13px] leading-relaxed">
+          {answer}
+        </p>
+      )}
       {list &&
         (past.length > 0 ? (
           <ul
             className="m-0 list-none divide-y divide-border border-y border-border p-0"
             aria-label={t('meeting.pastList')}
           >
-            {past.map((summary) => (
+            {(found ?? past).map((summary) => (
               <li key={summary.id} className="group flex items-center gap-3 py-3">
                 <button
                   type="button"
@@ -986,6 +1197,11 @@ export function MeetingCard() {
                   <span className="truncate text-[13px] font-medium text-text-primary">
                     {summary.title?.trim() || summary.preview}
                   </span>
+                  {found && summary.title?.trim() && (
+                    <span className="truncate text-[12px] text-text-secondary">
+                      {summary.preview}
+                    </span>
+                  )}
                   <span className="text-[12px] tabular-nums text-text-tertiary">
                     {when(summary.started_at)}
                     {(summary.duration_s ?? 0) > 0 && (
@@ -1093,6 +1309,7 @@ export function MeetingCard() {
               label={t('meeting.result')}
               onSeek={kept ? (seconds, play) => player.current?.seek(seconds, play) : undefined}
               position={kept ? position : undefined}
+              times={times}
               onEdit={correct}
             />
           </div>
@@ -1108,6 +1325,11 @@ export function MeetingCard() {
                   set({ minutes: written })
                   persist()
                   void nameFromMinutes(label, written).then(refreshPast)
+                }}
+                onSeek={kept ? (seconds) => player.current?.seek(seconds, true) : undefined}
+                onEdit={(changed) => {
+                  set({ minutes: changed })
+                  persist()
                 }}
               />
             )}

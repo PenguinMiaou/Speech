@@ -451,6 +451,61 @@ impl WorkerSupervisor {
         answer
     }
 
+    /// Tells what a small recognizer that times its tokens hears in `pcm`, piece by piece
+    /// with the millisecond each begins at. The audio goes to the worker in a file in
+    /// `scratch_dir`.
+    pub fn word_times(
+        &self,
+        model: &Path,
+        tokens: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+    ) -> Result<Vec<(String, u32)>, LocalSttError> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let pcm_path = scratch_dir.join(format!(
+            "times-{}-{}.pcm",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let raw: Vec<u8> = pcm.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+        if let Err(error) = std::fs::write(&pcm_path, raw) {
+            let _ = std::fs::remove_file(&pcm_path);
+            return Err(LocalSttError::Io(error.to_string()));
+        }
+        let text = |path: &Path| path.to_string_lossy().into_owned();
+        let payload = encode(&Request::WordTimes {
+            model: text(model),
+            tokens: text(tokens),
+            pcm_path: text(&pcm_path),
+        });
+        let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
+        let answer = payload.and_then(|payload| {
+            let mut state = self.lock();
+            if state.is_none() {
+                *state = Some(spawn_worker(&self.command)?);
+            }
+            let running = state.as_mut().expect("worker was just started");
+            match exchange(running, payload, self.request_timeout + audio_time) {
+                Ok(Response::WordTimes { tokens }) => Ok(tokens),
+                Ok(Response::Error { code, message }) => {
+                    Err(LocalSttError::Engine { code, message })
+                }
+                Ok(other) => {
+                    *state = None;
+                    Err(LocalSttError::WorkerCrashed(format!(
+                        "unexpected reply {other:?}"
+                    )))
+                }
+                Err(error) => {
+                    *state = None;
+                    Err(error)
+                }
+            }
+        });
+        let _ = std::fs::remove_file(&pcm_path);
+        answer
+    }
+
     /// Sends the next piece of the recording.
     pub fn isolate_feed(&self, pcm: &[f32]) -> Result<(), LocalSttError> {
         let mut payload = encode(&Request::IsolateFeed {

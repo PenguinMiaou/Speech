@@ -49,6 +49,13 @@ pub enum Request {
         pcm_path: String,
         first: bool,
     },
+    /// Tells when each word in a stretch of sound is said, with a recognizer that tells
+    /// the time of every token. The audio is in a file of 32-bit little-endian floats.
+    WordTimes {
+        model: String,
+        tokens: String,
+        pcm_path: String,
+    },
     Shutdown,
 }
 
@@ -86,6 +93,10 @@ pub enum Response {
         /// What each speaker's voice sounds like, for telling known people by voice.
         #[serde(default)]
         voices: Vec<SpeakerVoice>,
+    },
+    /// What the timing recognizer heard, each piece with the millisecond it begins at.
+    WordTimes {
+        tokens: Vec<(String, u32)>,
     },
     /// The recording is being isolated; more audio may follow.
     Isolating,

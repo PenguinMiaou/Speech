@@ -1,5 +1,9 @@
 //! Capture the default output device as 16 kHz mono signed 16-bit PCM.
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 /// Owns the capture worker. Dropping the handle also stops capture.
@@ -27,11 +31,12 @@ impl Drop for SystemAudioHandle {
     }
 }
 
-/// Capture the output device selected at startup in 20 ms little-endian PCM chunks.
+/// Capture the output device in use, and whichever becomes it later, in 20 ms
+/// little-endian PCM chunks.
 /// Requires macOS 14.6 or later, or Windows 10 version 1703 or later.
 /// On macOS, cpal cannot capture loopback from a device that also exposes input channels.
 /// Returns after stream construction and the play request succeed.
-/// Later backend failures end capture and close the receiver.
+/// After a later backend failure the capture is opened anew.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn start() -> Result<(SystemAudioHandle, mpsc::Receiver<Vec<u8>>), String> {
     #[cfg(target_os = "macos")]
@@ -55,21 +60,54 @@ pub fn start() -> Result<(SystemAudioHandle, mpsc::Receiver<Vec<u8>>), String> {
     let thread = std::thread::Builder::new()
         .name("system-audio".to_string())
         .spawn(move || {
-            use cpal::traits::StreamTrait;
-
-            let stream = match open_stream(audio_tx, callback_stop) {
-                Ok(stream) => stream,
+            let lost = Arc::new(AtomicBool::new(false));
+            let open = || {
+                use cpal::traits::StreamTrait;
+                let stream = open_stream(audio_tx.clone(), callback_stop.clone(), lost.clone())?;
+                stream
+                    .play()
+                    .map_err(|error| format!("Failed to start system audio: {error}"))?;
+                Ok::<_, String>(stream)
+            };
+            let mut output = default_output();
+            let mut stream = match open() {
+                Ok(stream) => Some(stream),
                 Err(error) => {
                     let _ = ready_tx.send(Err(error));
                     return;
                 }
             };
-            if let Err(error) = stream.play() {
-                let _ = ready_tx.send(Err(format!("Failed to start system audio: {error}")));
+            if ready_tx.send(Ok(())).is_err() {
                 return;
             }
-            if ready_tx.send(Ok(())).is_ok() {
-                let _ = stop_rx.recv();
+            // The sound may move to another output while this runs, headphones put on
+            // or taken off, and the output in use may go away: it is followed.
+            while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = stop_rx.recv_timeout(LOOK) {
+                let now = default_output();
+                if !opens_anew(
+                    stream.is_some(),
+                    lost.load(Ordering::Relaxed),
+                    &output,
+                    &now,
+                ) {
+                    continue;
+                }
+                // The old tap has to be gone before a new one is made.
+                let had = stream.take().is_some();
+                lost.store(false, Ordering::Relaxed);
+                output = now;
+                stream = match open() {
+                    Ok(stream) => {
+                        tracing::info!("The computer's sound is recorded from another output");
+                        Some(stream)
+                    }
+                    Err(error) => {
+                        if had {
+                            tracing::warn!("The computer's sound cannot be recorded now: {error}");
+                        }
+                        None
+                    }
+                };
             }
             // Dropping the stream also destroys cpal's tap and aggregate device on macOS.
             drop(stream);
@@ -83,6 +121,24 @@ pub fn start() -> Result<(SystemAudioHandle, mpsc::Receiver<Vec<u8>>), String> {
         .recv()
         .map_err(|_| "System audio capture ended during startup".to_string())??;
     Ok((handle, audio_rx))
+}
+
+/// How often the output in use is looked at.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+const LOOK: std::time::Duration = std::time::Duration::from_secs(1);
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn default_output() -> Option<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let device = cpal::default_host().default_output_device()?;
+    device.id().ok().map(|id| id.to_string())
+}
+
+/// Whether the computer's sound has to be opened anew: nothing is open, what was open
+/// ended, or the sound now plays through another output.
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
+fn opens_anew(open: bool, lost: bool, opened: &Option<String>, now: &Option<String>) -> bool {
+    !open || lost || opened != now
 }
 
 /// System audio capture is unavailable on this platform.
@@ -103,6 +159,7 @@ fn macos_version_supported(version: &str) -> bool {
 fn open_stream(
     sender: mpsc::Sender<Vec<u8>>,
     stop: std::sync::mpsc::Sender<()>,
+    lost: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, String> {
     use cpal::traits::{DeviceTrait, HostTrait};
 
@@ -125,7 +182,7 @@ fn open_stream(
 
     macro_rules! build {
         ($sample:ty) => {
-            build_stream::<$sample>(&device, config.config(), sender, stop)
+            build_stream::<$sample>(&device, config.config(), sender, stop, lost)
         };
     }
     let stream = match config.sample_format() {
@@ -152,6 +209,7 @@ fn build_stream<T>(
     config: cpal::StreamConfig,
     sender: mpsc::Sender<Vec<u8>>,
     stop: std::sync::mpsc::Sender<()>,
+    lost: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, cpal::Error>
 where
     T: cpal::SizedSample,
@@ -162,7 +220,6 @@ where
     const CHUNK_BYTES: usize = 320 * 2;
     let mut converter = PcmConverter::new(config.sample_rate, config.channels);
     let mut pending = Vec::new();
-    let error_stop = stop.clone();
     // An input stream on an output device enables Core Audio or WASAPI loopback.
     device.build_input_stream(
         config,
@@ -180,9 +237,14 @@ where
             }
         },
         move |error| {
-            if error.kind() != cpal::ErrorKind::Xrun {
+            // The output moving elsewhere is seen by looking; anything else that is
+            // not a late cycle ends this stream, and it is opened anew.
+            if !matches!(
+                error.kind(),
+                cpal::ErrorKind::Xrun | cpal::ErrorKind::DeviceChanged
+            ) {
                 tracing::error!("System audio capture error: {error}");
-                let _ = error_stop.send(());
+                lost.store(true, Ordering::Relaxed);
             }
         },
         Some(std::time::Duration::from_secs(5)),
@@ -240,6 +302,17 @@ impl PcmConverter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_sound_is_opened_anew_when_it_ended_or_plays_elsewhere() {
+        let speakers = Some("speakers".to_string());
+        let buds = Some("buds".to_string());
+        assert!(!opens_anew(true, false, &speakers, &speakers));
+        assert!(opens_anew(true, false, &speakers, &buds));
+        assert!(opens_anew(true, true, &speakers, &speakers));
+        assert!(opens_anew(false, false, &speakers, &speakers));
+        assert!(opens_anew(true, false, &speakers, &None));
+    }
 
     #[test]
     fn macos_loopback_requires_14_6_or_later() {

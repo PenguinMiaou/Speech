@@ -67,7 +67,7 @@ fn name_of(device: &cpal::Device) -> String {
         .unwrap_or_default()
 }
 
-fn id_of(device: &cpal::Device) -> Option<String> {
+pub(super) fn id_of(device: &cpal::Device) -> Option<String> {
     device.id().ok().map(|id| id.to_string())
 }
 

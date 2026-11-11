@@ -5,7 +5,9 @@ use super::system_mute::{self, OutputMute};
 use anyhow::Result;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use cpal::Sample;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 struct CaptureStartupNotifier {
@@ -72,6 +74,9 @@ pub struct AudioConfig {
     /// When set, the sound output stays muted during the recording and this file
     /// records it, so a run that ends abruptly can be undone at next launch.
     pub mute_marker: Option<std::path::PathBuf>,
+    /// For a long recording: when the microphone goes away or another one becomes the
+    /// one to use, the recording goes on with that one, and with silence in between.
+    pub follow_devices: bool,
 }
 
 impl AudioConfig {
@@ -97,6 +102,7 @@ impl Default for AudioConfig {
             chunk_duration_ms: 20,
             input_device: String::new(),
             mute_marker: None,
+            follow_devices: false,
         }
     }
 }
@@ -252,6 +258,40 @@ struct InputProcessingContext {
     buffer: Arc<Mutex<Vec<i16>>>,
     resampler: Option<Mutex<Resampler>>,
     health: Arc<CaptureHealth>,
+    /// Set once the system says the microphone is gone or its stream no longer runs.
+    lost: Arc<AtomicBool>,
+}
+
+/// Whether an error means the stream will deliver nothing more.
+fn ends_the_stream(kind: cpal::ErrorKind) -> bool {
+    matches!(
+        kind,
+        cpal::ErrorKind::DeviceNotAvailable
+            | cpal::ErrorKind::StreamInvalidated
+            | cpal::ErrorKind::HostUnavailable
+    )
+}
+
+/// A stream that has delivered nothing for this long has stopped, whatever it reports.
+const STALLED: Duration = Duration::from_secs(3);
+/// How often a long recording looks whether its microphone still runs.
+const LOOK: Duration = Duration::from_millis(500);
+/// How often it looks whether another microphone has become the one to use.
+const LOOK_FOR_ANOTHER: Duration = Duration::from_secs(2);
+
+/// Whether a stream has to be opened anew: the system said it ended, or it went quiet.
+fn is_gone(lost: bool, nothing_for: Duration) -> bool {
+    lost || nothing_for >= STALLED
+}
+
+/// Silence for the time no microphone delivered, in pieces as the microphone sends
+/// them, so that a recording keeps its time and the computer's sound goes on being
+/// recorded.
+fn silence(lasting: Duration, config: &AudioConfig) -> Vec<Vec<u8>> {
+    let piece = config.chunk_duration_ms.max(1);
+    let samples = (config.sample_rate * piece / 1000) as usize;
+    let pieces = (lasting.as_millis() as u64 / u64::from(piece)).min(3_000) as usize;
+    vec![vec![0; samples * 2]; pieces]
 }
 
 pub(super) fn normalized_rms(data: &[f32]) -> f32 {
@@ -330,6 +370,7 @@ where
     f32: cpal::FromSample<T>,
 {
     let health = context.health.clone();
+    let lost = context.lost.clone();
     let channels = usize::from(context.device_channels.max(1));
     device.build_input_stream(
         *stream_config,
@@ -340,6 +381,9 @@ where
         },
         move |error| {
             if error.kind() != cpal::ErrorKind::Xrun {
+                if ends_the_stream(error.kind()) {
+                    lost.store(true, Ordering::Relaxed);
+                }
                 tracing::error!("Audio capture error: {}", error);
             } else if let Some(at) = health.late_cycle() {
                 tracing::warn!(
@@ -354,17 +398,25 @@ where
     )
 }
 
-fn run_capture(
-    config: AudioConfig,
+/// What the streams of one recording share: where the audio goes and what is shown of it.
+struct Shared {
     sender: mpsc::Sender<Vec<u8>>,
-    stop_rx: std::sync::mpsc::Receiver<()>,
     volume: Arc<Mutex<f32>>,
-    state: Arc<Mutex<CaptureState>>,
-    listening: Listening,
-    startup_notifier: &mut CaptureStartupNotifier,
-) -> Result<()> {
-    let host = cpal::default_host();
-    let device = devices::input_device(&host, &config.input_device)
+    loudest: Arc<Mutex<f32>>,
+}
+
+/// A microphone that is being recorded from.
+struct Opened {
+    stream: cpal::Stream,
+    device: cpal::Device,
+    id: Option<String>,
+    health: Arc<CaptureHealth>,
+    lost: Arc<AtomicBool>,
+}
+
+/// Opens the chosen microphone, or the system's when it is not connected, and starts it.
+fn open_input(host: &cpal::Host, config: &AudioConfig, shared: &Shared) -> Result<Opened> {
+    let device = devices::input_device(host, &config.input_device)
         .ok_or_else(|| anyhow::anyhow!("No input device available"))?;
 
     let device_description = device
@@ -398,56 +450,39 @@ fn run_capture(
     let buffer: Arc<Mutex<Vec<i16>>> = Arc::new(Mutex::new(Vec::with_capacity(samples_per_chunk)));
 
     let health = Arc::new(CaptureHealth::new(device_sample_rate));
+    let lost = Arc::new(AtomicBool::new(false));
     let processing_context = InputProcessingContext {
         device_channels,
         target_channels,
         samples_per_chunk,
-        sender,
-        volume,
-        loudest: listening.loudest.clone(),
+        sender: shared.sender.clone(),
+        volume: shared.volume.clone(),
+        loudest: shared.loudest.clone(),
         buffer,
         resampler: (device_sample_rate != target_rate)
             .then(|| Mutex::new(Resampler::new(device_sample_rate, target_rate))),
         health: health.clone(),
+        lost: lost.clone(),
     };
 
+    macro_rules! build {
+        ($sample:ty) => {
+            build_input_stream_for_sample::<$sample>(&device, &stream_config, processing_context)
+        };
+    }
     let stream = match device_sample_format {
-        cpal::SampleFormat::F32 => {
-            build_input_stream_for_sample::<f32>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::F64 => {
-            build_input_stream_for_sample::<f64>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::I8 => {
-            build_input_stream_for_sample::<i8>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::I16 => {
-            build_input_stream_for_sample::<i16>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::I24 => {
-            build_input_stream_for_sample::<cpal::I24>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::I32 => {
-            build_input_stream_for_sample::<i32>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::I64 => {
-            build_input_stream_for_sample::<i64>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::U8 => {
-            build_input_stream_for_sample::<u8>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::U16 => {
-            build_input_stream_for_sample::<u16>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::U24 => {
-            build_input_stream_for_sample::<cpal::U24>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::U32 => {
-            build_input_stream_for_sample::<u32>(&device, &stream_config, processing_context)
-        }
-        cpal::SampleFormat::U64 => {
-            build_input_stream_for_sample::<u64>(&device, &stream_config, processing_context)
-        }
+        cpal::SampleFormat::F32 => build!(f32),
+        cpal::SampleFormat::F64 => build!(f64),
+        cpal::SampleFormat::I8 => build!(i8),
+        cpal::SampleFormat::I16 => build!(i16),
+        cpal::SampleFormat::I24 => build!(cpal::I24),
+        cpal::SampleFormat::I32 => build!(i32),
+        cpal::SampleFormat::I64 => build!(i64),
+        cpal::SampleFormat::U8 => build!(u8),
+        cpal::SampleFormat::U16 => build!(u16),
+        cpal::SampleFormat::U24 => build!(cpal::U24),
+        cpal::SampleFormat::U32 => build!(u32),
+        cpal::SampleFormat::U64 => build!(u64),
         cpal::SampleFormat::DsdU8 | cpal::SampleFormat::DsdU16 | cpal::SampleFormat::DsdU32 => {
             return Err(anyhow::anyhow!(
                 "Unsupported DSD input sample format: {device_sample_format}"
@@ -461,9 +496,6 @@ fn run_capture(
     }?;
 
     stream.play()?;
-    let capture_ready_at = crate::recording_deadline::CaptureReadyAt::now();
-    *state.lock().unwrap_or_else(|e| e.into_inner()) = CaptureState::Recording;
-    startup_notifier.ready(capture_ready_at);
     tracing::info!(
         "Audio capture started (device: {}Hz {}ch -> target: {}Hz {}ch)",
         device_sample_rate,
@@ -471,34 +503,116 @@ fn run_capture(
         target_rate,
         target_channels
     );
+    Ok(Opened {
+        stream,
+        id: devices::id_of(&device),
+        device,
+        health,
+        lost,
+    })
+}
+
+fn run_capture(
+    config: AudioConfig,
+    sender: mpsc::Sender<Vec<u8>>,
+    stop_rx: std::sync::mpsc::Receiver<()>,
+    volume: Arc<Mutex<f32>>,
+    state: Arc<Mutex<CaptureState>>,
+    listening: Listening,
+    startup_notifier: &mut CaptureStartupNotifier,
+) -> Result<()> {
+    let host = cpal::default_host();
+    let shared = Shared {
+        sender,
+        volume,
+        loudest: listening.loudest.clone(),
+    };
+    let opened = open_input(&host, &config, &shared)?;
+    let capture_ready_at = crate::recording_deadline::CaptureReadyAt::now();
+    *state.lock().unwrap_or_else(|e| e.into_inner()) = CaptureState::Recording;
+    startup_notifier.ready(capture_ready_at);
 
     // Block until stop signal (sender dropped). A microphone that hears nothing
     // at the start is compared with the others once.
+    let mut opened = Some(opened);
     if let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
         stop_rx.recv_timeout(devices::SILENCE_BEFORE_PROBE)
     {
         if listening.loudest() < devices::SILENT_LEVEL {
-            let others = devices::listen_to_others(&host, &device);
-            *listening.others.lock().unwrap_or_else(|e| e.into_inner()) = others;
+            if let Some(opened) = &opened {
+                let others = devices::listen_to_others(&host, &opened.device);
+                *listening.others.lock().unwrap_or_else(|e| e.into_inner()) = others;
+            }
         }
-        let _ = stop_rx.recv();
+        if config.follow_devices {
+            follow(&host, &config, &shared, &stop_rx, &mut opened);
+        } else {
+            let _ = stop_rx.recv();
+        }
     }
 
     // Stream is dropped here, stopping capture
-    drop(stream);
     *state.lock().unwrap_or_else(|e| e.into_inner()) = CaptureState::Idle;
-    tracing::info!(
-        "Audio capture stopped (missing audio: {}ms, late cycles: {})",
-        health.missing_ms(),
-        health.late_cycles()
-    );
+    if let Some(opened) = opened {
+        drop(opened.stream);
+        tracing::info!(
+            "Audio capture stopped (missing audio: {}ms, late cycles: {})",
+            opened.health.missing_ms(),
+            opened.health.late_cycles()
+        );
+    }
     Ok(())
+}
+
+/// Keeps a long recording going until it is stopped: a microphone that went away or
+/// went quiet is opened anew, or the one to use now in its place, and the time without
+/// one is filled with silence.
+fn follow(
+    host: &cpal::Host,
+    config: &AudioConfig,
+    shared: &Shared,
+    stop_rx: &std::sync::mpsc::Receiver<()>,
+    opened: &mut Option<Opened>,
+) {
+    let fill = |lasting: Duration| {
+        for piece in silence(lasting, config) {
+            let _ = shared.sender.try_send(piece);
+        }
+    };
+    let mut looked = std::time::Instant::now();
+    while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = stop_rx.recv_timeout(LOOK) {
+        let gone = match opened.as_ref() {
+            Some(open) => is_gone(open.lost.load(Ordering::Relaxed), open.health.nothing_for()),
+            None => true,
+        };
+        let mut another = false;
+        if !gone && looked.elapsed() >= LOOK_FOR_ANOTHER {
+            looked = std::time::Instant::now();
+            let wanted = devices::input_device(host, &config.input_device)
+                .as_ref()
+                .and_then(devices::id_of);
+            another =
+                wanted.is_some() && wanted != opened.as_ref().and_then(|open| open.id.clone());
+        }
+        if !gone && !another {
+            continue;
+        }
+        match opened.take() {
+            Some(open) if gone => {
+                tracing::warn!("The microphone stopped during the recording");
+                fill(open.health.nothing_for());
+            }
+            Some(_) => tracing::info!("Another microphone is the one to use now"),
+            None => fill(LOOK),
+        }
+        *shared.volume.lock().unwrap_or_else(|e| e.into_inner()) = 0.0;
+        *opened = open_input(host, config, shared).ok();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn recording_settings_carry_the_microphone_and_the_mute_choice() {
@@ -517,6 +631,66 @@ mod tests {
             AudioConfig::for_recording(&app, Some(dir)).mute_marker,
             None
         );
+    }
+
+    #[test]
+    fn a_stream_the_system_ended_or_that_went_quiet_is_gone() {
+        assert!(!is_gone(false, Duration::from_millis(400)));
+        assert!(is_gone(true, Duration::ZERO));
+        assert!(is_gone(false, Duration::from_secs(3)));
+    }
+
+    #[test]
+    fn only_a_microphone_going_away_ends_a_stream() {
+        assert!(ends_the_stream(cpal::ErrorKind::DeviceNotAvailable));
+        assert!(ends_the_stream(cpal::ErrorKind::StreamInvalidated));
+        assert!(!ends_the_stream(cpal::ErrorKind::Xrun));
+        assert!(!ends_the_stream(cpal::ErrorKind::DeviceChanged));
+    }
+
+    #[test]
+    fn the_time_without_a_microphone_is_filled_with_silence_piece_by_piece() {
+        let pieces = silence(Duration::from_millis(510), &AudioConfig::default());
+        assert_eq!(pieces.len(), 25);
+        assert!(pieces.iter().all(|piece| piece == &vec![0_u8; 640]));
+        assert!(silence(Duration::from_millis(10), &AudioConfig::default()).is_empty());
+        // Never more at once than the queue holds.
+        assert_eq!(
+            silence(Duration::from_secs(600), &AudioConfig::default()).len(),
+            3_000
+        );
+    }
+
+    /// `OT_SECONDS`: records from this machine's microphone the way a meeting does and
+    /// prints, second by second, how much audio came and whether it was silence. Meant
+    /// to be watched while a microphone is connected or taken away.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "records from this machine's microphone"]
+    async fn follows_the_microphone_of_this_machine() {
+        let seconds: u64 = std::env::var("OT_SECONDS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(5);
+        let config = AudioConfig {
+            follow_devices: true,
+            ..AudioConfig::default()
+        };
+        let (mut capture, mut audio) = AudioCaptureHandle::start(config).unwrap();
+        capture.wait_until_ready().await.unwrap();
+        let mut total = 0;
+        for second in 1..=seconds {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let (mut pieces, mut silent) = (0, 0);
+            while let Ok(piece) = audio.try_recv() {
+                pieces += 1;
+                silent += usize::from(piece.iter().all(|byte| *byte == 0));
+            }
+            total += pieces;
+            println!("second {second}: {pieces} pieces, {silent} of them silence");
+        }
+        capture.stop();
+        println!("{total} pieces in {seconds} seconds");
+        assert!(total as u64 >= seconds * 40);
     }
 
     #[test]

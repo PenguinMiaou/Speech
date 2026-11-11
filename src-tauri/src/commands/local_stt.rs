@@ -374,6 +374,12 @@ pub fn meeting_record_pause(paused: bool) -> bool {
     crate::meeting_record::pause(paused)
 }
 
+/// A recording that was cut short the last time the app ran, if there is one.
+#[tauri::command]
+pub fn meeting_recover() -> Option<crate::meeting_record::Recovered> {
+    crate::meeting_record::recover()
+}
+
 /// Tells again who spoke when in a kept meeting, from the whole of its sound. Hearing a
 /// whole meeting at once tells voices apart better than hearing it window by window.
 #[tauri::command]
@@ -515,13 +521,66 @@ pub async fn speaker_models_install(app: tauri::AppHandle) -> Result<(), String>
     if SPEAKER_DOWNLOAD.swap(true, Ordering::SeqCst) {
         return Err("busy".to_string());
     }
-    let result = install_speaker_models(&app, &dir).await;
+    let files = &crate::speakers::MODEL_FILES;
+    let result = install_models(&app, &dir, files, "speakers:download-progress").await;
     SPEAKER_DOWNLOAD.store(false, Ordering::SeqCst);
     result
 }
 
-async fn install_speaker_models(app: &tauri::AppHandle, dir: &Path) -> Result<(), String> {
-    let files = &crate::speakers::MODEL_FILES;
+#[tauri::command]
+pub fn word_times_status() -> SpeakerModelsStatus {
+    SpeakerModelsStatus {
+        installed: crate::word_times::installed_models().is_some(),
+        downloading: TIMES_DOWNLOAD.load(Ordering::SeqCst),
+        total_bytes: crate::word_times::MODEL_FILES
+            .iter()
+            .map(|file| file.size_bytes)
+            .sum(),
+    }
+}
+
+static TIMES_DOWNLOAD: AtomicBool = AtomicBool::new(false);
+
+/// Downloads and verifies the model that times words, reporting progress as
+/// `times:download-progress`.
+#[tauri::command]
+pub async fn word_times_install(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = crate::word_times::model_dir().ok_or("models directory is not ready")?;
+    if TIMES_DOWNLOAD.swap(true, Ordering::SeqCst) {
+        return Err("busy".to_string());
+    }
+    let files = &crate::word_times::MODEL_FILES;
+    let result = install_models(&app, &dir, files, "times:download-progress").await;
+    TIMES_DOWNLOAD.store(false, Ordering::SeqCst);
+    result
+}
+
+/// Tells when the words of a kept meeting were said: for the words under each heading,
+/// the places in them whose time is known. Heard on this machine from the kept sound.
+#[tauri::command]
+pub async fn meeting_word_times(
+    id: String,
+    spans: Vec<crate::word_times::Span>,
+) -> Result<Vec<Vec<(u32, u64)>>, String> {
+    let recording = crate::meetings::audio(&id).ok_or_else(|| "no_recording".to_string())?;
+    crate::applog::note(
+        "meeting",
+        &format!("timing the words of {} paragraphs", spans.len()),
+    );
+    let marks = tokio::task::spawn_blocking(move || crate::word_times::of(&recording, &spans))
+        .await
+        .map_err(|error| error.to_string())??;
+    let known = marks.iter().map(Vec::len).sum::<usize>();
+    crate::applog::note("meeting", &format!("found the time of {known} places"));
+    Ok(marks)
+}
+
+async fn install_models(
+    app: &tauri::AppHandle,
+    dir: &Path,
+    files: &[crate::voice_isolation::ModelFile],
+    event: &'static str,
+) -> Result<(), String> {
     let total: u64 = files.iter().map(|file| file.size_bytes).sum();
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
@@ -546,7 +605,7 @@ async fn install_speaker_models(app: &tauri::AppHandle, dir: &Path) -> Result<()
             install::download_and_verify(&job, move |progress| {
                 if progress.phase == Phase::Downloading {
                     let _ = progress_app.emit(
-                        "speakers:download-progress",
+                        event,
                         serde_json::json!({ "downloaded": before + progress.downloaded, "total": total }),
                     );
                 }

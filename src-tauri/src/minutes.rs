@@ -131,20 +131,37 @@ pub fn notes_messages(part: &str) -> Vec<Value> {
         json!({ "role": "system", "content": format!(
             "You take notes on one part of a meeting transcript. List, in short lines, the \
 topics discussed, the points each speaker made, every decision, and every task with its \
-owner and deadline when they were said. Keep the speaker names as written. {RULES} Output \
-only the notes."
+owner and deadline when they were said. Keep the speaker names as written, and put the time \
+the transcript gives beside each decision and task. {RULES} Output only the notes."
         ) }),
         json!({ "role": "user", "content": format!("<transcript>\n{part}\n</transcript>") }),
     ]
 }
 
 /// Asks for the minutes, from the transcript itself or from the notes of its parts.
+/// The most the minutes of a meeting of `said` characters should run to, in characters:
+/// a quarter of what was said, between a few lines and a few pages.
+pub fn longest_minutes(said: usize) -> usize {
+    (said / 4).clamp(300, 6_000)
+}
+
 pub fn minutes_messages(
     source: &str,
     template: &str,
     own_notes: &str,
+    words: &[String],
     from_notes: bool,
 ) -> Vec<Value> {
+    let (words_rule, words_block) = if words.is_empty() {
+        ("", String::new())
+    } else {
+        (
+            " Where a word in the meeting is an obvious variant of a name or term listed in \
+<spellings> or written in the person's own notes, use that spelling.",
+            format!("\n\n<spellings>\n{}\n</spellings>", words.join("\n")),
+        )
+    };
+    let longest = longest_minutes(source.chars().count());
     let own_notes = own_notes.trim();
     let (own_rule, own_block) = if own_notes.is_empty() {
         ("", String::new())
@@ -168,10 +185,15 @@ note is about.",
         json!({ "role": "system", "content": format!(
             "You write the minutes of a meeting from {what}. Follow the template: keep its \
 headings and their order, and fill in each one. Where the meeting does not give what a \
-heading asks for, say under it that this was not mentioned.{own_rule} {RULES} Output only the minutes."
+heading asks for, say under it that this was not mentioned. Tell what was decided apart \
+from what was only discussed, proposed or asked for. Write each task on a line of its own as \
+\"- [ ] task — owner, deadline\", leaving out an owner or deadline nobody named. Where the \
+source gives the time something was said, put it after a decision or task as [mm:ss], so \
+that it can be looked up. A short meeting gets short minutes: write at most about {longest} \
+characters, and never pad.{own_rule}{words_rule} {RULES} Output only the minutes."
         ) }),
         json!({ "role": "user", "content": format!(
-            "<template>\n{template}\n</template>{own_block}\n\n<{tag}>\n{source}\n</{tag}>"
+            "<template>\n{template}\n</template>{own_block}{words_block}\n\n<{tag}>\n{source}\n</{tag}>"
         ) }),
     ]
 }
@@ -240,8 +262,9 @@ pub fn relevant_messages(part: &str, question: &str) -> Vec<Value> {
     vec![
         json!({ "role": "system", "content": format!(
             "You read one part of a meeting transcript for someone with a question. Quote or \
-restate, in short lines with the speaker and time, everything in this part that bears on the \
-question. If nothing does, output only the word NONE. {RULES}"
+restate, in short lines with the speaker and time, and with the name and day of the meeting \
+where the part stands under a heading that gives them, everything in this part that bears on \
+the question. If nothing does, output only the word NONE. {RULES}"
         ) }),
         json!({ "role": "user", "content": format!(
             "<question>\n{question}\n</question>\n\n<transcript>\n{part}\n</transcript>"
@@ -255,8 +278,10 @@ pub fn answer_messages(source: &str, question: &str, from_notes: bool) -> Vec<Va
     vec![
         json!({ "role": "system", "content": format!(
             "You answer a question about a meeting from its {tag}. Answer briefly and name \
-who said what, with the time when it is given. If the meeting does not answer the question, \
-say so plainly. {RULES} Answer in the language of the question."
+who said what, with the time when it is given. Where the material holds several meetings, \
+each under a heading with its name and day, say which meeting each point comes from. If the \
+meeting does not answer the question, say so plainly. {RULES} Answer in the language of the \
+question."
         ) }),
         json!({ "role": "user", "content": format!(
             "<question>\n{question}\n</question>\n\n<{tag}>\n{source}\n</{tag}>"
@@ -651,12 +676,13 @@ pub async fn minutes(
     transcript: &str,
     template: &str,
     own_notes: &str,
+    words: &[String],
 ) -> Result<String, String> {
     let parts = parts(transcript, PART_CHARS);
     match parts.as_slice() {
         [] => Err("minutes_nothing_said".to_string()),
         [whole] => {
-            let messages = minutes_messages(whole, template, own_notes, false);
+            let messages = minutes_messages(whole, template, own_notes, words, false);
             complete(client, config, api_key, messages, MINUTES_TOKENS).await
         }
         many => {
@@ -665,7 +691,7 @@ pub async fn minutes(
                 let messages = notes_messages(part);
                 notes.push(complete(client, config, api_key, messages, NOTES_TOKENS).await?);
             }
-            let messages = minutes_messages(&notes.join("\n\n"), template, own_notes, true);
+            let messages = minutes_messages(&notes.join("\n\n"), template, own_notes, words, true);
             complete(client, config, api_key, messages, MINUTES_TOKENS).await
         }
     }
@@ -836,22 +862,58 @@ mod tests {
 
     #[test]
     fn the_request_carries_the_template_and_the_transcript_as_material() {
-        let messages = minutes_messages("说话人 1  00:00\n开会", "## 结论", "", false);
+        let messages = minutes_messages("说话人 1  00:00\n开会", "## 结论", "", &[], false);
         let user = messages[1]["content"].as_str().unwrap();
         assert!(user.contains("<template>\n## 结论\n</template>"));
         assert!(user.contains("<transcript>\n说话人 1  00:00\n开会\n</transcript>"));
         let system = messages[0]["content"].as_str().unwrap();
         assert!(system.contains("Never invent"));
         assert!(!user.contains("own_notes") && !system.contains("own notes"));
-        assert!(minutes_messages("n", "t", "", true)[1]["content"]
+        assert!(minutes_messages("n", "t", "", &[], true)[1]["content"]
             .as_str()
             .unwrap()
             .contains("<notes>\nn\n</notes>"));
     }
 
     #[test]
+    fn minutes_are_as_long_as_the_meeting_calls_for() {
+        assert_eq!(longest_minutes(0), 300);
+        assert_eq!(longest_minutes(800), 300);
+        assert_eq!(longest_minutes(6_000), 1_500);
+        assert_eq!(longest_minutes(400_000), 6_000);
+        let system =
+            minutes_messages(&"字".repeat(6_000), "t", "", &[], false)[0]["content"].to_string();
+        assert!(system.contains("at most about 1500 characters"));
+        assert!(system.contains("never pad"));
+    }
+
+    #[test]
+    fn tasks_are_asked_for_as_boxes_with_their_owner_and_moment() {
+        let system = minutes_messages("开会", "t", "", &[], false)[0]["content"].to_string();
+        assert!(system.contains("- [ ] "));
+        assert!(system.contains("[mm:ss]"));
+        assert!(system.contains("was decided"));
+        let notes = notes_messages("开会")[0]["content"].to_string();
+        assert!(notes.contains("the time"));
+    }
+
+    #[test]
+    fn known_spellings_go_along_with_the_minutes() {
+        let words = ["Tauri".to_string(), "Qwen".to_string()];
+        let messages = minutes_messages("开会", "t", "", &words, false);
+        let user = messages[1]["content"].as_str().unwrap();
+        assert!(user.contains("<spellings>\nTauri\nQwen\n</spellings>"));
+        assert!(messages[0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("use that spelling"));
+        let none = minutes_messages("开会", "t", "", &[], false);
+        assert!(!none[1]["content"].as_str().unwrap().contains("spellings"));
+    }
+
+    #[test]
     fn the_users_own_notes_go_along_as_the_points_that_matter_most() {
-        let messages = minutes_messages("开会", "## 结论", " 预算要砍\n", false);
+        let messages = minutes_messages("开会", "## 结论", " 预算要砍\n", &[], false);
         let user = messages[1]["content"].as_str().unwrap();
         assert!(user.contains("</template>\n\n<own_notes>\n预算要砍\n</own_notes>\n\n<transcript>"));
         assert!(messages[0]["content"]

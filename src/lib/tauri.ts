@@ -852,6 +852,11 @@ export interface MeetingSegment {
   speaker: number | null
   start_ms: number
   text: string
+  /** Where the words end; absent in what older versions wrote down. */
+  end_ms?: number
+  /** True for words said into the microphone while the computer played next to nothing,
+   * null or absent when that cannot be told. */
+  mine?: boolean | null
 }
 
 export function meetingRecordStart(
@@ -940,6 +945,12 @@ export function onMeetingTranslating(handler: (text: string) => void): Promise<U
   return listen<string>('meeting:translating', (event) => handler(event.payload))
 }
 
+/** A recording that was cut short the last time the app ran: what was written down of it
+ * and how long its sound is. Null when there is none. It is handed over only once. */
+export function meetingRecover(): Promise<{ segments: MeetingSegment[]; seconds: number } | null> {
+  return invoke('meeting_recover')
+}
+
 /** Who spoke when in a kept meeting, told again from the whole of its sound. */
 export function meetingSpeakersAgain(id: string): Promise<SpeakerTurn[]> {
   return invoke('meeting_speakers_again', { id })
@@ -992,6 +1003,8 @@ export interface MeetingRecord {
   names: Record<number, string>
   title?: string
   duration_s?: number
+  /** When the words under each heading were said, in order. */
+  times?: { end_ms: number; chars: number; marks: [number, number][] }[]
 }
 
 export interface MeetingSummary {
@@ -1002,6 +1015,25 @@ export interface MeetingSummary {
   title?: string
   duration_s?: number
   has_audio?: boolean
+}
+
+/** A meeting that holds what was looked for, with the words around the place found. */
+export interface MeetingFound {
+  id: string
+  started_at: number
+  title: string
+  duration_s: number
+  found: string
+}
+
+/** The meetings that hold every word of `query`, in their text, notes, minutes or title. */
+export function meetingsSearch(query: string): Promise<MeetingFound[]> {
+  return invoke('meetings_search', { query })
+}
+
+/** Answers a question from the newest meetings together, with the polish model. */
+export function meetingsAsk(question: string): Promise<string> {
+  return invoke('meetings_ask', { question })
 }
 
 /** Past meetings, the newest first. */
@@ -1105,6 +1137,31 @@ export function onSpeakerModelsProgress(
   )
 }
 
+export function wordTimesStatus(): Promise<SpeakerModelsStatus> {
+  return invoke('word_times_status')
+}
+
+export function installWordTimes(): Promise<void> {
+  return invoke('word_times_install')
+}
+
+export function onWordTimesProgress(
+  handler: (progress: { downloaded: number; total: number }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ downloaded: number; total: number }>('times:download-progress', (event) =>
+    handler(event.payload),
+  )
+}
+
+/** Hears a kept meeting again on this machine for when its words were said: for the
+ * words under each heading, the places in them whose time was found. */
+export function meetingWordTimes(
+  id: string,
+  spans: { start_ms: number; end_ms: number; text: string }[],
+): Promise<[number, number][][]> {
+  return invoke('meeting_word_times', { id, spans })
+}
+
 const MEDIA_EXTENSIONS = [
   'm4a',
   'mp3',
@@ -1119,30 +1176,39 @@ const MEDIA_EXTENSIONS = [
   'm4v',
 ]
 
-/** Asks for an audio or video file. Null when the dialog is closed without one. */
-export async function pickMediaFile(): Promise<string | null> {
+/** Asks for audio or video files. Empty when the dialog is closed without one. */
+export async function pickMediaFile(): Promise<string[]> {
   const { open } = await import('@tauri-apps/plugin-dialog')
   const picked = await open({
-    multiple: false,
+    multiple: true,
     directory: false,
     filters: [{ name: 'Audio / Video', extensions: MEDIA_EXTENSIONS }],
   })
-  return typeof picked === 'string' ? picked : null
+  if (typeof picked === 'string') return [picked]
+  return Array.isArray(picked) ? picked : []
 }
 
-/** Asks where to save `text` and writes it there. False when the dialog is closed. */
-export async function saveTextFile(text: string, suggestedName: string): Promise<boolean> {
+/** Asks where to save `text` and writes it there. False when the dialog is closed.
+ * `subtitles` are other ways to write it, by the file ending they are chosen with. */
+export async function saveTextFile(
+  text: string,
+  suggestedName: string,
+  subtitles?: Record<string, () => string>,
+): Promise<boolean> {
   const { save } = await import('@tauri-apps/plugin-dialog')
+  const endings = Object.keys(subtitles ?? {})
   const path = await save({
     defaultPath: suggestedName,
     // Saved under a .docx name, the text is written as a Word document.
     filters: [
       { name: 'Text', extensions: ['txt', 'md'] },
       { name: 'Word', extensions: ['docx'] },
+      ...(endings.length > 0 ? [{ name: 'Subtitles', extensions: endings }] : []),
     ],
   })
   if (!path) return false
-  await invoke('save_text_file', { path, text })
+  const ending = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
+  await invoke('save_text_file', { path, text: subtitles?.[ending]?.() ?? text })
   return true
 }
 

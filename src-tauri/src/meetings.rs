@@ -28,6 +28,21 @@ pub struct Meeting {
     /// How long the recording ran, in seconds. Zero when that is not known.
     #[serde(default)]
     pub duration_s: u64,
+    /// When the words under each heading of the transcript were said, in order. Empty
+    /// where that was not written down.
+    #[serde(default)]
+    pub times: Vec<Times>,
+}
+
+/// When the words under one heading were said.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Times {
+    /// Where the last of them end, in milliseconds from the start.
+    pub end_ms: u64,
+    /// How long the text was when it was marked, in characters.
+    pub chars: u32,
+    /// Places in the text and when the words there began.
+    pub marks: Vec<(u32, u64)>,
 }
 
 /// A meeting as the list shows it.
@@ -109,6 +124,158 @@ fn list_in(dir: &Path) -> Vec<Summary> {
     all
 }
 
+/// A meeting that holds what was looked for, with the place it was found in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Found {
+    pub id: String,
+    pub started_at: u64,
+    pub title: String,
+    pub duration_s: u64,
+    /// The words around the first place found, on one line.
+    pub found: String,
+}
+
+/// How much is shown on either side of a find, in characters.
+const AROUND: usize = 40;
+
+/// The text around the first `word` in `text`, on one line. Empty when it is not there.
+fn around(text: &str, word: &str) -> String {
+    let line: Vec<char> = text
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .collect();
+    let lower: Vec<char> = line
+        .iter()
+        .flat_map(|each| each.to_lowercase().next())
+        .collect();
+    let word: Vec<char> = word
+        .chars()
+        .flat_map(|each| each.to_lowercase().next())
+        .collect();
+    if word.is_empty() || lower.len() != line.len() {
+        return String::new();
+    }
+    let Some(at) = lower
+        .windows(word.len())
+        .position(|window| window == word.as_slice())
+    else {
+        return String::new();
+    };
+    let from = at.saturating_sub(AROUND);
+    let to = (at + word.len() + AROUND).min(line.len());
+    let mut shown: String = line[from..to].iter().collect();
+    if from > 0 {
+        shown.insert(0, '…');
+    }
+    if to < line.len() {
+        shown.push('…');
+    }
+    shown
+}
+
+/// The meetings that hold every word of `query`, in their text, notes, minutes or title,
+/// the newest first. Capital and small letters count as the same.
+fn search_in(dir: &Path, query: &str) -> Vec<Found> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let mut all: Vec<Found> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|kind| kind == "json"))
+        .filter_map(|path| std::fs::read(path).ok())
+        .filter_map(|raw| serde_json::from_slice::<Meeting>(&raw).ok())
+        .filter_map(|meeting| {
+            let parts = [
+                &meeting.minutes,
+                &meeting.notes,
+                &meeting.transcript,
+                &meeting.title,
+            ];
+            let whole = parts.map(|part| part.to_lowercase()).join("\n");
+            if !words.iter().all(|word| whole.contains(word.as_str())) {
+                return None;
+            }
+            let found = parts
+                .iter()
+                .map(|part| around(part, &words[0]))
+                .find(|shown| !shown.is_empty())
+                .unwrap_or_default();
+            Some(Found {
+                found,
+                title: meeting.title.trim().to_string(),
+                duration_s: meeting.duration_s,
+                id: meeting.id,
+                started_at: meeting.started_at,
+            })
+        })
+        .collect();
+    all.sort_by(|a, b| b.started_at.cmp(&a.started_at).then(b.id.cmp(&a.id)));
+    all
+}
+
+/// How much of one meeting is read when a question is asked of many, in characters.
+const MOST_READ: usize = 4_000;
+
+/// The newest `most` meetings laid out to be read together, each under a heading with its
+/// name and day: its minutes where it has them, and otherwise the beginning of what was said.
+fn reading_in(dir: &Path, most: usize) -> String {
+    let mut all: Vec<Meeting> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|kind| kind == "json"))
+        .filter_map(|path| std::fs::read(path).ok())
+        .filter_map(|raw| serde_json::from_slice::<Meeting>(&raw).ok())
+        .collect();
+    all.sort_by(|a, b| b.started_at.cmp(&a.started_at).then(b.id.cmp(&a.id)));
+    all.iter()
+        .take(most)
+        .map(|meeting| {
+            let day = chrono::DateTime::from_timestamp_millis(meeting.started_at as i64)
+                .map(|when| {
+                    when.with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d")
+                        .to_string()
+                })
+                .unwrap_or_default();
+            let name = match meeting.title.trim() {
+                "" => "Meeting",
+                title => title,
+            };
+            let source = if meeting.minutes.trim().is_empty() {
+                &meeting.transcript
+            } else {
+                &meeting.minutes
+            };
+            // On one paragraph, so that a meeting is not cut away from its heading.
+            let said: String = source
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(MOST_READ)
+                .collect();
+            format!("=== {name}, {day} ===\n{said}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+pub fn reading(most: usize) -> String {
+    dir().map(|dir| reading_in(&dir, most)).unwrap_or_default()
+}
+
+pub fn search(query: &str) -> Vec<Found> {
+    dir().map(|dir| search_in(&dir, query)).unwrap_or_default()
+}
+
 /// Where a meeting's sound is kept, beside its text.
 fn audio_file(dir: &Path, id: &str) -> Result<PathBuf, String> {
     Ok(file_of(dir, id)?.with_extension("wav"))
@@ -187,6 +354,91 @@ mod tests {
             transcript: transcript.into(),
             ..Meeting::default()
         }
+    }
+
+    #[test]
+    fn a_meeting_keeps_when_its_words_were_said_and_one_without_that_still_opens() {
+        let dir = scratch("times");
+        let mut timed = meeting("m1", 10, "Speaker 1  00:00\nwe ship on Friday");
+        timed.times = vec![Times {
+            end_ms: 8000,
+            chars: 17,
+            marks: vec![(0, 0), (8, 5000)],
+        }];
+        save_in(&dir, &timed).unwrap();
+        assert_eq!(get_in(&dir, "m1").unwrap().times, timed.times);
+
+        std::fs::write(
+            dir.join("m0.json"),
+            r#"{"id":"m0","started_at":5,"transcript":"older"}"#,
+        )
+        .unwrap();
+        assert!(get_in(&dir, "m0").unwrap().times.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn meetings_are_found_by_words_in_their_text_notes_minutes_or_title() {
+        let dir = scratch("search");
+        save_in(
+            &dir,
+            &meeting("m1", 10, "说话人 1  00:00\n我们讨论了预算，要砍掉百分之十"),
+        )
+        .unwrap();
+        let mut second = meeting("m2", 20, "nothing of the kind");
+        second.minutes = "## Decisions\nThe BUDGET is cut".into();
+        second.title = "Weekly".into();
+        save_in(&dir, &second).unwrap();
+        save_in(&dir, &meeting("m3", 30, "something else")).unwrap();
+
+        let found = search_in(&dir, " budget ");
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            (found[0].id.as_str(), found[0].title.as_str()),
+            ("m2", "Weekly")
+        );
+        assert_eq!(found[0].found, "## Decisions The BUDGET is cut");
+
+        let found = search_in(&dir, "预算");
+        assert_eq!(found[0].id, "m1");
+        assert!(found[0].found.contains("讨论了预算，要砍掉"));
+
+        // Every word asked for must be there, wherever in the meeting.
+        assert_eq!(search_in(&dir, "weekly budget").len(), 1);
+        assert!(search_in(&dir, "weekly 预算").is_empty());
+        assert!(search_in(&dir, "  ").is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_newest_meetings_are_laid_out_to_be_read_together() {
+        let dir = scratch("reading");
+        let mut first = meeting("m1", 1_700_000_000_000, &"长".repeat(9_000));
+        first.title = "预算".into();
+        save_in(&dir, &first).unwrap();
+        let mut second = meeting("m2", 1_700_086_400_000, "what was said");
+        second.minutes = "## Decisions\nShip on Friday".into();
+        save_in(&dir, &second).unwrap();
+        save_in(&dir, &meeting("m0", 1_600_000_000_000, "long ago")).unwrap();
+
+        let read = reading_in(&dir, 2);
+        let (newest, older) = read.split_once("\n\n=== ").unwrap();
+        assert!(newest.starts_with("=== Meeting, 2023-11-"));
+        // Minutes say more in less than the words they were written from.
+        assert!(newest.ends_with("===\n## Decisions Ship on Friday"));
+        assert!(older.starts_with("预算, 2023-11-"));
+        assert!(older.chars().count() < MOST_READ + 100);
+        assert!(!read.contains("long ago"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn what_is_shown_of_a_find_is_cut_between_characters() {
+        let text = format!("{}预算{}", "开".repeat(200), "会".repeat(200));
+        let shown = around(&text, "预算");
+        assert!(shown.starts_with('…') && shown.ends_with('…'));
+        assert!(shown.contains("预算"));
+        assert!(shown.chars().count() <= 2 * AROUND + 4);
     }
 
     #[test]

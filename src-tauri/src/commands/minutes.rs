@@ -10,6 +10,7 @@ pub async fn meeting_minutes(
     template: String,
     notes: Option<String>,
     config_state: tauri::State<'_, storage::ConfigManager>,
+    dictionary: tauri::State<'_, storage::DictionaryStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
     let config = config_state.load().await.map_err(|e| e.to_string())?;
@@ -22,7 +23,20 @@ pub async fn meeting_minutes(
         return Err("llm_not_configured".to_string());
     }
     let notes = notes.unwrap_or_default();
-    crate::minutes::minutes(&client, &config, &api_key, &transcript, &template, &notes).await
+    // The spellings the user taught the dictionary, newest first.
+    let mut words = dictionary.words().await;
+    words.reverse();
+    words.truncate(80);
+    crate::minutes::minutes(
+        &client,
+        &config,
+        &api_key,
+        &transcript,
+        &template,
+        &notes,
+        &words,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -60,6 +74,32 @@ pub async fn meeting_ask(
         return Err("llm_not_configured".to_string());
     }
     crate::minutes::ask(&client, &config, &api_key, &transcript, &question).await
+}
+
+/// How many of the newest meetings a question asked of all of them reads.
+const MOST_MEETINGS_ASKED: usize = 20;
+
+/// Answers a question from the newest meetings together: from the minutes of those that
+/// have them, and the beginning of what was said in the others.
+#[tauri::command]
+pub async fn meetings_ask(
+    question: String,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<String, String> {
+    let config = config_state.load().await.map_err(|e| e.to_string())?;
+    let api_key =
+        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    let read = tokio::task::spawn_blocking(|| crate::meetings::reading(MOST_MEETINGS_ASKED))
+        .await
+        .map_err(|error| error.to_string())?;
+    crate::minutes::ask(&client, &config, &api_key, &read, &question).await
 }
 
 /// Names a meeting after what was said in it, with the language model chosen in the

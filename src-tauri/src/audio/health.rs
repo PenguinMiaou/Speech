@@ -53,6 +53,13 @@ impl CaptureHealth {
             .store(frames as u64, Ordering::Relaxed);
     }
 
+    /// How long ago the stream last delivered audio, or was built when it never did.
+    pub fn nothing_for(&self) -> Duration {
+        self.built
+            .elapsed()
+            .saturating_sub(Duration::from_nanos(self.last_ns.load(Ordering::Relaxed)))
+    }
+
     /// Records a late audio cycle. Returns how far into the recording it happened when it
     /// was not part of the device starting up.
     pub fn late_cycle(&self) -> Option<Duration> {
@@ -105,6 +112,15 @@ mod tests {
             missing_ms(Duration::from_millis(1_000), 99 * 480, 48_000),
             10
         );
+    }
+
+    #[test]
+    fn tells_how_long_ago_audio_last_came() {
+        let health = CaptureHealth::new(48_000);
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(health.nothing_for() >= Duration::from_millis(30));
+        health.delivered(480);
+        assert!(health.nothing_for() < Duration::from_millis(20));
     }
 
     #[test]

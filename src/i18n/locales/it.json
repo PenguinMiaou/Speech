@@ -810,7 +810,9 @@
       "template_empty": "Il file del modello è vuoto",
       "template_unreadable": "Impossibile aprire il modello. Deve essere un file di testo",
       "ask": "Non è arrivata nessuna risposta",
-      "system_audio_unsupported": "Questa versione del sistema non può registrare l’audio del computer"
+      "system_audio_unsupported": "Questa versione del sistema non può registrare l’audio del computer",
+      "someFailed": "Alcuni file non sono stati trascritti.",
+      "timesDownload": "Impossibile scaricare il modello"
     },
     "live": "Testo in diretta",
     "listening": "In ascolto. Il testo arriva circa ogni quindici secondi",
@@ -868,6 +870,21 @@
     "removeLanguage": "Rimuovi {{name}}",
     "pauseRecording": "Metti in pausa",
     "resume": "Riprendi la registrazione",
-    "speakersAgain": "Nuova distinzione dei parlanti"
+    "speakersAgain": "Nuova distinzione dei parlanti",
+    "editMinutes": "Modifica il verbale",
+    "search": "Cerca nelle riunioni",
+    "askAll": "Chiedi a tutte le riunioni",
+    "me": "Io",
+    "waiting": "File in attesa",
+    "wordTimes": "Tempo esatto di ogni parola (modello da 240 MB)",
+    "downloadingModel": "Download del modello {{percent}}%",
+    "oneOnOneTemplateName": "Colloquio a due",
+    "oneOnOneTemplate": "# Colloquio a due\n\n## Di cosa si è parlato\n\n## Riscontri dati\nChi lo ha detto a chi\n\n## Cosa farà ciascuno\nCon responsabile e scadenza\n\n## Da riprendere la prossima volta",
+    "interviewTemplateName": "Intervista",
+    "interviewTemplate": "# Intervista\n\n## Chi è stato intervistato e su cosa\n\n## Domande e risposte\nOgni domanda con il succo della risposta e l’ora\n\n## Punti di forza\n\n## Dubbi\n\n## Prossimi passi",
+    "talkTemplateName": "Lezione o intervento",
+    "talkTemplate": "# Appunti\n\n## Argomento\n\n## Punti principali\nNell’ordine in cui sono stati esposti, ciascuno con l’ora\n\n## Esempi e cifre citati\n\n## Domande del pubblico e risposte",
+    "standupTemplateName": "Stand-up",
+    "standupTemplate": "# Stand-up\n\nPer ogni persona che ha parlato:\n\n## Nome\n- Fatto\n- Prossimo\n- Bloccato da\n\n## Per tutti\nDecisioni e compiti, con responsabile e scadenza"
   }
 }

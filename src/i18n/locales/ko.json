@@ -810,7 +810,9 @@
       "template_empty": "템플릿 파일이 비어 있습니다",
       "template_unreadable": "템플릿을 열 수 없습니다. 텍스트 파일이어야 합니다",
       "ask": "답변을 받지 못했습니다",
-      "system_audio_unsupported": "이 시스템 버전에서는 컴퓨터 소리를 녹음할 수 없습니다"
+      "system_audio_unsupported": "이 시스템 버전에서는 컴퓨터 소리를 녹음할 수 없습니다",
+      "someFailed": "텍스트로 바꾸지 못한 파일이 있습니다.",
+      "timesDownload": "모델을 다운로드하지 못했습니다"
     },
     "live": "실시간 텍스트",
     "listening": "듣는 중입니다. 텍스트는 약 15초마다 나옵니다",
@@ -868,6 +870,21 @@
     "removeLanguage": "{{name}} 빼기",
     "pauseRecording": "녹음 일시 중지",
     "resume": "녹음 계속",
-    "speakersAgain": "화자를 다시 구분하는 중"
+    "speakersAgain": "화자를 다시 구분하는 중",
+    "editMinutes": "회의록 편집",
+    "search": "회의 검색",
+    "askAll": "모든 회의에 질문",
+    "me": "나",
+    "waiting": "대기 중인 파일",
+    "wordTimes": "단어별 정확한 시간 (240 MB 모델)",
+    "downloadingModel": "모델 다운로드 중 {{percent}}%",
+    "oneOnOneTemplateName": "일대일",
+    "oneOnOneTemplate": "# 일대일 면담\n\n## 나눈 이야기\n\n## 전달한 피드백\n누가 누구에게 했는지\n\n## 각자 할 일\n담당자와 기한을 적기\n\n## 다음에 이어갈 것",
+    "interviewTemplateName": "면접 / 인터뷰",
+    "interviewTemplate": "# 인터뷰 기록\n\n## 대상과 주제\n\n## 질문과 답변\n질문마다 답변의 요지와 시각\n\n## 강점\n\n## 우려\n\n## 다음 단계",
+    "talkTemplateName": "강연 / 강의",
+    "talkTemplate": "# 노트\n\n## 주제\n\n## 주요 내용\n말한 순서대로, 각각 시각과 함께\n\n## 언급된 예시와 수치\n\n## 청중의 질문과 답변",
+    "standupTemplateName": "스탠드업",
+    "standupTemplate": "# 스탠드업\n\n발언한 사람마다:\n\n## 이름\n- 한 일\n- 다음 할 일\n- 막힌 점\n\n## 공통\n결정 사항과 할 일, 담당자와 기한을 적기"
   }
 }

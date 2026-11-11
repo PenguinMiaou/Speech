@@ -733,3 +733,8 @@ body,
   accent-color: var(--color-accent);
   cursor: pointer;
 }
+
+/* The words of a meeting the sound has not reached yet, in the paragraph being played. */
+::highlight(ahead) {
+  color: var(--color-text-tertiary);
+}

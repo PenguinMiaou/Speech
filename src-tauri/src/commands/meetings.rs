@@ -6,6 +6,14 @@ pub fn meetings_list() -> Vec<Summary> {
     crate::meetings::list()
 }
 
+/// The meetings that hold every word looked for, the newest first.
+#[tauri::command]
+pub async fn meetings_search(query: String) -> Vec<crate::meetings::Found> {
+    tokio::task::spawn_blocking(move || crate::meetings::search(&query))
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn meeting_get(id: String) -> Result<Meeting, String> {
     crate::meetings::get(&id)
