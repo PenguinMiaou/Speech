@@ -7,11 +7,13 @@ use std::time::Instant;
 /// 0.2 seconds at 16 kHz. Shorter audio is an accidental key press, not speech.
 pub const MIN_SAMPLES: usize = 3_200;
 
+#[derive(Debug)]
 pub struct EngineError {
     pub code: String,
     pub message: String,
 }
 
+#[derive(Debug)]
 pub struct EngineOutput {
     pub text: String,
     pub language: Option<String>,

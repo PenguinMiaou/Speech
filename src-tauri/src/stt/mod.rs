@@ -1,6 +1,7 @@
 pub mod aliyun_qwen3_asr;
 pub mod apple_speech;
 pub mod assemblyai;
+pub mod batch;
 pub mod capabilities;
 pub mod config;
 pub mod deepgram;

@@ -17,8 +17,9 @@ const SAME_PARAGRAPH_GAP_MS: u64 = 2_000;
 const SHORTEST_TURN_MS: u64 = 400;
 
 /// The pyannote segmentation 3.0 model (MIT) and the 3D-Speaker CAM++ voice model
-/// (Apache-2.0), in the form sherpa-onnx loads.
-pub const MODEL_FILES: [ModelFile; 2] = [
+/// (Apache-2.0), in the form sherpa-onnx loads, and NVIDIA's Nemotron-3-Diarization
+/// (OpenMDW-1.1), which follows up to eight speakers through a whole recording.
+pub const MODEL_FILES: [ModelFile; 3] = [
     ModelFile {
         file_name: "speaker-segmentation.onnx",
         url: "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/9403a6902bb58e3d5ae8c7e77c3422de279db2e0/model.onnx",
@@ -30,6 +31,12 @@ pub const MODEL_FILES: [ModelFile; 2] = [
         url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
         size_bytes: 28_281_164,
         sha256: "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+    },
+    ModelFile {
+        file_name: "speaker-turns.gguf",
+        url: "https://github.com/PenguinMiaou/Speech/releases/download/models-1/Nemotron-3-Diarization-Q8_0.gguf",
+        size_bytes: 108_664_384,
+        sha256: "8bb6dbb3de10c94f2b413e83e0219f6a7c4a86e3a9be3074e2b46e17b9770028",
     },
 ];
 
@@ -45,13 +52,44 @@ pub fn model_dir() -> Option<PathBuf> {
         .map(|dir| dir.join("models").join("speakers"))
 }
 
-/// The two model files, when both are fully downloaded.
-pub fn installed_models() -> Option<(PathBuf, PathBuf)> {
+fn downloaded(index: usize) -> Option<PathBuf> {
     let dir = model_dir()?;
-    let whole = |file: &ModelFile| {
-        crate::voice_isolation::is_downloaded(&dir, file).then(|| dir.join(file.file_name))
-    };
-    Some((whole(&MODEL_FILES[0])?, whole(&MODEL_FILES[1])?))
+    let file = &MODEL_FILES[index];
+    crate::voice_isolation::is_downloaded(&dir, file).then(|| dir.join(file.file_name))
+}
+
+/// The models for a recording still running, which is split window by window: the one
+/// that cuts the sound up and the voice model. Only when every file is downloaded.
+pub fn installed_models() -> Option<(PathBuf, PathBuf)> {
+    downloaded(2)?;
+    Some((downloaded(0)?, downloaded(1)?))
+}
+
+/// The models for a finished recording: the one that follows the speakers through all
+/// of it, and the voice model.
+pub fn models_for_a_file() -> Option<(PathBuf, PathBuf)> {
+    downloaded(0)?;
+    Some((downloaded(2)?, downloaded(1)?))
+}
+
+/// Whether the model tells the speakers of a whole recording in one go.
+pub fn follows(model: &Path) -> bool {
+    model
+        .extension()
+        .is_some_and(|extension| extension == "gguf")
+}
+
+/// The turns of a whole recording that fall between two moments, counted from the first.
+pub fn within(whole: &[SpeakerTurn], from_ms: u64, to_ms: u64) -> Vec<SpeakerTurn> {
+    whole
+        .iter()
+        .filter(|turn| turn.start_ms < to_ms && turn.end_ms > from_ms)
+        .map(|turn| SpeakerTurn {
+            start_ms: turn.start_ms.max(from_ms) - from_ms,
+            end_ms: turn.end_ms.min(to_ms) - from_ms,
+            speaker: turn.speaker,
+        })
+        .collect()
 }
 
 /// Tidies the worker's turns into paragraphs: no audio twice, no blips, and one speaker's
@@ -122,6 +160,27 @@ mod tests {
             end_ms,
             speaker,
         }
+    }
+
+    #[test]
+    fn a_part_of_a_recording_gets_the_turns_that_fall_in_it_counted_from_its_start() {
+        let whole = [
+            turn(0, 4_000, 1),
+            turn(4_000, 12_000, 2),
+            turn(12_000, 20_000, 1),
+        ];
+        assert_eq!(
+            within(&whole, 5_000, 15_000),
+            vec![turn(0, 7_000, 2), turn(7_000, 10_000, 1)]
+        );
+        assert_eq!(within(&whole, 20_000, 30_000), vec![]);
+    }
+
+    #[test]
+    fn the_model_that_follows_speakers_is_downloaded_with_the_others() {
+        assert_eq!(MODEL_FILES.len(), 3);
+        assert!(follows(Path::new(MODEL_FILES[2].file_name)));
+        assert!(!follows(Path::new(MODEL_FILES[0].file_name)));
     }
 
     #[test]

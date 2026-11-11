@@ -248,6 +248,35 @@ mod tests {
 
 static TRANSCRIBING_FILE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Has meetings heard with the recognizer the settings name for dictation: the one on
+/// this machine, or one away from it, to which the sound of the meeting then goes.
+async fn choose_recognizer(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let config = app.state::<crate::storage::ConfigManager>();
+    let client = app.state::<reqwest::Client>();
+    let settings = config.load().await.map_err(|error| error.to_string())?;
+    let chosen = if crate::stt::batch::leaves_the_machine(&settings.stt_provider) {
+        let key = crate::credentials::resolve_stt_config_secret(
+            &settings,
+            &crate::credentials::SystemCredentialVault,
+        )
+        .map_err(|error| error.to_string())?;
+        crate::stt::batch::Chosen::of(&settings, key, client.inner().clone())?
+    } else {
+        None
+    };
+    crate::applog::note(
+        "meeting",
+        if chosen.is_some() {
+            "meetings are heard by the recognizer away from this machine"
+        } else {
+            "meetings are heard on this machine"
+        },
+    );
+    crate::stt::batch::choose(chosen);
+    Ok(())
+}
+
 async fn file_options(
     dictionary: &crate::storage::DictionaryStore,
     speaker_label: Option<String>,
@@ -289,6 +318,7 @@ pub async fn transcribe_file(
     languages: Option<Vec<String>>,
     dictionary: tauri::State<'_, crate::storage::DictionaryStore>,
 ) -> Result<String, String> {
+    choose_recognizer(&app).await?;
     let languages = languages.unwrap_or_default();
     let options = file_options(&dictionary, speaker_label, model_id, languages).await;
     if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
@@ -301,8 +331,16 @@ pub async fn transcribe_file(
         "file",
         &format!("transcribing a file, speakers told apart: {by_speaker}"),
     );
+    // How much sound was heard and how long that took go into the log, so that a slow
+    // machine can be told from a stuck one.
+    let started = std::time::Instant::now();
+    let heard = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let heard_to = heard.clone();
     let result = tokio::task::spawn_blocking(move || {
         crate::file_transcribe::transcribe(std::path::Path::new(&path), &options, |stage| {
+            if let crate::file_transcribe::Stage::Text { done, .. } = &stage {
+                heard_to.store(*done, Ordering::SeqCst);
+            }
             report_stage(&app, stage)
         })
     })
@@ -311,6 +349,14 @@ pub async fn transcribe_file(
     .and_then(|result| result);
     TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
     crate::file_transcribe::stop(false);
+    crate::applog::note(
+        "file",
+        &format!(
+            "{} seconds of sound heard in {} seconds",
+            heard.load(Ordering::SeqCst),
+            started.elapsed().as_secs()
+        ),
+    );
     crate::applog::note(
         "file",
         match &result {
@@ -350,6 +396,7 @@ pub async fn meeting_record_start(
     if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
         return Err("busy".to_string());
     }
+    choose_recognizer(&app).await?;
     let languages = languages.unwrap_or_default();
     crate::applog::note(
         "meeting",
@@ -504,7 +551,8 @@ pub struct SpeakerModelsStatus {
 #[tauri::command]
 pub fn speaker_models_status() -> SpeakerModelsStatus {
     SpeakerModelsStatus {
-        installed: crate::speakers::installed_models().is_some(),
+        installed: crate::speakers::installed_models().is_some()
+            && crate::speakers::models_for_a_file().is_some(),
         downloading: SPEAKER_DOWNLOAD.load(Ordering::SeqCst),
         total_bytes: crate::speakers::MODEL_FILES
             .iter()
@@ -515,7 +563,7 @@ pub fn speaker_models_status() -> SpeakerModelsStatus {
 
 static SPEAKER_DOWNLOAD: AtomicBool = AtomicBool::new(false);
 
-/// Downloads and verifies the two speaker models, reporting progress over both as
+/// Downloads and verifies the speaker models, reporting progress over all of them as
 /// `speakers:download-progress`.
 #[tauri::command]
 pub async fn speaker_models_install(app: tauri::AppHandle) -> Result<(), String> {

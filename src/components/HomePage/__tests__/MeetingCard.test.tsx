@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MeetingCard } from '../MeetingCard'
+import { useAppStore } from '../../../stores/appStore'
 import * as tauri from '../../../lib/tauri'
 import { initialMeeting, useMeetingStore } from '../../../stores/meetingStore'
 
@@ -128,6 +129,40 @@ describe('MeetingCard', () => {
     await act(async () => finish('the first minute and the rest'))
     await screen.findByText('the first minute and the rest')
     expect(screen.queryByText('the first minute')).toBeNull()
+  })
+
+  it('shows that the sound goes to the recognizer chosen in the settings when that is away', async () => {
+    const config = useAppStore.getState().config
+    useAppStore.setState({ config: { ...config, stt_provider: 'groq-whisper' } })
+    await ready()
+    expect(screen.getByLabelText('meeting.heardAway')).toBeTruthy()
+    act(() => useAppStore.setState({ config }))
+    expect(screen.queryByLabelText('meeting.heardAway')).toBeNull()
+  })
+
+  it('names a failure of the recognizer chosen in the settings', async () => {
+    vi.mocked(tauri.transcribeFile).mockReset()
+    vi.mocked(tauri.transcribeFile).mockRejectedValue('stt_invalid_key')
+    await ready()
+    act(() => drop(['/tmp/talk.m4a']))
+    await waitFor(() =>
+      expect(useMeetingStore.getState().error).toBe('meeting.error.stt_invalid_key'),
+    )
+  })
+
+  it('keeps what was written of a file that could not be finished, and says it failed', async () => {
+    let fail: (reason: string) => void = () => {}
+    vi.mocked(tauri.transcribeFile).mockReset()
+    vi.mocked(tauri.transcribeFile).mockReturnValue(new Promise((_, reject) => (fail = reject)))
+    vi.mocked(tauri.meetingSave).mockClear()
+    await ready()
+    act(() => drop(['/tmp/one.mp3']))
+    act(() => write('the first minute'))
+    await act(async () => fail('local speech worker timed out'))
+    await waitFor(() =>
+      expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0].transcript).toBe('the first minute'),
+    )
+    expect(useMeetingStore.getState().error).toBe('meeting.error.failed')
   })
 
   it('stops writing a file out when asked, and keeps what is written so far', async () => {

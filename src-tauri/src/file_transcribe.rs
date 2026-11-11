@@ -173,6 +173,12 @@ pub fn recognize_in(
     before: Option<&str>,
     languages: &[String],
 ) -> Result<String, String> {
+    // A recognizer away from this machine, where the settings name one, hears it all.
+    if let Some(chosen) = crate::stt::batch::chosen() {
+        return chosen
+            .hear(pcm, vocabulary)
+            .map(|text| without_loops(&text));
+    }
     let ask = |language: Option<String>| {
         supervisor
             .transcribe_heard(
@@ -477,6 +483,34 @@ fn stopped() -> Result<(), String> {
     }
 }
 
+/// How many pieces one after another may fail before the file is given up.
+const FAILED_IN_A_ROW: u32 = 3;
+
+/// What a piece is taken to hold. A piece that could not be heard is left out, so that
+/// one bad stretch does not cost the whole file; `failed` counts such pieces in a row,
+/// and the file ends when there are too many, when it was let be, or when no model is
+/// there to hear with.
+fn forgiving(
+    failed: &std::cell::Cell<u32>,
+    outcome: Result<String, String>,
+) -> Result<String, String> {
+    match outcome {
+        Ok(text) => {
+            failed.set(0);
+            Ok(text)
+        }
+        Err(error) => {
+            let hopeless = error == STOPPED || error.contains("model") || error.contains("stt_");
+            failed.set(failed.get() + 1);
+            if hopeless || failed.get() >= FAILED_IN_A_ROW {
+                return Err(error);
+            }
+            crate::applog::note("file", "a piece could not be heard and is left out");
+            Ok(String::new())
+        }
+    }
+}
+
 /// Recognizes a whole file. See [`transcribe_pcm`].
 pub fn transcribe(
     path: &Path,
@@ -486,6 +520,15 @@ pub fn transcribe(
     transcribe_pcm(&decode(path)?, options, progress)
 }
 
+/// The model on this machine to hear with. None is needed, and an empty path stands for
+/// it, where the settings name a recognizer away from this machine.
+pub fn model_for(model_id: Option<&str>) -> Result<std::path::PathBuf, String> {
+    if crate::stt::batch::chosen().is_some() {
+        return Ok(std::path::PathBuf::new());
+    }
+    model_path(model_id).ok_or_else(|| "local_model_not_installed".to_string())
+}
+
 /// Recognizes a recording piece by piece, by speaker when asked and the speaker models
 /// are installed.
 pub fn transcribe_pcm(
@@ -493,14 +536,13 @@ pub fn transcribe_pcm(
     options: &Options,
     progress: impl FnMut(Stage),
 ) -> Result<String, String> {
-    let model = model_path(options.model_id.as_deref())
-        .ok_or_else(|| "local_model_not_installed".to_string())?;
+    let model = model_for(options.model_id.as_deref())?;
     let supervisor =
         crate::local_stt::global().ok_or_else(|| "local_engine_unavailable".to_string())?;
     let speakers = match &options.speaker_label {
         Some(label) => {
             let missing = || "speaker_models_not_installed".to_string();
-            let (segmentation, voice) = crate::speakers::installed_models().ok_or_else(missing)?;
+            let (segmentation, voice) = crate::speakers::models_for_a_file().ok_or_else(missing)?;
             Some(SpeakerModels {
                 segmentation,
                 voice,
@@ -646,11 +688,15 @@ fn recognize(
     pcm: &[f32],
     progress: impl FnMut(Stage),
 ) -> Result<String, String> {
+    let failed = std::cell::Cell::new(0);
     let hear = |sound: &[f32]| {
         stopped()?;
-        patiently(&TRY_AGAIN_AFTER, || {
-            recognize_in(supervisor, model, sound, vocabulary, None, languages)
-        })
+        forgiving(
+            &failed,
+            patiently(&TRY_AGAIN_AFTER, || {
+                recognize_in(supervisor, model, sound, vocabulary, None, languages)
+            }),
+        )
     };
     let Some(models) = speakers else {
         return in_parts(pcm, PART_SECS * RATE as usize, "", None, hear, progress);
@@ -660,8 +706,27 @@ fn recognize(
         crate::local_stt::REQUEST_TIMEOUT,
         std::time::Duration::from_secs(60),
     );
+    // A model that follows the speakers is given the whole recording once; each part
+    // then takes its own stretch of that answer.
+    let follows = crate::speakers::follows(&models.segmentation);
+    let mut whole = Vec::new();
+    let mut at = 0;
     let mut tell = |sound: &[f32], first: bool| {
         stopped()?;
+        if follows {
+            if first {
+                let (found, voices) = worker
+                    .diarize(&models.segmentation, &models.voice, pcm, &models.scratch)
+                    .map_err(|error| error.to_string())?;
+                crate::voiceprints::hear(voices, true);
+                whole = found;
+                at = 0;
+            }
+            let ms = |samples: usize| (samples as u64) * 1000 / u64::from(RATE);
+            let here = crate::speakers::within(&whole, ms(at), ms(at + sound.len()));
+            at += sound.len();
+            return Ok(here);
+        }
         let (found, voices) = worker
             .speakers_window(
                 &models.segmentation,
@@ -689,6 +754,38 @@ fn recognize(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_piece_that_cannot_be_heard_is_left_out_and_the_rest_goes_on() {
+        let answers = std::cell::RefCell::new(vec![
+            Ok("one".to_string()),
+            Err("engine_slow".to_string()),
+            Ok("three".to_string()),
+        ]);
+        let failed = std::cell::Cell::new(0);
+        let mut said = Vec::new();
+        for _ in 0..3 {
+            said.push(forgiving(&failed, answers.borrow_mut().remove(0)).unwrap());
+        }
+        assert_eq!(said, vec!["one", "", "three"]);
+    }
+
+    #[test]
+    fn pieces_that_fail_one_after_another_end_the_file() {
+        let failed = std::cell::Cell::new(0);
+        let fail = || forgiving(&failed, Err("engine_slow".to_string()));
+        assert_eq!(fail().unwrap(), "");
+        assert_eq!(fail().unwrap(), "");
+        assert_eq!(fail().unwrap_err(), "engine_slow");
+    }
+
+    #[test]
+    fn a_file_that_was_let_be_or_has_no_model_ends_at_once() {
+        let failed = std::cell::Cell::new(0);
+        assert!(forgiving(&failed, Err(STOPPED.to_string())).is_err());
+        let failed = std::cell::Cell::new(0);
+        assert!(forgiving(&failed, Err("model_missing".to_string())).is_err());
+    }
 
     #[test]
     fn a_file_that_is_let_be_ends_before_its_next_piece() {

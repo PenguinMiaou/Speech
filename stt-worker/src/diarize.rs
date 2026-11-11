@@ -14,6 +14,9 @@ pub fn diarize(
     pcm: &[f32],
     threads: i32,
 ) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
+    if follows_speakers(segmentation_model) {
+        return by_following(segmentation_model, embedding_model, pcm, threads);
+    }
     let config = OfflineSpeakerDiarizationConfig {
         segmentation: OfflineSpeakerSegmentationModelConfig {
             pyannote: OfflineSpeakerSegmentationPyannoteModelConfig {
@@ -67,6 +70,49 @@ pub fn diarize(
     };
     // A long meeting leaves dozens of numbers that each said a few seconds: coughs,
     // laughter, two people at once. They are not people of their own.
+    let whole = without_fragments(&turns, &voices);
+    if whole == turns {
+        return Ok((turns, voices));
+    }
+    let voices = voices_of(&extractor, pcm, &whole);
+    Ok((whole, voices))
+}
+
+/// Whether the model follows each speaker through the whole recording by itself, rather
+/// than cutting the sound up for voices to be compared afterwards.
+fn follows_speakers(model: &str) -> bool {
+    model.ends_with(".gguf")
+}
+
+/// Who spoke when, told by a model that keeps every speaker's number from the first
+/// minute to the last. The voice model only takes each speaker's voice, for their name.
+fn by_following(
+    model: &str,
+    embedding_model: &str,
+    pcm: &[f32],
+    threads: i32,
+) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
+    let failed = |error: transcribe_cpp::Error| error.to_string();
+    let model = transcribe_cpp::Model::load(model).map_err(failed)?;
+    let mut session = model.diarize_session().map_err(failed)?;
+    let mut segments = session.run(pcm, &Default::default()).map_err(failed)?;
+    segments.sort_by_key(|segment| segment.t0_ms);
+    let turns = number_by_first_appearance(segments.iter().map(|segment| {
+        (
+            segment.t0_ms as f32 / 1000.0,
+            segment.t1_ms as f32 / 1000.0,
+            segment.speaker_id,
+        )
+    }));
+    let embedding = SpeakerEmbeddingExtractorConfig {
+        model: Some(embedding_model.to_string()),
+        num_threads: threads,
+        ..Default::default()
+    };
+    let Some(extractor) = sherpa_onnx::SpeakerEmbeddingExtractor::create(&embedding) else {
+        return Ok((turns, Vec::new()));
+    };
+    let voices = voices_of(&extractor, pcm, &turns);
     let whole = without_fragments(&turns, &voices);
     if whole == turns {
         return Ok((turns, voices));
@@ -413,6 +459,14 @@ mod tests {
     }
 
     #[test]
+    fn a_model_that_follows_speakers_is_known_by_its_file() {
+        assert!(follows_speakers("models/speakers/speaker-turns.gguf"));
+        assert!(!follows_speakers(
+            "models/speakers/speaker-segmentation.onnx"
+        ));
+    }
+
+    #[test]
     fn the_first_voice_heard_is_speaker_one() {
         let turns = number_by_first_appearance(
             [(0.0, 1.5, 7), (1.5, 3.0, 2), (3.0, 4.0, 7), (4.0, 5.0, 0)].into_iter(),
@@ -558,5 +612,10 @@ mod tests {
                 turn.start_ms, turn.end_ms, turn.speaker
             );
         }
+        let mut said: std::collections::BTreeMap<u32, u64> = Default::default();
+        for turn in &turns {
+            *said.entry(turn.speaker).or_default() += (turn.end_ms - turn.start_ms) / 1000;
+        }
+        println!("seconds by speaker {said:?}");
     }
 }

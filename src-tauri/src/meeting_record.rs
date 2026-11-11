@@ -723,7 +723,9 @@ fn work(
                 None if waiting.finishing => return,
                 None => {
                     let unsettled = waiting.pending.len();
-                    let heard = guessing.due(unsettled).then(|| waiting.pending.clone());
+                    // A recognizer away from this machine is asked for settled speech only.
+                    let near = crate::stt::batch::chosen().is_none();
+                    let heard = (near && guessing.due(unsettled)).then(|| waiting.pending.clone());
                     drop(waiting);
                     let Some(heard) = heard else {
                         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -884,8 +886,7 @@ pub async fn start(
         return Err("busy".to_string());
     }
     delete_recording();
-    let model = crate::file_transcribe::model_path(model_id.as_deref())
-        .ok_or_else(|| "local_model_not_installed".to_string())?;
+    let model = crate::file_transcribe::model_for(model_id.as_deref())?;
     let supervisor =
         crate::local_stt::global().ok_or_else(|| "local_engine_unavailable".to_string())?;
     let speakers = if by_speaker {

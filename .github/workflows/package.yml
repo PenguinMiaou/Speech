@@ -52,6 +52,20 @@ jobs:
           "VULKAN_SDK=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
           "$root\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+      # The recognizer's Vulkan part asks for these headers as a CMake package, which
+      # the SDK does not bring. They are taken at the commit that goes with the SDK.
+      - name: Install the SPIR-V headers
+        shell: pwsh
+        run: |
+          git init -q spirv-headers
+          git -C spirv-headers fetch -q --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git 09913f088a1197aba4aefd300a876b2ebbaa3391
+          git -C spirv-headers checkout -q FETCH_HEAD
+          cmake -S spirv-headers -B spirv-headers/build "-DCMAKE_INSTALL_PREFIX=C:\spirv-headers" -DSPIRV_HEADERS_ENABLE_TESTS=OFF
+          cmake --build spirv-headers/build --target install --config Release
+          if (-not (Test-Path "C:\spirv-headers\share\cmake\SPIRV-Headers\SPIRV-HeadersConfig.cmake")) { throw "the SPIR-V headers were not installed" }
+          "TRANSCRIBE_CMAKE_ARGS=$env:TRANSCRIBE_CMAKE_ARGS -DSPIRV-Headers_DIR=C:/spirv-headers/share/cmake/SPIRV-Headers" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Remove-Item -Recurse -Force spirv-headers
+
       # The speech worker is built first by the app's own build command.
       - name: Build the installer
         run: npm run tauri build -- --bundles nsis

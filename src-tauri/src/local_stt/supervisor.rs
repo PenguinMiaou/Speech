@@ -67,6 +67,8 @@ pub struct WorkerSupervisor {
     failed: Mutex<(Option<Instant>, u32)>,
     /// How long the worker does without after the first failure.
     again_after: Duration,
+    /// How many times the length of the sound hearing it may take.
+    slowest: u32,
 }
 
 /// How long the worker does without the graphics processor after it failed once; each
@@ -259,7 +261,31 @@ fn encode(request: &Request) -> Result<Vec<u8>, LocalSttError> {
     Ok(buffer)
 }
 
+/// How many times the length of the sound a slow machine may take to hear it.
+const SLOWEST: u32 = 20;
+
+/// Whether the graphics processor may be why this failed: the worker died, the model
+/// did not load, or the computing itself went wrong. Words that repeat, a decode out of
+/// room and a worker that is merely slow are none of its doing.
+fn blamed_on_acceleration(error: &LocalSttError) -> bool {
+    match error {
+        LocalSttError::WorkerCrashed(_) => true,
+        LocalSttError::Engine { code, message } => {
+            code == "load_failed" || message.contains("backend")
+        }
+        _ => false,
+    }
+}
+
 impl WorkerSupervisor {
+    /// How long hearing so many samples may take: the fixed allowance, and time in
+    /// proportion to the sound, enough for a machine that hears far slower than it is
+    /// spoken.
+    fn allowance(&self, samples: usize) -> Duration {
+        self.request_timeout
+            + Duration::from_secs_f64(samples as f64 / SAMPLE_RATE_HZ) * self.slowest
+    }
+
     pub fn new(command: WorkerCommand, request_timeout: Duration, idle_timeout: Duration) -> Self {
         Self {
             command,
@@ -270,7 +296,14 @@ impl WorkerSupervisor {
             plain: std::sync::atomic::AtomicBool::new(false),
             failed: Mutex::new((None, 0)),
             again_after: TRY_AGAIN_AFTER,
+            slowest: SLOWEST,
         }
+    }
+
+    /// The same supervisor, giving hearing this many times the length of the sound.
+    pub fn hearing_within(mut self, times: u32) -> Self {
+        self.slowest = times;
+        self
     }
 
     /// The same supervisor, waiting this long after a first failure before it tries the
@@ -333,10 +366,7 @@ impl WorkerSupervisor {
         if first.is_ok() && !self.is_plain() {
             *self.failed() = (None, 0);
         }
-        let blamed = matches!(
-            first,
-            Err(LocalSttError::WorkerCrashed(_) | LocalSttError::Engine { .. })
-        );
+        let blamed = first.as_ref().is_err_and(blamed_on_acceleration);
         if !blamed || !self.falls_back || self.is_plain() {
             return first;
         }
@@ -532,14 +562,13 @@ impl WorkerSupervisor {
             },
         };
         let payload = encode(&request);
-        let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
         let answer = payload.and_then(|payload| {
             let mut state = self.lock();
             if state.is_none() {
                 *state = Some(spawn_worker(&self.command, self.is_plain())?);
             }
             let running = state.as_mut().expect("worker was just started");
-            match exchange(running, payload, self.request_timeout + audio_time) {
+            match exchange(running, payload, self.allowance(pcm.len())) {
                 Ok(Response::Speakers { turns, voices }) => Ok((turns, voices)),
                 Ok(Response::Error { code, message }) => {
                     Err(LocalSttError::Engine { code, message })
@@ -587,14 +616,13 @@ impl WorkerSupervisor {
             tokens: text(tokens),
             pcm_path: text(&pcm_path),
         });
-        let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
         let answer = payload.and_then(|payload| {
             let mut state = self.lock();
             if state.is_none() {
                 *state = Some(spawn_worker(&self.command, self.is_plain())?);
             }
             let running = state.as_mut().expect("worker was just started");
-            match exchange(running, payload, self.request_timeout + audio_time) {
+            match exchange(running, payload, self.allowance(pcm.len())) {
                 Ok(Response::WordTimes { tokens }) => Ok(tokens),
                 Ok(Response::Error { code, message }) => {
                     Err(LocalSttError::Engine { code, message })
@@ -738,11 +766,8 @@ impl WorkerSupervisor {
         for sample in pcm {
             payload.extend_from_slice(&sample.to_le_bytes());
         }
-
-        // Recognition takes time in proportion to the audio, so only the base allowance is fixed.
-        let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
         let running = state.as_mut().expect("worker was just loaded");
-        match exchange(running, payload, self.request_timeout + audio_time) {
+        match exchange(running, payload, self.allowance(pcm.len())) {
             Ok(Response::Transcript { text, language, .. }) => Ok((text, language)),
             Ok(Response::Error { code, message }) => Err(LocalSttError::Engine { code, message }),
             Ok(other) => {
@@ -1086,6 +1111,39 @@ while True:
     }
 
     #[test]
+    fn slow_hearing_gets_time_in_proportion_to_the_sound() {
+        let worker = supervisor("ok", "", 2_000, 60_000);
+        // Ten seconds of sound: the fixed allowance and twenty times its length.
+        assert_eq!(
+            worker.allowance(160_000),
+            Duration::from_secs(2) + Duration::from_secs(200)
+        );
+    }
+
+    #[test]
+    fn words_that_repeat_are_not_blamed_on_acceleration() {
+        let repeats = LocalSttError::Engine {
+            code: "transcribe_failed".into(),
+            message: "output began repeating before end-of-stream".into(),
+        };
+        assert!(!blamed_on_acceleration(&repeats));
+        let backend = LocalSttError::Engine {
+            code: "transcribe_failed".into(),
+            message: "run: backend error (status 8)".into(),
+        };
+        assert!(blamed_on_acceleration(&backend));
+        let load = LocalSttError::Engine {
+            code: "load_failed".into(),
+            message: "no device".into(),
+        };
+        assert!(blamed_on_acceleration(&load));
+        assert!(blamed_on_acceleration(&LocalSttError::WorkerCrashed(
+            "exit".into()
+        )));
+        assert!(!blamed_on_acceleration(&LocalSttError::Timeout));
+    }
+
+    #[test]
     fn a_failure_that_acceleration_is_not_to_blame_for_stays_one() {
         let worker = supervisor("bad-load", "", 5_000, 60_000).falling_back();
         let error = worker.ensure_loaded(&model_file()).unwrap_err();
@@ -1132,7 +1190,7 @@ while True:
 
     #[test]
     fn worker_that_stops_reading_audio_still_times_out() {
-        let worker = supervisor("never-read", "", 400, 60_000);
+        let worker = supervisor("never-read", "", 400, 60_000).hearing_within(1);
         // 160 KB fills the pipe, and 2.5 seconds of audio keeps the allowance short.
         let audio = vec![0.0f32; 40_000];
         let started = Instant::now();

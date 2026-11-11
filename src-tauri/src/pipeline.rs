@@ -2378,12 +2378,12 @@ impl PipelineHandle {
             return Ok(None);
         }
 
-        let raw_text = self
-            .accumulated_text
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .trim()
-            .to_string();
+        let raw_text = heard(
+            &self
+                .accumulated_text
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        );
 
         // A recognizer handed pure silence still returns a phrase, so the audio decides.
         let silent = crate::audio::silence::is_silent(self.recording_peak.load(Ordering::SeqCst));
@@ -3454,9 +3454,25 @@ impl PipelineHandle {
     }
 }
 
+/// What the recognizer wrote, with words it got stuck on written once, as in a meeting.
+fn heard(accumulated: &str) -> String {
+    crate::file_transcribe::without_loops(accumulated.trim())
+        .trim()
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn words_the_recognizer_got_stuck_on_are_typed_once() {
+        assert_eq!(
+            heard("  谢谢大家谢谢大家谢谢大家谢谢大家，明天见 "),
+            "谢谢大家，明天见"
+        );
+        assert_eq!(heard("好的好的，我知道了"), "好的好的，我知道了");
+    }
 
     fn named_config() -> storage::AppConfig {
         storage::AppConfig {

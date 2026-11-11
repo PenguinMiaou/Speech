@@ -19,6 +19,11 @@ transcribe-cpp = { version = "=0.4.1", default-features = false, features = ["me
 [target.'cfg(not(all(target_os = "macos", target_arch = "aarch64")))'.dependencies]
 transcribe-cpp = { version = "=0.4.1", default-features = false }
 
+# The library with Nemotron-3-Diarization added, which follows up to eight speakers.
+[patch.crates-io]
+transcribe-cpp = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "31c72970065d43efedb1e4ad11008b889b53271c" }
+transcribe-cpp-sys = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "31c72970065d43efedb1e4ad11008b889b53271c" }
+
 [features]
 # Runs the recognizer on the graphics processor through Vulkan, where the machine has
 # one. Building it needs the Vulkan SDK.

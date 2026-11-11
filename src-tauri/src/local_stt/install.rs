@@ -316,6 +316,39 @@ mod tests {
         assert_eq!(std::fs::metadata(&path).unwrap().len(), entry.size_bytes);
     }
 
+    /// Downloads the models that tell speakers apart into `INSTALL_DIR` from the real
+    /// servers, the way the meeting card does.
+    #[tokio::test]
+    #[ignore = "downloads about 140 megabytes"]
+    async fn installs_the_speaker_models_from_the_real_servers() {
+        let dir = PathBuf::from(std::env::var("INSTALL_DIR").expect("INSTALL_DIR"));
+        for file in &crate::speakers::MODEL_FILES {
+            let job = InstallJob {
+                model_id: file.file_name.to_string(),
+                url: file.url.to_string(),
+                file_name: file.file_name.to_string(),
+                size_bytes: file.size_bytes,
+                sha256: file.sha256.to_string(),
+                dir: dir.clone(),
+                client: reqwest::Client::new(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                free_space: plenty,
+            };
+            let started = std::time::Instant::now();
+            let mut steps = 0;
+            let path = download_and_verify(&job, |_| steps += 1)
+                .await
+                .expect("an installed model");
+            println!(
+                "{} is {} bytes after {}s and {steps} progress reports",
+                file.file_name,
+                std::fs::metadata(&path).unwrap().len(),
+                started.elapsed().as_secs()
+            );
+            assert_eq!(std::fs::metadata(&path).unwrap().len(), file.size_bytes);
+        }
+    }
+
     #[tokio::test]
     async fn downloads_and_verifies() {
         let (server, dir) = (serve(200, BODY).await, temp_dir());

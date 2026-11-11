@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   AudioLines,
   ArrowLeft,
+  Cloud,
   Copy,
   Download,
   Files,
@@ -118,6 +119,10 @@ const KNOWN_ERRORS = [
   'speaker_models_not_installed',
   'system_audio_unsupported',
   'busy',
+  'stt_invalid_key',
+  'stt_quota_exceeded',
+  'stt_timeout',
+  'stt_failed',
 ]
 const SPEAKERS_KEY = 'meeting.speakers'
 const SYSTEM_SOUND_KEY = 'meeting.systemSound'
@@ -243,6 +248,11 @@ export function MeetingCard() {
   const { t } = useTranslation()
   const inputDevice = useAppStore((s) => s.config.input_device)
   const dictationModel = useAppStore((s) => s.config.stt_local_model)
+  /** Whether the recognizer chosen in the settings is away from this machine: meetings
+   * are heard with the same one, so their sound then goes there. */
+  const heardAway = useAppStore(
+    (s) => s.config.stt_provider !== 'local-qwen3' && s.config.stt_provider !== 'apple-speech',
+  )
   const {
     phase,
     text,
@@ -476,7 +486,17 @@ export function MeetingCard() {
         setError(`meeting.error.${code ?? 'failed'}`)
         several.current.failed = several.current.running
         // A meeting that could not be written out anew stays as it was.
-        if (same) set({ text: was.text, names: was.names, times: was.times, voicesAtHand: false })
+        if (same) {
+          set({ text: was.text, names: was.names, times: was.times, voicesAtHand: false })
+          return
+        }
+        // What was written of a new one before it failed is kept as a meeting.
+        const soFar = useMeetingStore.getState().soFar
+        if (!soFar.trim()) return
+        return settle(soFar).then((text) => {
+          setText(text)
+          keep()
+        })
       })
       .finally(() => {
         enter('idle')
@@ -1021,6 +1041,16 @@ export function MeetingCard() {
         </div>
         {list && (
           <div className="flex shrink-0 items-center gap-2">
+            {heardAway && (
+              <span
+                role="img"
+                aria-label={t('meeting.heardAway')}
+                title={t('meeting.heardAway')}
+                className="inline-flex px-1 text-text-secondary"
+              >
+                <Cloud size={16} />
+              </span>
+            )}
             <button
               type="button"
               aria-expanded={showOptions}
@@ -1255,7 +1285,7 @@ export function MeetingCard() {
                 {t('meeting.downloadingSpeakers', { percent: download })}
               </span>
             )}
-            {models.length > 1 && chosenModel && (
+            {!heardAway && models.length > 1 && chosenModel && (
               <div className="ml-auto w-[190px]">
                 <LogoSelect
                   compact

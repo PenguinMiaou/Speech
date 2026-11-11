@@ -55,6 +55,12 @@ Copyright (c) 2022 CNRS
 
 Finds where speakers change in a recording. Downloaded on first use in the ONNX form published at https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0, used unmodified under the MIT License. The original model is at https://huggingface.co/pyannote/segmentation-3.0.
 
+## Nemotron-3-Diarization
+
+Copyright (c) NVIDIA Corporation
+
+Follows each speaker through a whole recording. Downloaded on first use as a GGUF file converted, with 8-bit weights, from the model NVIDIA publishes at https://huggingface.co/nvidia/Nemotron-3-Diarization, under the OpenMDW License Agreement 1.1. The licence text is at https://openmdw.ai/license/1-1/ and a copy stands beside the file where it is downloaded from. It runs on transcribe.cpp (MIT) with the port of this model from https://github.com/handy-computer/transcribe.cpp/pull/175.
+
 ## 3D-Speaker CAM++
 
 Tells one speaker's voice from another's. Downloaded on first use in the ONNX form published with sherpa-onnx, used unmodified under the Apache License 2.0. The source is at https://github.com/modelscope/3D-Speaker.

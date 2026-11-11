@@ -188,14 +188,28 @@ impl Engine for RealEngine {
             .ok_or_else(|| engine_error("not_loaded", "no model loaded"))?;
         let mut options = run_options(vocabulary, prompt, self.accepts);
         options.language = self.language.clone();
-        let transcript = session
-            .run(pcm, &options)
-            .map_err(|e| engine_error("transcribe_failed", e))?;
-        Ok(EngineOutput {
-            text: transcript.text.trim().to_string(),
-            language: transcript.language,
-        })
+        heard(session.run(pcm, &options))
     }
+}
+
+/// What a run heard. A decode that was stopped because its words began to repeat, or
+/// because it ran out of room, still heard what came before: that is what it gives,
+/// and it is no failure.
+fn heard(
+    run: Result<transcribe_cpp::Transcript, transcribe_cpp::Error>,
+) -> Result<EngineOutput, EngineError> {
+    let transcript = match run {
+        Ok(transcript) => transcript,
+        Err(
+            error @ (transcribe_cpp::Error::OutputRepetition { .. }
+            | transcribe_cpp::Error::OutputTruncated { .. }),
+        ) => error.partial().cloned().unwrap_or_default(),
+        Err(error) => return Err(engine_error("transcribe_failed", error)),
+    };
+    Ok(EngineOutput {
+        text: transcript.text.trim().to_string(),
+        language: transcript.language,
+    })
 }
 
 #[cfg(test)]
@@ -207,6 +221,35 @@ mod tests {
     }
 
     #[test]
+    fn what_was_heard_before_the_words_began_to_repeat_is_kept() {
+        let partial = transcribe_cpp::Transcript {
+            text: " we ship on Friday ".into(),
+            ..Default::default()
+        };
+        let looped = transcribe_cpp::Error::OutputRepetition {
+            message: "decode stopped".into(),
+            partial: Some(Box::new(partial.clone())),
+        };
+        assert_eq!(heard(Err(looped)).unwrap().text, "we ship on Friday");
+        let cut = transcribe_cpp::Error::OutputTruncated {
+            message: "budget".into(),
+            partial: Some(Box::new(partial)),
+        };
+        assert_eq!(heard(Err(cut)).unwrap().text, "we ship on Friday");
+        let nothing = transcribe_cpp::Error::OutputRepetition {
+            message: "decode stopped".into(),
+            partial: None,
+        };
+        assert_eq!(heard(Err(nothing)).unwrap().text, "");
+    }
+
+    #[test]
+    fn a_run_that_failed_otherwise_is_a_failure() {
+        let failed = transcribe_cpp::Error::UnsupportedRole("x".into());
+        assert_eq!(heard(Err(failed)).unwrap_err().code, "transcribe_failed");
+    }
+
+    #[test]
     fn a_model_that_takes_hints_receives_them() {
         let options = with_vocabulary_and_prompt(Hints {
             vocabulary: true,
@@ -214,6 +257,36 @@ mod tests {
         });
         assert_eq!(options.vocabulary, vec!["TypeScript".to_string()]);
         assert_eq!(options.prompt.as_deref(), Some("上一段"));
+    }
+
+    /// Tries a model that only tells speakers apart, in one pass over the whole recording:
+    /// `OT_MODEL=<gguf> OT_WAV=<16 kHz mono 16-bit wav> cargo test --release
+    /// tells_who_spoke_when -- --ignored --nocapture`. Prints numbers only.
+    #[test]
+    #[ignore]
+    fn tells_who_spoke_when() {
+        let wav = std::fs::read(std::env::var("OT_WAV").unwrap()).unwrap();
+        let pcm = crate::eval::decode_wav(&wav).unwrap();
+        let model = Model::load(std::env::var("OT_MODEL").unwrap()).unwrap();
+        let mut session = model.diarize_session().unwrap();
+        let started = std::time::Instant::now();
+        let segments = session.run(&pcm, &Default::default()).unwrap();
+        println!(
+            "audio {:.0}s took {:.1}s on {}, {} segments",
+            pcm.len() as f32 / 16_000.0,
+            started.elapsed().as_secs_f32(),
+            model.backend(),
+            segments.len()
+        );
+        let mut seconds: std::collections::BTreeMap<i32, i64> = Default::default();
+        for segment in &segments {
+            *seconds.entry(segment.speaker_id).or_default() += segment.t1_ms - segment.t0_ms;
+            println!(
+                "{:>7} - {:>7} speaker {}",
+                segment.t0_ms, segment.t1_ms, segment.speaker_id
+            );
+        }
+        println!("milliseconds by speaker {seconds:?}");
     }
 
     #[test]

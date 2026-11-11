@@ -68,6 +68,8 @@ Rules:
 10. LETTER CASE: Keep every Latin word in the case it has in the transcription, in long text too. Never write ordinary words in ALL CAPS. The only change allowed is correcting the case of an acronym or a proper noun.
 11. SPOKEN SPELLING: When the speaker explains how a word they just said is written, apply it to that word, even if the transcription wrote the word with a different homophone, and delete the explanation. Keep the sentence when the writing itself is the topic, as in "巧克力的克和克拉的克是同一个字吗".
 12. SELF-CORRECTION: The speaker is dictating live and corrects themselves out loud. When a correction phrase (不对, 不是, 哦不, 啊不, 错了, 说错了, 我是说, 应该是, 算了, 我再说一遍, no wait, no, sorry, I mean, make it, actually make it) stands between two versions of the same thing (two times, days, numbers, people, places, items or choices), the speaker means only the last version. Write the sentence as if only that version had been said: delete the earlier version and the correction phrase. Punctuation around the phrase does not matter, and this applies inside lists too. Keep the words when nothing is being replaced: a judgment ("这个数据不对"), a report of what someone said ("他说不是老周，是老吴负责") and a contrast ("不是他不来，是来不了") are content.
+13. DIGITS: Write numbers, dates, times, amounts of money, percentages and measures in digits (三点五万 becomes 3.5万, twenty percent becomes 20%, 十二月五号 becomes 12月5号). Keep words inside set phrases and names (一下, 一起, 统一, 三心二意, 十一假期) and for a plain small count of people or things (三个人, 两件事, three options).
+14. MISHEARD WORDS: Speech recognition writes a wrong word that sounds like the right one. Where a word makes no sense in its sentence and a word of the same or nearly the same sound plainly fits, write the fitting word (功能已经上限了 becomes 功能已经上线了). When the sentence makes sense as written, or you are not sure, leave the word alone; never swap a word for a synonym.
 
 Examples:
 
@@ -84,7 +86,7 @@ Input: "我觉得这个方案还不错就是价格有点贵"
 Output: 我觉得这个方案还不错，就是价格有点贵
 
 Input: "下周一上午十点不对十一点碰头"
-Output: 下周一上午十一点碰头
+Output: 下周一上午11点碰头
 
 Input: "合同给王工，不是，给赵工"
 Output: 合同给赵工
@@ -96,7 +98,16 @@ Input: "call Anna no wait call Ben"
 Output: Call Ben
 
 Input: "the call is at four I mean five"
-Output: The call is at five
+Output: The call is at 5
+
+Input: "这个功能已经上限了用户反馈还不错"
+Output: 这个功能已经上线了，用户反馈还不错
+
+Input: "预算三点五万占比百分之二十十二月五号前定"
+Output: 预算3.5万，占比20%，12月5号前定
+
+Input: "我们三个人一起吃了顿饭"
+Output: 我们三个人一起吃了顿饭
 
 Input: "这个数据不对你再核实一下"
 Output: 这个数据不对，你再核实一下
@@ -714,8 +725,22 @@ mod tests {
     #[test]
     fn a_spoken_self_correction_keeps_only_the_last_version() {
         assert!(BASE_PROMPT.contains("SELF-CORRECTION"));
-        assert!(BASE_PROMPT.contains("Output: 下周一上午十一点碰头"));
+        assert!(BASE_PROMPT.contains("Output: 下周一上午11点碰头"));
         assert!(BASE_PROMPT.contains("Output: 这个数据不对，你再核实一下"));
+    }
+
+    #[test]
+    fn dictation_writes_figures_in_digits_as_meetings_do() {
+        assert!(BASE_PROMPT.contains("13. DIGITS"));
+        assert!(BASE_PROMPT.contains("Output: 下周一上午11点碰头"));
+        assert!(BASE_PROMPT.contains("Output: 预算3.5万，占比20%，12月5号前定"));
+        assert!(BASE_PROMPT.contains("Output: 我们三个人一起吃了顿饭"));
+    }
+
+    #[test]
+    fn dictation_puts_right_a_plainly_misheard_word() {
+        assert!(BASE_PROMPT.contains("14. MISHEARD WORDS"));
+        assert!(BASE_PROMPT.contains("Output: 这个功能已经上线了，用户反馈还不错"));
     }
 
     #[test]
