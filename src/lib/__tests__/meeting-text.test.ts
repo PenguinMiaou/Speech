@@ -4,6 +4,7 @@ import {
   addTranslation,
   meetingText,
   renameSpeakers,
+  speakersAgain,
   speakersIn,
   spokenLines,
   stampNote,
@@ -11,6 +12,7 @@ import {
   transcriptLines,
   withLines,
   withParagraphText,
+  withSpeakers,
   type Paragraph,
 } from '../meeting-text'
 
@@ -47,7 +49,72 @@ describe('meeting text', () => {
     let paragraphs = addSegment([], said(null, 0, 'one'))
     paragraphs = addSegment(paragraphs, said(null, 30_000, 'two'))
     paragraphs = addSegment(paragraphs, said(null, 60_000, '  '))
-    expect(meetingText(paragraphs, 'Speaker')).toBe('one\n\ntwo')
+    expect(meetingText(paragraphs, 'Speaker')).toBe('00:00\none\n\n00:30\ntwo')
+  })
+
+  it('joins what follows soon when speakers are not told apart', () => {
+    let paragraphs = addSegment([], said(null, 0, 'one'))
+    paragraphs = addSegment(paragraphs, said(null, 8_000, 'two'))
+    expect(paragraphs).toEqual([{ speaker: null, startMs: 0, text: 'one two' }])
+  })
+
+  it('reads a time on a line of its own as the moment the words under it were said', () => {
+    expect(transcriptLines('00:30\ntwo\n\n1:02:05\nthree\n12:30 is late', 'Speaker')).toEqual([
+      { speaker: null, time: '00:30' },
+      { text: 'two' },
+      { text: '' },
+      { speaker: null, time: '1:02:05' },
+      { text: 'three' },
+      { text: '12:30 is late' },
+    ])
+  })
+
+  it('tells again who spoke each paragraph, keeping the numbers people already have', () => {
+    const paragraphs = [
+      { speaker: 1, startMs: 0, text: 'a' },
+      { speaker: 2, startMs: 10_000, text: 'b' },
+      // Heard as a third person while recording, and as the first in the whole sound.
+      { speaker: 3, startMs: 20_000, text: 'c' },
+      { speaker: 2, startMs: 30_000, text: 'd' },
+      // Someone the whole sound tells apart from the others.
+      { speaker: 2, startMs: 40_000, text: 'e' },
+    ]
+    const turn = (start_ms: number, end_ms: number, speaker: number) => ({
+      start_ms,
+      end_ms,
+      speaker,
+    })
+    const turns = [
+      turn(0, 9_000, 7),
+      turn(10_000, 19_000, 8),
+      turn(20_000, 26_000, 7),
+      turn(30_000, 39_000, 8),
+      turn(40_000, 45_000, 9),
+    ]
+    expect(speakersAgain(paragraphs, turns)).toEqual([1, 2, 1, 2, 4])
+  })
+
+  it('leaves a paragraph nobody was heard in, and a meeting without speakers, as they are', () => {
+    const turns = [{ start_ms: 0, end_ms: 5_000, speaker: 1 }]
+    expect(
+      speakersAgain(
+        [
+          { speaker: 2, startMs: 0, text: 'a' },
+          { speaker: 0, startMs: 60_000, text: 'b' },
+        ],
+        turns,
+      ),
+    ).toEqual([2, 0])
+    expect(speakersAgain([{ speaker: null, startMs: 0, text: 'a' }], turns)).toEqual([null])
+  })
+
+  it('puts the speakers told again into the headings of a text', () => {
+    const text = 'Speaker 1  00:00\na\n\nSpeaker 3  00:20\nSpeaker 3 said\n\nSpeaker  00:40\nc'
+    expect(withSpeakers(text, 'Speaker', [1, 1, 2])).toBe(
+      'Speaker 1  00:00\na\n\nSpeaker 1  00:20\nSpeaker 3 said\n\nSpeaker 2  00:40\nc',
+    )
+    // A paragraph was removed meanwhile: the headings no longer answer the paragraphs.
+    expect(withSpeakers(text, 'Speaker', [1, 1])).toBe(text)
   })
 
   it('finds the speakers a text names', () => {

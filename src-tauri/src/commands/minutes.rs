@@ -138,6 +138,7 @@ pub async fn meeting_learn(
 /// Translates one piece of a meeting with the language model chosen in the settings.
 #[tauri::command]
 pub async fn meeting_translate(
+    app: tauri::AppHandle,
     text: String,
     target: String,
     config_state: tauri::State<'_, storage::ConfigManager>,
@@ -152,5 +153,15 @@ pub async fn meeting_translate(
     if !configured {
         return Err("llm_not_configured".to_string());
     }
-    crate::minutes::translate(&client, &config, &api_key, &text, &target).await
+    use tauri::Emitter;
+    // The translation is shown as it is written: each event carries all of it so far.
+    let so_far = std::sync::Mutex::new(String::new());
+    let piece = move |piece: &str| {
+        let mut so_far = so_far
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        so_far.push_str(piece);
+        let _ = app.emit("meeting:translating", so_far.as_str());
+    };
+    crate::minutes::translate(&client, &config, &api_key, &text, &target, &piece).await
 }

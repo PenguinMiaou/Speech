@@ -54,6 +54,35 @@ pub fn installed_models() -> Option<(PathBuf, PathBuf)> {
     Some((whole(&MODEL_FILES[0])?, whole(&MODEL_FILES[1])?))
 }
 
+/// Tells who spoke when in a whole recording kept on disk. This runs in a worker of its
+/// own, so that dictation is not kept waiting for the minutes it can take.
+pub fn again(recording: &Path) -> Result<Vec<SpeakerTurn>, String> {
+    let missing = || "speaker_models_not_installed".to_string();
+    let (segmentation, voice) = installed_models().ok_or_else(missing)?;
+    let scratch = model_dir().ok_or_else(missing)?;
+    let command = crate::local_stt::default_worker_command().map_err(|e| e.to_string())?;
+    heard_whole(command, &segmentation, &voice, &scratch, recording)
+}
+
+fn heard_whole(
+    command: crate::local_stt::WorkerCommand,
+    segmentation: &Path,
+    voice: &Path,
+    scratch: &Path,
+    recording: &Path,
+) -> Result<Vec<SpeakerTurn>, String> {
+    let pcm = crate::file_transcribe::decode(recording)?;
+    let worker = crate::local_stt::WorkerSupervisor::new(
+        command,
+        crate::local_stt::REQUEST_TIMEOUT,
+        std::time::Duration::from_secs(60),
+    );
+    let found = worker.diarize(segmentation, voice, &pcm, scratch);
+    worker.stop();
+    let (turns, _) = found.map_err(|error| crate::local_stt::supervisor::failure_code(&error))?;
+    Ok(merge_turns(&turns))
+}
+
 /// Tidies the worker's turns into paragraphs: no audio twice, no blips, and one speaker's
 /// neighbouring turns joined.
 pub fn merge_turns(turns: &[SpeakerTurn]) -> Vec<SpeakerTurn> {
@@ -115,6 +144,35 @@ pub fn transcript(turns: &[(SpeakerTurn, String)], speaker_label: &str) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Run by hand on a real recording: `OT_WORKER OT_SEG OT_EMB OT_WAV`.
+    #[test]
+    #[ignore]
+    fn tells_the_speakers_of_a_kept_recording_again() {
+        let at = |name: &str| std::path::PathBuf::from(std::env::var(name).unwrap());
+        let command = crate::local_stt::WorkerCommand {
+            program: at("OT_WORKER"),
+            args: vec!["serve".to_string()],
+        };
+        let began = std::time::Instant::now();
+        let turns = heard_whole(
+            command,
+            &at("OT_SEG"),
+            &at("OT_EMB"),
+            &std::env::temp_dir(),
+            &at("OT_WAV"),
+        )
+        .unwrap();
+        let mut spoke = std::collections::BTreeMap::new();
+        for turn in &turns {
+            *spoke.entry(turn.speaker).or_insert(0) += (turn.end_ms - turn.start_ms) / 1000;
+        }
+        println!(
+            "{} turns in {:?}, seconds each: {spoke:?}",
+            turns.len(),
+            began.elapsed()
+        );
+    }
 
     fn turn(start_ms: u64, end_ms: u64, speaker: u32) -> SpeakerTurn {
         SpeakerTurn {

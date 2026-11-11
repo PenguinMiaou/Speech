@@ -457,7 +457,9 @@
     "punctuationMode": "Punctuation",
     "punctuationAuto": "Added automatically",
     "punctuationSpoken": "Only marks said aloud",
-    "punctuationNone": "None"
+    "punctuationNone": "None",
+    "showLog": "Show log",
+    "showLogHint": "States and errors only, never what was said"
   },
   "contextFamilies": {
     "email": "Email",
@@ -865,6 +867,7 @@
     "addLanguage": "Add a language",
     "removeLanguage": "Remove {{name}}",
     "pauseRecording": "Pause recording",
-    "resume": "Go on recording"
+    "resume": "Go on recording",
+    "speakersAgain": "Telling the speakers apart again"
   }
 }

@@ -258,6 +258,27 @@ describe('LlmConnectionForm', () => {
     expect(benchLlmConnection).toHaveBeenCalledTimes(3)
   })
 
+  it('puts the models in order of their times once all are timed, and marks the quickest', async () => {
+    mockStore.llmModels = ['a-slow', 'b-dead', 'c-quick']
+    vi.mocked(benchLlmConnection).mockImplementation(async (_key, _provider, _url, model) => {
+      if (model === 'b-dead') throw new Error('HTTP 404')
+      return { latencyMs: model === 'c-quick' ? 90 : 700, reasoningActive: false }
+    })
+    render(<LlmConnectionForm />)
+    await waitFor(() => expect(readCredential).toHaveBeenCalled())
+    openModelList()
+
+    await waitFor(() =>
+      expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+        'c-quick90ms',
+        'a-slow700ms',
+        'b-dead—',
+      ]),
+    )
+    expect(screen.getByText('90ms').dataset.quickest).toBe('true')
+    expect(screen.getByText('700ms').dataset.quickest).toBeUndefined()
+  })
+
   it('does not time a model again when the list is opened a second time', async () => {
     mockStore.llmModels = ['qwen/qwen3.8-27b', 'llama-3.3-70b-versatile']
     render(<LlmConnectionForm />)

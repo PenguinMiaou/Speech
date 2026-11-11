@@ -79,11 +79,15 @@ export function Transcript({ text, names, speakerLabel, label, onSeek, onEdit, p
             words(line, index)
           ) : (
             <>
-              <span className="font-medium" style={{ color: speakerColor(line.speaker) }}>
-                {names[line.speaker]?.trim() ||
-                  (line.speaker > 0 ? `${speakerLabel} ${line.speaker}` : speakerLabel)}
-              </span>
-              {'  '}
+              {line.speaker !== null && (
+                <>
+                  <span className="font-medium" style={{ color: speakerColor(line.speaker) }}>
+                    {names[line.speaker]?.trim() ||
+                      (line.speaker > 0 ? `${speakerLabel} ${line.speaker}` : speakerLabel)}
+                  </span>
+                  {'  '}
+                </>
+              )}
               {onSeek ? (
                 <button
                   type="button"

@@ -457,7 +457,9 @@
     "punctuationMode": "문장 부호",
     "punctuationAuto": "자동으로 넣기",
     "punctuationSpoken": "말로 한 부호만",
-    "punctuationNone": "넣지 않음"
+    "punctuationNone": "넣지 않음",
+    "showLog": "로그 보기",
+    "showLogHint": "상태와 오류만 기록하며 말한 내용은 기록하지 않습니다"
   },
   "contextFamilies": {
     "email": "이메일",
@@ -865,6 +867,7 @@
     "addLanguage": "언어 추가",
     "removeLanguage": "{{name}} 빼기",
     "pauseRecording": "녹음 일시 중지",
-    "resume": "녹음 계속"
+    "resume": "녹음 계속",
+    "speakersAgain": "화자를 다시 구분하는 중"
   }
 }

@@ -457,7 +457,9 @@
     "punctuationMode": "标点",
     "punctuationAuto": "自动加标点",
     "punctuationSpoken": "只加说出来的标点",
-    "punctuationNone": "不加标点"
+    "punctuationNone": "不加标点",
+    "showLog": "显示日志",
+    "showLogHint": "只记状态和错误，不记说话内容"
   },
   "contextFamilies": {
     "email": "邮件",
@@ -865,6 +867,7 @@
     "addLanguage": "添加语言",
     "removeLanguage": "去掉 {{name}}",
     "pauseRecording": "暂停录音",
-    "resume": "继续录音"
+    "resume": "继续录音",
+    "speakersAgain": "正在重新区分发言人"
   }
 }

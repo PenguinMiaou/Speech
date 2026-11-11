@@ -158,6 +158,32 @@ fn stopped(running: &mut Running, what: &str) -> LocalSttError {
 }
 
 /// Names why a model could not be run, for the message the user sees.
+/// What the log says of a failure. A reply the worker was not asked for is named and not
+/// written out, since a reply can hold what was said.
+pub fn log_text(error: &LocalSttError) -> String {
+    match error {
+        LocalSttError::WorkerCrashed(detail) if detail.starts_with("unexpected reply") => {
+            "the worker gave an unexpected reply".to_string()
+        }
+        other => other.to_string(),
+    }
+}
+
+/// Puts a failure of the worker in the log, and hands the result on as it is.
+fn noted<T>(what: &str, result: Result<T, LocalSttError>) -> Result<T, LocalSttError> {
+    if let Err(error) = &result {
+        crate::applog::note(
+            "engine",
+            &format!(
+                "{what} failed ({}): {}",
+                failure_code(error),
+                log_text(error)
+            ),
+        );
+    }
+    result
+}
+
 pub fn failure_code(error: &LocalSttError) -> &'static str {
     match error {
         // An instruction the processor does not have: STATUS_ILLEGAL_INSTRUCTION or SIGILL.
@@ -315,7 +341,10 @@ impl WorkerSupervisor {
         ),
         LocalSttError,
     > {
-        self.speakers(segmentation_model, embedding_model, pcm, scratch_dir, None)
+        noted(
+            "telling the speakers of a recording apart",
+            self.speakers(segmentation_model, embedding_model, pcm, scratch_dir, None),
+        )
     }
 
     /// The same for the next window of a recording still running: speakers keep their
@@ -334,12 +363,15 @@ impl WorkerSupervisor {
         ),
         LocalSttError,
     > {
-        self.speakers(
-            segmentation_model,
-            embedding_model,
-            pcm,
-            scratch_dir,
-            Some(first),
+        noted(
+            "telling the speakers of a window apart",
+            self.speakers(
+                segmentation_model,
+                embedding_model,
+                pcm,
+                scratch_dir,
+                Some(first),
+            ),
         )
     }
 
@@ -450,7 +482,10 @@ impl WorkerSupervisor {
     }
 
     pub fn ensure_loaded(&self, model_path: &Path) -> Result<(), LocalSttError> {
-        self.load_locked(&mut self.lock(), model_path)
+        noted(
+            "loading the model",
+            self.load_locked(&mut self.lock(), model_path),
+        )
     }
 
     pub fn transcribe(
@@ -479,6 +514,20 @@ impl WorkerSupervisor {
 
     /// The same, with the language the model heard when it was left to tell.
     pub fn transcribe_heard(
+        &self,
+        model_path: &Path,
+        pcm: &[f32],
+        vocabulary: Vec<String>,
+        prompt: Option<String>,
+        language: Option<String>,
+    ) -> Result<(String, Option<String>), LocalSttError> {
+        noted(
+            "recognizing",
+            self.recognized(model_path, pcm, vocabulary, prompt, language),
+        )
+    }
+
+    fn recognized(
         &self,
         model_path: &Path,
         pcm: &[f32],

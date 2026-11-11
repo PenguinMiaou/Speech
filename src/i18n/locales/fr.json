@@ -457,7 +457,9 @@
     "punctuationMode": "Ponctuation",
     "punctuationAuto": "Ajoutée automatiquement",
     "punctuationSpoken": "Seulement les signes prononcés",
-    "punctuationNone": "Aucune"
+    "punctuationNone": "Aucune",
+    "showLog": "Afficher le journal",
+    "showLogHint": "États et erreurs uniquement, jamais ce qui a été dit"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -865,6 +867,7 @@
     "addLanguage": "Ajouter une langue",
     "removeLanguage": "Retirer {{name}}",
     "pauseRecording": "Mettre en pause",
-    "resume": "Reprendre l’enregistrement"
+    "resume": "Reprendre l’enregistrement",
+    "speakersAgain": "Nouvelle distinction des intervenants"
   }
 }

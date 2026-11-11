@@ -457,7 +457,9 @@
     "punctuationMode": "Пунктуация",
     "punctuationAuto": "Расставлять автоматически",
     "punctuationSpoken": "Только названные вслух знаки",
-    "punctuationNone": "Без знаков"
+    "punctuationNone": "Без знаков",
+    "showLog": "Показать журнал",
+    "showLogHint": "Только состояния и ошибки, без сказанного"
   },
   "contextFamilies": {
     "email": "Электронная почта",
@@ -865,6 +867,7 @@
     "addLanguage": "Добавить язык",
     "removeLanguage": "Убрать {{name}}",
     "pauseRecording": "Приостановить запись",
-    "resume": "Продолжить запись"
+    "resume": "Продолжить запись",
+    "speakersAgain": "Говорящие определяются заново"
   }
 }

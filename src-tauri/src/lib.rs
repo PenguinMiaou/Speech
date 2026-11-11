@@ -1,4 +1,5 @@
 pub mod app_detector;
+pub mod applog;
 pub mod audio;
 pub mod commands;
 pub mod credentials;
@@ -871,6 +872,7 @@ pub fn run() {
 
             // Initialize data directory and database
             let data_dir = app.path().app_data_dir()?;
+            applog::init(&data_dir);
             local_stt::init(&data_dir);
             voice_isolation::init(&data_dir);
             speakers::init(&data_dir);
@@ -1229,6 +1231,8 @@ pub fn run() {
             commands::minutes::meeting_title,
             commands::local_stt::meeting_languages,
             commands::local_stt::meeting_record_pause,
+            commands::local_stt::meeting_speakers_again,
+            commands::local_stt::log_reveal,
             commands::minutes::meeting_learn,
             commands::minutes::minutes_templates,
             commands::minutes::minutes_template_import,

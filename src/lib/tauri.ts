@@ -1,3 +1,4 @@
+import type { SpeakerTurn } from './meeting-text'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import type {
@@ -932,6 +933,21 @@ export function onMeetingSegment(handler: (segment: MeetingSegment) => void): Pr
 
 export function onMeetingError(handler: (error: string) => void): Promise<UnlistenFn> {
   return listen<string>('meeting:error', (event) => handler(event.payload))
+}
+
+/** The translation being written now, as far as it has got. */
+export function onMeetingTranslating(handler: (text: string) => void): Promise<UnlistenFn> {
+  return listen<string>('meeting:translating', (event) => handler(event.payload))
+}
+
+/** Who spoke when in a kept meeting, told again from the whole of its sound. */
+export function meetingSpeakersAgain(id: string): Promise<SpeakerTurn[]> {
+  return invoke('meeting_speakers_again', { id })
+}
+
+/** Shows the app's log file in the file manager. */
+export function logReveal(): Promise<void> {
+  return invoke('log_reveal')
 }
 
 /** A guess at the words being said now, replaced by the settled words when they come. */

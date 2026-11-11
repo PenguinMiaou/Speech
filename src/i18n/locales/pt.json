@@ -457,7 +457,9 @@
     "punctuationMode": "Pontuação",
     "punctuationAuto": "Adicionada automaticamente",
     "punctuationSpoken": "Só os sinais ditos em voz alta",
-    "punctuationNone": "Nenhuma"
+    "punctuationNone": "Nenhuma",
+    "showLog": "Mostrar registo",
+    "showLogHint": "Apenas estados e erros, nunca o que foi dito"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -865,6 +867,7 @@
     "addLanguage": "Adicionar um idioma",
     "removeLanguage": "Remover {{name}}",
     "pauseRecording": "Pausar a gravação",
-    "resume": "Continuar a gravação"
+    "resume": "Continuar a gravação",
+    "speakersAgain": "Distinguindo os oradores novamente"
   }
 }

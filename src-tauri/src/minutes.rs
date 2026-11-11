@@ -298,13 +298,120 @@ pub fn translate_messages(text: &str, target: &str) -> Vec<Value> {
     ]
 }
 
-/// Translates one piece of a meeting with the user's language model.
+/// The same as `complete`, with the answer handed over piece by piece as it is written.
+/// Returns the whole answer.
+async fn complete_in_pieces(
+    client: &reqwest::Client,
+    config: &crate::storage::AppConfig,
+    api_key: &str,
+    messages: Vec<Value>,
+    max_tokens: u32,
+    piece: &(dyn Fn(&str) + Send + Sync),
+) -> Result<String, String> {
+    use crate::llm::protocol;
+    use futures_util::StreamExt;
+    let api_kind = protocol::resolve_api_kind(
+        &config.llm_api_format,
+        &config.llm_provider,
+        &config.llm_base_url,
+    );
+    let url = protocol::chat_endpoint(api_kind, &config.llm_base_url)?;
+    let mut body = protocol::build_chat_body(
+        api_kind,
+        &config.llm_provider,
+        &config.llm_base_url,
+        &config.llm_model,
+        messages,
+        max_tokens,
+        0.2,
+        true,
+    );
+    let response = protocol::send_with_reasoning_fallback(
+        |body| {
+            let request = client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .json(body)
+                .timeout(std::time::Duration::from_secs(180));
+            protocol::apply_auth_headers(api_kind, request, &config.llm_provider, api_key)
+        },
+        &mut body,
+        &config.llm_base_url,
+        &config.llm_model,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        let text: String = text.chars().take(300).collect();
+        return Err(format!("llm_http_{}: {text}", status.as_u16()));
+    }
+    let mut whole = String::new();
+    let mut used = crate::llm::usage::TokenUsage::default();
+    let mut thinking = protocol::ThinkFilter::default();
+    let mut unread = String::new();
+    let mut stream = response.bytes_stream();
+    let mut done = false;
+    while !done {
+        let Some(chunk) = stream.next().await else {
+            break;
+        };
+        unread.push_str(&String::from_utf8_lossy(
+            &chunk.map_err(|error| error.to_string())?,
+        ));
+        while let Some(end) = unread.find('\n') {
+            let line = unread[..end].trim().to_string();
+            unread = unread[end + 1..].to_string();
+            let Some(data) = protocol::sse_data(&line) else {
+                continue;
+            };
+            if data == "[DONE]" {
+                done = true;
+                break;
+            }
+            let Ok(event) = serde_json::from_str::<Value>(data) else {
+                continue;
+            };
+            used.absorb(&event);
+            let event = protocol::parse_stream_event(api_kind, &event);
+            if let Some(error) = event.error {
+                return Err(error);
+            }
+            if let Some(text) = event.text {
+                let shown = thinking.push(&text);
+                if !shown.is_empty() {
+                    whole.push_str(&shown);
+                    piece(&shown);
+                }
+            }
+            done = event.done;
+        }
+    }
+    let held_back = thinking.finish();
+    if !held_back.is_empty() {
+        whole.push_str(&held_back);
+        piece(&held_back);
+    }
+    if !used.is_empty() {
+        crate::llm::usage::report(used);
+    }
+    let whole = whole.trim();
+    if whole.is_empty() {
+        return Err("llm_empty".to_string());
+    }
+    Ok(whole.to_string())
+}
+
+/// Translates one piece of a meeting with the user's language model. The translation is
+/// handed to `piece` bit by bit as it is written, and returned whole.
 pub async fn translate(
     client: &reqwest::Client,
     config: &crate::storage::AppConfig,
     api_key: &str,
     text: &str,
     target: &str,
+    piece: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<String, String> {
     let text = text.trim();
     if text.is_empty() {
@@ -313,12 +420,13 @@ pub async fn translate(
     let limit = (text.chars().count() as u32)
         .saturating_mul(4)
         .clamp(256, 4096);
-    complete(
+    complete_in_pieces(
         client,
         config,
         api_key,
         translate_messages(text, target),
         limit,
+        piece,
     )
     .await
 }
@@ -640,6 +748,49 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[tokio::test]
+    async fn a_translation_is_handed_over_as_it_is_written() {
+        use wiremock::matchers::{body_partial_json, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let server = MockServer::start().await;
+        let stream = [
+            r#"data: {"choices":[{"delta":{"content":"We ship"}}]}"#,
+            r#"data: {"choices":[{"delta":{"content":" on Friday."}}]}"#,
+            "data: [DONE]",
+            "",
+        ]
+        .join("\n");
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(body_partial_json(json!({ "stream": true })))
+            .respond_with(ResponseTemplate::new(200).set_body_string(stream))
+            .mount(&server)
+            .await;
+        let config = crate::storage::AppConfig {
+            llm_provider: "custom".into(),
+            llm_base_url: format!("{}/v1", server.uri()),
+            llm_model: "some-model".into(),
+            llm_api_format: "chat_completions".into(),
+            ..Default::default()
+        };
+        let pieces = std::sync::Mutex::new(Vec::new());
+        let piece = |piece: &str| pieces.lock().unwrap().push(piece.to_string());
+
+        let whole = translate(
+            &reqwest::Client::new(),
+            &config,
+            "key",
+            "周五上线",
+            "en",
+            &piece,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(whole, "We ship on Friday.");
+        assert_eq!(*pieces.lock().unwrap(), ["We ship", " on Friday."]);
     }
 
     #[test]

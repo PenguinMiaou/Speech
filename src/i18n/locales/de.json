@@ -457,7 +457,9 @@
     "punctuationMode": "Satzzeichen",
     "punctuationAuto": "Automatisch gesetzt",
     "punctuationSpoken": "Nur ausgesprochene Zeichen",
-    "punctuationNone": "Keine"
+    "punctuationNone": "Keine",
+    "showLog": "Protokoll anzeigen",
+    "showLogHint": "Nur Zustände und Fehler, nie das Gesagte"
   },
   "contextFamilies": {
     "email": "E-Mail",
@@ -865,6 +867,7 @@
     "addLanguage": "Sprache hinzufügen",
     "removeLanguage": "{{name}} entfernen",
     "pauseRecording": "Aufnahme anhalten",
-    "resume": "Aufnahme fortsetzen"
+    "resume": "Aufnahme fortsetzen",
+    "speakersAgain": "Sprecher werden neu unterschieden"
   }
 }

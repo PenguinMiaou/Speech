@@ -495,6 +495,16 @@ function ModelPicker({
     }
   }, [open, onTime, listed])
 
+  // Once every model in the list has its time, the list is put in order of them, quickest
+  // first, and stays as it was listed until then so that it does not move under the pointer.
+  const time = (model: string) => {
+    const timing = timings[model]
+    return typeof timing === 'number' ? timing : Infinity
+  }
+  const allTimed = Boolean(onTime) && shown.slice(0, MOST_TIMED).every((model) => model in timings)
+  const ordered = allTimed ? [...shown].sort((a, b) => time(a) - time(b)) : shown
+  const quickest = allTimed ? Math.min(...shown.map(time)) : Infinity
+
   const commit = (model: string) => {
     onChange(model)
     close()
@@ -505,13 +515,13 @@ function ModelPicker({
       close()
     } else if (event.key === 'ArrowDown') {
       event.preventDefault()
-      setActive((index) => Math.min(index + 1, shown.length - 1))
+      setActive((index) => Math.min(index + 1, ordered.length - 1))
     } else if (event.key === 'ArrowUp') {
       event.preventDefault()
       setActive((index) => Math.max(index - 1, 0))
     } else if (event.key === 'Enter') {
       event.preventDefault()
-      const choice = shown[active] ?? typed
+      const choice = ordered[active] ?? typed
       if (choice) commit(choice)
     }
   }
@@ -546,7 +556,7 @@ function ModelPicker({
           />
           {shown.length > 0 ? (
             <div role="listbox">
-              {shown.map((model, index) => (
+              {ordered.map((model, index) => (
                 <button
                   key={model}
                   type="button"
@@ -561,6 +571,7 @@ function ModelPicker({
                   <ModelTiming
                     timing={timings[model]}
                     waiting={Boolean(onTime) && index < MOST_TIMED}
+                    quickest={time(model) === quickest && quickest < Infinity}
                   />
                 </button>
               ))}
@@ -576,14 +587,27 @@ function ModelPicker({
   )
 }
 
-function ModelTiming({ timing, waiting }: { timing: Timing | undefined; waiting: boolean }) {
+function ModelTiming({
+  timing,
+  waiting,
+  quickest,
+}: {
+  timing: Timing | undefined
+  waiting: boolean
+  quickest: boolean
+}) {
   if (timing === undefined) {
     return waiting ? (
       <Loader2 size={11} className="flex-shrink-0 animate-spin text-text-tertiary" />
     ) : null
   }
   return (
-    <span className="flex-shrink-0 text-[11px] tabular-nums text-text-tertiary">
+    <span
+      data-quickest={quickest || undefined}
+      className={`flex-shrink-0 text-[11px] tabular-nums ${
+        quickest ? 'font-medium text-success' : 'text-text-tertiary'
+      }`}
+    >
       {timing === 'failed' ? '—' : `${timing}ms`}
     </span>
   )

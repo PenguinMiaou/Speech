@@ -3,12 +3,14 @@ import {
   meetingAudioKeep,
   meetingLearn,
   meetingSave,
+  meetingSpeakersAgain,
   meetingTitle,
   meetingTranslate,
   onMeetingError,
   onMeetingInterim,
   onMeetingNames,
   onMeetingSegment,
+  onMeetingTranslating,
   speakerConfirm,
   type MeetingSegment,
 } from '../lib/tauri'
@@ -16,7 +18,9 @@ import {
   addSegment,
   addTranslation,
   meetingText,
+  speakersAgain,
   withParagraphText,
+  withSpeakers,
   type Paragraph,
 } from '../lib/meeting-text'
 
@@ -57,7 +61,17 @@ export interface MeetingState {
   interim: string
   /** The paragraph the user is changing while the recording runs, if any. */
   editing: number | null
+  /** The translation being written now, as far as it has got, and the paragraph it is of. */
+  translating: string
+  translatingAt: number | null
+  /** The title the app gave, with the meeting it gave it to; a title the user typed differs. */
+  titleFrom: string
+  /** True while the speakers are told again from the whole sound. */
+  sorting: boolean
 }
+
+/** A title as the app gave it to a meeting, to tell it later from one the user typed. */
+const given = (id: string, title: string) => `${id}\n${title}`
 
 export const initialMeeting: MeetingState = {
   phase: 'idle',
@@ -77,6 +91,10 @@ export const initialMeeting: MeetingState = {
   title: '',
   duration: 0,
   editing: null,
+  translating: '',
+  translatingAt: null,
+  titleFrom: '',
+  sorting: false,
 }
 
 export const useMeetingStore = create<MeetingState>(() => initialMeeting)
@@ -134,10 +152,53 @@ export function nameMeeting(speakerLabel: string): Promise<void> {
       const now = useMeetingStore.getState()
       // The user may have named it, or opened another meeting, in the meantime.
       if (!title?.trim() || now.id !== id || now.title.trim()) return
-      useMeetingStore.setState({ title: title.trim() })
+      useMeetingStore.setState({ title: title.trim(), titleFrom: given(id, title.trim()) })
       return persistMeeting(speakerLabel)
     })
     .catch(() => {})
+}
+
+/** Names the meeting again after its minutes, which say what it was about better than a
+ * reading of the words. A name the user typed stands. */
+export function nameFromMinutes(speakerLabel: string, minutes: string): Promise<void> {
+  const state = useMeetingStore.getState()
+  const id = state.id
+  const ours = (title: string) => !title.trim() || (id && state.titleFrom === given(id, title))
+  if (!id || !minutes.trim() || !ours(state.title)) return Promise.resolve()
+  const before = state.title
+  return Promise.resolve(meetingTitle(minutes))
+    .then((title) => {
+      const now = useMeetingStore.getState()
+      if (!title?.trim() || now.id !== id || now.title !== before) return
+      useMeetingStore.setState({ title: title.trim(), titleFrom: given(id, title.trim()) })
+      return persistMeeting(speakerLabel)
+    })
+    .catch(() => {})
+}
+
+/** Tells again who spoke in the meeting just recorded, from the whole of its kept sound,
+ * and puts that in the paragraphs and in the headings of the text. */
+export function tellSpeakersAgain(speakerLabel: string): Promise<void> {
+  const state = useMeetingStore.getState()
+  const id = state.id
+  const told = state.paragraphs.some((paragraph) => paragraph.speaker !== null)
+  if (!id || !state.recorded || !state.kept || !told) return Promise.resolve()
+  useMeetingStore.setState({ sorting: true })
+  return Promise.resolve(meetingSpeakersAgain(id))
+    .then((turns) => {
+      const now = useMeetingStore.getState()
+      if (!turns?.length || now.id !== id || now.text === null) return
+      const speakers = speakersAgain(now.paragraphs, turns)
+      const text = withSpeakers(now.text, speakerLabel, speakers)
+      if (text === now.text) return
+      useMeetingStore.setState({
+        text,
+        paragraphs: now.paragraphs.map((each, index) => ({ ...each, speaker: speakers[index] })),
+      })
+      return persistMeeting(speakerLabel)
+    })
+    .catch(() => {})
+    .finally(() => useMeetingStore.setState({ sorting: false }))
 }
 
 let translating: Promise<void> = Promise.resolve()
@@ -153,15 +214,17 @@ export function takeSegment(segment: MeetingSegment): Promise<void> {
   const target = useMeetingStore.getState().translateTo
   if (!target) return Promise.resolve()
   const index = paragraphs.length - 1
-  translating = translating.then(() =>
-    Promise.resolve(meetingTranslate(segment.text.trim(), target))
+  translating = translating.then(() => {
+    useMeetingStore.setState({ translatingAt: index, translating: '' })
+    return Promise.resolve(meetingTranslate(segment.text.trim(), target))
       .then((translated) =>
         useMeetingStore.setState((state) => ({
           paragraphs: addTranslation(state.paragraphs, index, translated ?? ''),
         })),
       )
-      .catch(() => useMeetingStore.setState({ error: 'meeting.translateFailed' })),
-  )
+      .catch(() => useMeetingStore.setState({ error: 'meeting.translateFailed' }))
+      .finally(() => useMeetingStore.setState({ translatingAt: null, translating: '' }))
+  })
   return translating
 }
 
@@ -198,6 +261,14 @@ export function listenToMeeting() {
     onMeetingInterim((interim) => {
       // A guess that arrives after the recording has ended has nothing left to stand in for.
       if (useMeetingStore.getState().phase === 'recording') useMeetingStore.setState({ interim })
+    }),
+  ).catch(() => {})
+  void Promise.resolve(
+    onMeetingTranslating((text) => {
+      // Only a translation that is awaited is shown as it is written.
+      if (useMeetingStore.getState().translatingAt !== null) {
+        useMeetingStore.setState({ translating: text })
+      }
     }),
   ).catch(() => {})
   void Promise.resolve(

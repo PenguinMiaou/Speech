@@ -15,6 +15,7 @@ import {
   Square,
   Trash2,
   Undo2,
+  Users,
 } from 'lucide-react'
 import {
   copyText,
@@ -70,7 +71,9 @@ import {
   editParagraph,
   learnFrom,
   listenToMeeting,
+  nameFromMinutes,
   nameMeeting,
+  tellSpeakersAgain,
   persistMeeting,
   useMeetingStore,
   whenTranslated,
@@ -155,6 +158,9 @@ export function MeetingCard() {
     interim,
     title,
     editing,
+    translating,
+    translatingAt,
+    sorting,
   } = useMeetingStore()
   const [past, setPast] = useState<MeetingSummary[]>([])
   const [showOptions, setShowOptions] = useState(false)
@@ -167,10 +173,11 @@ export function MeetingCard() {
       .catch(() => {})
   const persist = () => void persistMeeting(label).then(refreshPast)
   /** Keeps a meeting that has just been written out, then names it after what was said. */
-  const keep = () =>
-    void persistMeeting(label)
-      .then(() => nameMeeting(label))
-      .then(refreshPast)
+  const keep = () => {
+    const kept = persistMeeting(label)
+    void kept.then(() => nameMeeting(label)).then(refreshPast)
+    return kept
+  }
   const set = useMeetingStore.setState
   const setText = (text: string | null) => set({ text })
   const setError = (error: string | null) => set({ error })
@@ -385,7 +392,8 @@ export function MeetingCard() {
         // From here on the meeting is its text, which the user can go on correcting.
         const said = meetingText(useMeetingStore.getState().paragraphs, label)
         set({ recorded: true, text: said, editing: null })
-        keep()
+        // Heard whole, the meeting tells its speakers apart better than window by window.
+        void keep().then(() => tellSpeakersAgain(label))
         if (polishAfter) polish(said)
       })
       .catch(() => setError('meeting.error.failed'))
@@ -665,6 +673,16 @@ export function MeetingCard() {
                 <Undo2 size={16} />
               </button>
             )}
+            {sorting && (
+              <span
+                role="status"
+                aria-label={t('meeting.speakersAgain')}
+                title={t('meeting.speakersAgain')}
+                className="flex items-center px-1.5 text-text-tertiary"
+              >
+                <Users size={14} className="animate-pulse" />
+              </span>
+            )}
             <button
               type="button"
               onClick={() => polish()}
@@ -859,16 +877,16 @@ export function MeetingCard() {
               const who = paragraph.speaker
               return (
                 <div key={index}>
-                  {who !== null && (
-                    <p className="text-[12px]">
+                  <p className="text-[12px]">
+                    {who !== null && (
                       <span className="font-medium" style={{ color: speakerColor(who) }}>
-                        {names[who]?.trim() || (who > 0 ? `${label} ${who}` : label)}
+                        {`${names[who]?.trim() || (who > 0 ? `${label} ${who}` : label)}  `}
                       </span>
-                      <span className="tabular-nums text-text-tertiary">
-                        {`  ${clock(Math.floor(paragraph.startMs / 1000))}`}
-                      </span>
-                    </p>
-                  )}
+                    )}
+                    <span className="tabular-nums text-text-tertiary">
+                      {clock(Math.floor(paragraph.startMs / 1000))}
+                    </span>
+                  </p>
                   <p
                     contentEditable={phase === 'recording' ? 'plaintext-only' : undefined}
                     suppressContentEditableWarning
@@ -891,8 +909,12 @@ export function MeetingCard() {
                   >
                     {paragraph.text}
                   </p>
-                  {paragraph.translation && (
-                    <p className="text-text-secondary">{paragraph.translation}</p>
+                  {(paragraph.translation || (translatingAt === index && translating)) && (
+                    <p className="text-text-secondary">
+                      {[paragraph.translation, translatingAt === index ? translating : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                    </p>
                   )}
                 </div>
               )
@@ -1085,6 +1107,7 @@ export function MeetingCard() {
                 onMinutes={(written) => {
                   set({ minutes: written })
                   persist()
+                  void nameFromMinutes(label, written).then(refreshPast)
                 }}
               />
             )}

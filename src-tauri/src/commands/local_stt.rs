@@ -296,6 +296,10 @@ pub async fn transcribe_file(
     }
     let by_speaker = options.speaker_label.is_some();
     let names_to = app.clone();
+    crate::applog::note(
+        "file",
+        &format!("transcribing a file, speakers told apart: {by_speaker}"),
+    );
     let result = tokio::task::spawn_blocking(move || {
         crate::file_transcribe::transcribe(std::path::Path::new(&path), &options, |stage| {
             report_stage(&app, stage)
@@ -305,6 +309,13 @@ pub async fn transcribe_file(
     .map_err(|error| error.to_string())
     .and_then(|result| result);
     TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
+    crate::applog::note(
+        "file",
+        match &result {
+            Ok(_) => "the file is transcribed",
+            Err(_) => "the file could not be transcribed",
+        },
+    );
     if by_speaker && result.is_ok() {
         let _ = names_to.emit("meeting:names", crate::voiceprints::names());
     }
@@ -327,13 +338,21 @@ pub async fn meeting_record_start(
     if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
         return Err("busy".to_string());
     }
+    let languages = languages.unwrap_or_default();
+    crate::applog::note(
+        "meeting",
+        &format!(
+            "recording begins: speakers {by_speaker}, system sound {system_sound}, languages {}",
+            languages.len()
+        ),
+    );
     crate::meeting_record::start(
         input_device,
         by_speaker,
         system_sound,
         model_id,
         vocabulary,
-        languages.unwrap_or_default(),
+        languages,
         move |outcome| {
             let _ = match outcome {
                 Ok(crate::meeting_record::Heard::Said(segment)) => {
@@ -353,6 +372,34 @@ pub async fn meeting_record_start(
 #[tauri::command]
 pub fn meeting_record_pause(paused: bool) -> bool {
     crate::meeting_record::pause(paused)
+}
+
+/// Tells again who spoke when in a kept meeting, from the whole of its sound. Hearing a
+/// whole meeting at once tells voices apart better than hearing it window by window.
+#[tauri::command]
+pub async fn meeting_speakers_again(
+    id: String,
+) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, String> {
+    let recording = crate::meetings::audio(&id).ok_or_else(|| "no_recording".to_string())?;
+    crate::applog::note(
+        "meeting",
+        "telling the speakers apart again from the whole sound",
+    );
+    let turns = tokio::task::spawn_blocking(move || crate::speakers::again(&recording))
+        .await
+        .map_err(|error| error.to_string())??;
+    crate::applog::note("meeting", &format!("found {} turns", turns.len()));
+    Ok(turns)
+}
+
+/// Shows the log file in the file manager.
+#[tauri::command]
+pub fn log_reveal(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = crate::applog::path().ok_or_else(|| "no_log".to_string())?;
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|error| error.to_string())
 }
 
 /// Changes the languages the running meeting is held in: three at most, none to let the
@@ -385,7 +432,15 @@ pub fn meeting_record_level() -> Option<MeetingLevel> {
 /// The latest meeting's audio stays on disk; its path comes back unless it was discarded.
 #[tauri::command]
 pub async fn meeting_record_stop(discard: bool) -> Result<Option<String>, String> {
-    crate::meeting_record::stop(discard).await?;
+    let stopped = crate::meeting_record::stop(discard).await;
+    crate::applog::note(
+        "meeting",
+        &format!(
+            "recording ends: discarded {discard}, in order {}",
+            stopped.is_ok()
+        ),
+    );
+    stopped?;
     Ok(crate::meeting_record::kept_recording().map(|path| path.to_string_lossy().into_owned()))
 }
 

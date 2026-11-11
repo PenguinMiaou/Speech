@@ -457,7 +457,9 @@
     "punctuationMode": "句読点",
     "punctuationAuto": "自動で付ける",
     "punctuationSpoken": "声に出した記号だけ",
-    "punctuationNone": "付けない"
+    "punctuationNone": "付けない",
+    "showLog": "ログを表示",
+    "showLogHint": "状態とエラーのみ。話した内容は記録しません"
   },
   "contextFamilies": {
     "email": "メールアドレス",
@@ -865,6 +867,7 @@
     "addLanguage": "言語を追加",
     "removeLanguage": "{{name}} を外す",
     "pauseRecording": "録音を一時停止",
-    "resume": "録音を再開"
+    "resume": "録音を再開",
+    "speakersAgain": "話者を区別し直しています"
   }
 }

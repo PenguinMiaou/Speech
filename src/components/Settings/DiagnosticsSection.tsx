@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getSystemDiagnostics, type DiagnosticRow } from '../../lib/tauri'
+import { FileText } from 'lucide-react'
+import { getSystemDiagnostics, logReveal, type DiagnosticRow } from '../../lib/tauri'
 
 const PART: Record<string, string> = {
   microphone: 'settings.diagnosticMicrophone',
@@ -44,6 +45,15 @@ export function DiagnosticsSection() {
         className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
       >
         {t(busy ? 'settings.diagnosticStatusChecking' : 'settings.refreshDiagnostics')}
+      </button>
+      <button
+        type="button"
+        onClick={() => void Promise.resolve(logReveal()).catch(() => {})}
+        title={t('settings.showLogHint')}
+        className="ml-2 inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary"
+      >
+        <FileText size={14} />
+        {t('settings.showLog')}
       </button>
       {failed && <p className="text-[12px] text-error">{t('settings.diagnosticsUnavailable')}</p>}
       {rows && rows.length > 0 && (

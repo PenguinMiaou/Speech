@@ -377,7 +377,7 @@ describe('MeetingCard', () => {
     cleanup()
     act(() => hear({ speaker: null, start_ms: 0, text: 'said while away' }))
     render(<MeetingCard />)
-    expect(screen.getByRole('log').textContent).toBe('said while away')
+    expect(screen.getByRole('log').textContent).toBe('00:00said while away')
     expect(screen.getByRole('button', { name: 'meeting.stop' })).toBeTruthy()
   })
 
@@ -520,7 +520,7 @@ describe('MeetingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
     await screen.findByText('the minutes')
     expect(tauri.meetingMinutes).toHaveBeenCalledWith(
-      'what was said',
+      '00:00\nwhat was said',
       'meeting.defaultTemplate',
       expect.stringMatching(/^\[00:0\d\] cut the budget$/),
     )

@@ -471,6 +471,10 @@ fn work(
             // by window.
             Err(error) if !gives_up(&mut lost) => {
                 tracing::warn!("[Meeting] a window at {offset_ms} ms was passed over: {error}");
+                crate::applog::note(
+                    "meeting",
+                    &format!("the window at {offset_ms} ms was passed over ({lost} lost in a row)"),
+                );
                 guessing.settled();
                 continue;
             }
@@ -478,6 +482,7 @@ fn work(
                 let mut waiting = locked(&waiting);
                 waiting.dropped = true;
                 waiting.pending = Vec::new();
+                crate::applog::note("meeting", &format!("recognition gave up at {offset_ms} ms"));
                 report(Err(error));
                 return;
             }

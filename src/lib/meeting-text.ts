@@ -28,12 +28,12 @@ export function addSegment(
   const text = segment.text.trim()
   if (!text) return paragraphs
   const last = paragraphs[paragraphs.length - 1]
+  const sameVoice =
+    segment.speaker === null
+      ? last?.speaker === null
+      : segment.speaker === 0 || segment.speaker === last?.speaker
   const goesOn =
-    !closed &&
-    last &&
-    segment.speaker !== null &&
-    segment.start_ms - last.startMs < LONGEST_PARAGRAPH_MS &&
-    (segment.speaker === 0 || segment.speaker === last.speaker)
+    !closed && last && segment.start_ms - last.startMs < LONGEST_PARAGRAPH_MS && sameVoice
   if (goesOn) {
     return [...paragraphs.slice(0, -1), { ...last, text: joined(last.text, text) }]
   }
@@ -115,11 +115,13 @@ export function clock(seconds: number): string {
   return hours > 0 ? `${hours}:${rest}` : rest
 }
 
-/** The line above a paragraph: who speaks and when. Null when speakers are not told apart. */
-export function heading(paragraph: Paragraph, speakerLabel: string): string | null {
-  if (paragraph.speaker === null) return null
+/** The line above a paragraph: who speaks and when, or only when where speakers are not
+ * told apart. */
+export function heading(paragraph: Paragraph, speakerLabel: string): string {
+  const time = clock(Math.floor(paragraph.startMs / 1000))
+  if (paragraph.speaker === null) return time
   const who = paragraph.speaker === 0 ? speakerLabel : `${speakerLabel} ${paragraph.speaker}`
-  return `${who}  ${clock(Math.floor(paragraph.startMs / 1000))}`
+  return `${who}  ${time}`
 }
 
 /** The meeting as text, the way a transcribed file is written out. */
@@ -130,7 +132,7 @@ export function meetingText(paragraphs: Paragraph[], speakerLabel: string): stri
       const said = paragraph.translation
         ? `${paragraph.text}\n${paragraph.translation}`
         : paragraph.text
-      return above ? `${above}\n${said}` : said
+      return `${above}\n${said}`
     })
     .join('\n\n')
 }
@@ -159,17 +161,91 @@ export function renameSpeakers(
   })
 }
 
-export type TranscriptLine = { speaker: number; time: string } | { text: string }
+export type TranscriptLine = { speaker: number | null; time: string } | { text: string }
 
-/** A transcript line by line: a heading tells who speaks (0 for a voice too short to tell)
- * and when, any other line is words. */
+/** A transcript line by line: a heading tells who speaks (0 for a voice too short to tell,
+ * null where speakers are not told apart) and when, any other line is words. */
 export function transcriptLines(text: string, speakerLabel: string): TranscriptLine[] {
   const label = speakerLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const heading = new RegExp(`^${label}(?: (\\d+))? {2}(\\d[\\d:]*)$`)
   return text.split('\n').map((line) => {
     const found = heading.exec(line)
-    return found ? { speaker: Number(found[1] ?? 0), time: found[2] } : { text: line }
+    if (found) return { speaker: Number(found[1] ?? 0), time: found[2] }
+    return /^(\d+:)?\d{2}:\d{2}$/.test(line) ? { speaker: null, time: line } : { text: line }
   })
+}
+
+/** A stretch of a recording one person speaks in, as the speaker models tell it. */
+export interface SpeakerTurn {
+  start_ms: number
+  end_ms: number
+  speaker: number
+}
+
+/** Who speaks each paragraph, told again from the whole recording, which tells voices
+ * apart better than the windows it was first heard in. A voice keeps the number it mostly
+ * had, so that names given to numbers stay with their people; a voice that is new gets a
+ * new number. A paragraph nobody is heard in keeps what it had. */
+export function speakersAgain(paragraphs: Paragraph[], turns: SpeakerTurn[]): (number | null)[] {
+  const heard = paragraphs.map((paragraph, index) => {
+    if (paragraph.speaker === null) return null
+    const until = paragraphs[index + 1]?.startMs ?? Infinity
+    let most: { voice: number; ms: number } | null = null
+    const each = new Map<number, number>()
+    for (const turn of turns) {
+      const ms = Math.min(until, turn.end_ms) - Math.max(paragraph.startMs, turn.start_ms)
+      if (ms <= 0) continue
+      const total = (each.get(turn.speaker) ?? 0) + ms
+      each.set(turn.speaker, total)
+      if (!most || total > most.ms) most = { voice: turn.speaker, ms: total }
+    }
+    return most as { voice: number; ms: number } | null
+  })
+  // How long each voice spoke under each of the numbers given while recording.
+  const had = new Map<number, Map<number, number>>()
+  heard.forEach((found, index) => {
+    if (!found) return
+    const numbers = had.get(found.voice) ?? new Map<number, number>()
+    const before = paragraphs[index].speaker ?? 0
+    numbers.set(before, (numbers.get(before) ?? 0) + found.ms)
+    had.set(found.voice, numbers)
+  })
+  const spoke = (voice: number) => [...(had.get(voice)?.values() ?? [])].reduce((a, b) => a + b, 0)
+  const taken = new Set<number>()
+  let highest = Math.max(0, ...paragraphs.map((paragraph) => paragraph.speaker ?? 0))
+  const number = new Map<number, number>()
+  for (const voice of [...had.keys()].sort((a, b) => spoke(b) - spoke(a))) {
+    const mostly = [...(had.get(voice) ?? [])]
+      .filter(([before]) => before > 0 && !taken.has(before))
+      .sort((a, b) => b[1] - a[1])[0]
+    const given = mostly ? mostly[0] : ++highest
+    taken.add(given)
+    number.set(voice, given)
+  }
+  return paragraphs.map((paragraph, index) => {
+    const found = heard[index]
+    return found ? (number.get(found.voice) ?? paragraph.speaker) : paragraph.speaker
+  })
+}
+
+/** The text with its headings naming `speakers`, one for each heading in order. A text
+ * whose headings no longer answer them one for one is left as it is. */
+export function withSpeakers(
+  text: string,
+  speakerLabel: string,
+  speakers: (number | null)[],
+): string {
+  const lines = text.split('\n')
+  const read = transcriptLines(text, speakerLabel)
+  const headings = read.flatMap((line, index) => ('text' in line ? [] : [index]))
+  if (headings.length !== speakers.length) return text
+  headings.forEach((index, order) => {
+    const line = read[index]
+    const who = speakers[order]
+    if ('text' in line || line.speaker === null || who === null) return
+    lines[index] = `${who > 0 ? `${speakerLabel} ${who}` : speakerLabel}  ${line.time}`
+  })
+  return lines.join('\n')
 }
 
 /** The colour a speaker's name is set in. A voice too short to tell has none of its own. */
