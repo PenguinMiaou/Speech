@@ -738,3 +738,21 @@ body,
 ::highlight(ahead) {
   color: var(--color-text-tertiary);
 }
+
+/* ─── A step under way: light moving along its bar ─── */
+.going-sweep {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: progress-sweep 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .going-sweep {
+    animation: none;
+  }
+}

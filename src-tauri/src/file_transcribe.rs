@@ -188,9 +188,10 @@ pub fn recognize_in(
     let (text, heard) = ask(only)?;
     let elsewhere = languages.len() > 1 && heard.is_some_and(|code| !spoken_in(languages, &code));
     if elsewhere && !text.trim().is_empty() {
-        return ask(Some(languages[0].clone())).map(|(text, _)| without_loops(&text));
+        return ask(Some(languages[0].clone()))
+            .map(|(text, _)| without_echo(&without_loops(&text), before));
     }
-    Ok(without_loops(&text))
+    Ok(without_echo(&without_loops(&text), before))
 }
 
 /// The longest run of characters looked at as one thing said over and over.
@@ -244,6 +245,95 @@ pub fn without_loops(text: &str) -> String {
         kept.truncate(kept.trim_end().len());
     }
     kept
+}
+
+/// How much said again counts as the recognizer writing down what it was given as having
+/// come before: eight words, or sixteen characters of a writing without spaces.
+const ECHO: usize = 16;
+/// Once that is found, shorter pieces of what came before go as well.
+const ECHO_REST: usize = 6;
+
+/// One word, or one character of a writing without spaces: where it lies, how it reads
+/// and how much it counts for.
+struct Token {
+    from: usize,
+    reads: String,
+    weight: usize,
+}
+
+fn tokens(text: &str) -> Vec<Token> {
+    let mut found: Vec<Token> = Vec::new();
+    let mut within = false;
+    for (at, character) in text.char_indices() {
+        if !character.is_alphanumeric() {
+            within = false;
+        } else if character as u32 >= 0x2E80 {
+            within = false;
+            found.push(Token {
+                from: at,
+                reads: character.to_string(),
+                weight: 1,
+            });
+        } else {
+            match found.last_mut() {
+                Some(last) if within => last.reads.extend(character.to_lowercase()),
+                _ => found.push(Token {
+                    from: at,
+                    reads: character.to_lowercase().collect(),
+                    weight: 2,
+                }),
+            }
+            within = true;
+        }
+    }
+    found
+}
+
+/// The text without what the recognizer was given as having come before. Given the end
+/// of what was said so far, a recognizer sometimes writes that down again in place of,
+/// or in front of, what it hears.
+pub fn without_echo(text: &str, before: Option<&str>) -> String {
+    let Some(before) = before else {
+        return text.to_string();
+    };
+    let given = tokens(before);
+    let mut kept = text.to_string();
+    let mut least = ECHO;
+    loop {
+        let heard = tokens(&kept);
+        // The longest run of words that stand in both, by how much it counts for.
+        let mut best = (0, 0, 0);
+        let mut runs = vec![(0_usize, 0_usize); given.len() + 1];
+        for (index, token) in heard.iter().enumerate() {
+            let mut next = vec![(0, 0); given.len() + 1];
+            for (other, was) in given.iter().enumerate() {
+                if token.reads == was.reads {
+                    let (length, weight) = runs[other];
+                    next[other + 1] = (length + 1, weight + token.weight);
+                    if weight + token.weight > best.2 {
+                        best = (index + 1 - (length + 1), index + 1, weight + token.weight);
+                    }
+                }
+            }
+            runs = next;
+        }
+        let (from, to, weight) = best;
+        if weight < least {
+            break;
+        }
+        let end = heard.get(to).map_or(kept.len(), |token| token.from);
+        kept.replace_range(heard[from].from..end, "");
+        least = ECHO_REST;
+    }
+    if kept.len() == text.len() {
+        return kept;
+    }
+    let kept = kept.trim();
+    if kept.chars().any(char::is_alphanumeric) {
+        kept.to_string()
+    } else {
+        String::new()
+    }
 }
 
 /// Runs `attempt` again after each of the `waits` until it succeeds. A recognizer that
@@ -397,6 +487,8 @@ pub fn transcribe_pcm(
                 voice,
                 scratch: crate::speakers::model_dir().ok_or_else(missing)?,
                 label: label.clone(),
+                command: crate::local_stt::default_worker_command()
+                    .map_err(|error| error.to_string())?,
             })
         }
         None => None,
@@ -417,6 +509,113 @@ struct SpeakerModels {
     voice: std::path::PathBuf,
     scratch: std::path::PathBuf,
     label: String,
+    /// Starts the worker that tells the speakers apart while the other one recognizes.
+    command: crate::local_stt::WorkerCommand,
+}
+
+/// How much of a recording has its speakers told apart at a time. A part is heard while
+/// the one before it is recognized, so the text of a long recording begins to show after
+/// the first part and not after the whole.
+const PART_SECS: usize = 8 * 60;
+
+/// A recording of `length` samples in parts of `part`; a last part under half that long
+/// goes with the one before it.
+fn parts_of(length: usize, part: usize) -> Vec<Range<usize>> {
+    let mut parts: Vec<Range<usize>> = (0..length)
+        .step_by(part.max(1))
+        .map(|from| from..(from + part).min(length))
+        .collect();
+    if parts.len() > 1 && parts[parts.len() - 1].len() < part / 2 {
+        parts.pop();
+        let last = parts.len() - 1;
+        parts[last].end = length;
+    }
+    parts
+}
+
+/// Tells who spoke when in a part of a recording; true for its first part. The speakers
+/// keep their numbers from part to part.
+type Tell<'a> =
+    &'a mut (dyn FnMut(&[f32], bool) -> Result<Vec<crate::speakers::SpeakerTurn>, String> + Send);
+
+/// Writes a recording out part by part: `tell` goes ahead through the parts while `hear`
+/// recognizes the pieces of the parts already told. Without `tell` the speakers are not
+/// told apart. The count in `progress` is in seconds of the recording.
+fn in_parts(
+    pcm: &[f32],
+    part: usize,
+    label: &str,
+    tell: Option<Tell>,
+    mut hear: impl FnMut(&[f32]) -> Result<String, String>,
+    mut progress: impl FnMut(Stage),
+) -> Result<String, String> {
+    let total = pcm.len() / RATE as usize;
+    let Some(tell) = tell else {
+        let mut said = Vec::new();
+        progress(Stage::Text { done: 0, total });
+        for piece in pieces(pcm) {
+            let text = hear(&pcm[piece.clone()])?;
+            let text = text.trim();
+            if !text.is_empty() {
+                said.push((None, text.to_string()));
+                progress(Stage::Written(assemble(&said, None, label)));
+            }
+            progress(Stage::Text {
+                done: (piece.end / RATE as usize).min(total),
+                total,
+            });
+        }
+        return Ok(assemble(&said, None, label));
+    };
+    progress(Stage::Speakers);
+    let parts = parts_of(pcm.len(), part);
+    std::thread::scope(|scope| {
+        let (found, told) = std::sync::mpsc::channel();
+        let ahead = parts.clone();
+        scope.spawn(move || {
+            for (index, range) in ahead.into_iter().enumerate() {
+                let turns = tell(&pcm[range], index == 0);
+                let failed = turns.is_err();
+                // Nobody waits any more once the writing has ended.
+                if found.send(turns).is_err() || failed {
+                    break;
+                }
+            }
+        });
+        let mut turns: Vec<crate::speakers::SpeakerTurn> = Vec::new();
+        let mut said = Vec::new();
+        for range in &parts {
+            let here = told
+                .recv()
+                .map_err(|_| "local_engine_unavailable".to_string())??;
+            let here = crate::speakers::merge_turns(&here);
+            let sound = &pcm[range.clone()];
+            let before = turns.len();
+            let offset_ms = (range.start * 1000 / RATE as usize) as u64;
+            turns.extend(here.iter().map(|turn| crate::speakers::SpeakerTurn {
+                start_ms: turn.start_ms + offset_ms,
+                end_ms: turn.end_ms + offset_ms,
+                speaker: turn.speaker,
+            }));
+            for (turn, piece) in plan(sound, Some(&here)) {
+                let text = hear(&sound[piece.clone()])?;
+                let text = text.trim();
+                if !text.is_empty() {
+                    said.push((turn.map(|index| before + index), text.to_string()));
+                    progress(Stage::Written(assemble(&said, Some(&turns), label)));
+                }
+                progress(Stage::Text {
+                    done: ((range.start + piece.end) / RATE as usize).min(total),
+                    total,
+                });
+            }
+            progress(Stage::Text {
+                done: (range.end / RATE as usize).min(total),
+                total,
+            });
+        }
+        Ok(assemble(&said, Some(&turns), label))
+    })
 }
 
 fn recognize(
@@ -426,50 +625,44 @@ fn recognize(
     vocabulary: &[String],
     languages: &[String],
     pcm: &[f32],
-    mut progress: impl FnMut(Stage),
+    progress: impl FnMut(Stage),
 ) -> Result<String, String> {
-    let turns = match speakers {
-        Some(models) => {
-            progress(Stage::Speakers);
-            let (found, voices) = supervisor
-                .diarize(&models.segmentation, &models.voice, pcm, &models.scratch)
-                .map_err(|error| error.to_string())?;
-            crate::voiceprints::hear(voices, true);
-            Some(crate::speakers::merge_turns(&found))
-        }
-        None => None,
+    let hear = |sound: &[f32]| {
+        patiently(&TRY_AGAIN_AFTER, || {
+            recognize_in(supervisor, model, sound, vocabulary, None, languages)
+        })
     };
-    let planned = plan(pcm, turns.as_deref());
-    let label = speakers
-        .map(|models| models.label.as_str())
-        .unwrap_or_default();
-    let mut said = Vec::new();
-    progress(Stage::Text {
-        done: 0,
-        total: planned.len(),
-    });
-    for (index, (turn, piece)) in planned.iter().enumerate() {
-        let text = patiently(&TRY_AGAIN_AFTER, || {
-            recognize_in(
-                supervisor,
-                model,
-                &pcm[piece.clone()],
-                vocabulary,
-                None,
-                languages,
+    let Some(models) = speakers else {
+        return in_parts(pcm, PART_SECS * RATE as usize, "", None, hear, progress);
+    };
+    let worker = crate::local_stt::WorkerSupervisor::new(
+        models.command.clone(),
+        crate::local_stt::REQUEST_TIMEOUT,
+        std::time::Duration::from_secs(60),
+    );
+    let mut tell = |sound: &[f32], first: bool| {
+        let (found, voices) = worker
+            .speakers_window(
+                &models.segmentation,
+                &models.voice,
+                sound,
+                &models.scratch,
+                first,
             )
-        })?;
-        let text = text.trim();
-        if !text.is_empty() {
-            said.push((*turn, text.to_string()));
-            progress(Stage::Written(assemble(&said, turns.as_deref(), label)));
-        }
-        progress(Stage::Text {
-            done: index + 1,
-            total: planned.len(),
-        });
-    }
-    Ok(assemble(&said, turns.as_deref(), label))
+            .map_err(|error| error.to_string())?;
+        crate::voiceprints::hear(voices, first);
+        Ok(found)
+    };
+    let written = in_parts(
+        pcm,
+        PART_SECS * RATE as usize,
+        &models.label,
+        Some(&mut tell),
+        hear,
+        progress,
+    );
+    worker.stop();
+    written
 }
 
 #[cfg(test)]
@@ -621,9 +814,14 @@ mod tests {
             voice: var("OT_EMB"),
             scratch: std::env::temp_dir(),
             label: "说话人".to_string(),
+            command: crate::local_stt::WorkerCommand {
+                program: var("OT_WORKER"),
+                args: vec!["serve".to_string()],
+            },
         };
         let pcm = decode(&var("OT_FILE")).unwrap();
         let started = std::time::Instant::now();
+        let mut shown = false;
         let text = recognize(
             &supervisor,
             &var("OT_MODEL"),
@@ -631,13 +829,162 @@ mod tests {
             &[],
             &[],
             &pcm,
-            |_| {},
+            |stage| {
+                if let Stage::Written(text) = &stage {
+                    if !shown {
+                        shown = true;
+                        println!(
+                            "the first {} characters show after {:.1}s",
+                            text.chars().count(),
+                            started.elapsed().as_secs_f32()
+                        );
+                    }
+                }
+            },
         )
         .unwrap();
         println!(
-            "audio {:.0}s took {:.1}s\n{text}",
+            "audio {:.0}s took {:.1}s",
             pcm.len() as f32 / RATE as f32,
             started.elapsed().as_secs_f32()
+        );
+        // How much each numbered speaker said, and who is taken for whom: the ghosts, and
+        // with `OT_PEOPLE` the speakers beyond that many.
+        let mut said: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        let mut speaker = None;
+        for line in text.lines() {
+            match line.strip_prefix("说话人 ") {
+                Some(rest) if rest.contains("  ") => {
+                    speaker = rest.split(' ').next().and_then(|n| n.parse::<u32>().ok());
+                }
+                _ if line.starts_with("说话人  ") => speaker = None,
+                _ => {
+                    if let Some(speaker) = speaker {
+                        *said.entry(speaker).or_default() +=
+                            line.chars().filter(|c| !c.is_whitespace()).count();
+                    }
+                }
+            }
+        }
+        let mut each: Vec<_> = said.iter().collect();
+        each.sort();
+        println!("said by speaker {each:?}");
+        println!("ghosts {:?}", crate::voiceprints::merged(&said, 0));
+        if let Ok(people) = std::env::var("OT_PEOPLE") {
+            let most = people.parse().unwrap();
+            println!(
+                "with {most} people {:?}",
+                crate::voiceprints::merged(&said, most)
+            );
+        }
+        // The words go to a file when one is named, so that they are not shown.
+        match std::env::var("OT_OUT") {
+            Ok(out) => std::fs::write(out, text).unwrap(),
+            Err(_) => println!("{text}"),
+        }
+    }
+
+    #[test]
+    fn a_long_recording_is_written_out_part_by_part() {
+        let pcm = tone(30.0);
+        let part = 10 * RATE as usize;
+        let firsts = std::sync::Mutex::new(Vec::new());
+        let mut tell = |sound: &[f32], first: bool| {
+            let mut firsts = firsts.lock().unwrap();
+            firsts.push(first);
+            Ok(vec![crate::speakers::SpeakerTurn {
+                start_ms: 0,
+                end_ms: (sound.len() * 1000 / RATE as usize) as u64,
+                speaker: firsts.len() as u32,
+            }])
+        };
+        let mut stages = Vec::new();
+
+        let text = in_parts(
+            &pcm,
+            part,
+            "S",
+            Some(&mut tell),
+            |_| Ok("words".to_string()),
+            |stage| stages.push(stage),
+        )
+        .unwrap();
+
+        assert_eq!(
+            text,
+            "S 1  00:00\nwords\n\nS 2  00:10\nwords\n\nS 3  00:20\nwords"
+        );
+        assert_eq!(*firsts.lock().unwrap(), vec![true, false, false]);
+        assert_eq!(stages[0], Stage::Speakers);
+        // The text shows after the first part, and the count ends at the whole length.
+        assert!(stages.contains(&Stage::Written("S 1  00:00\nwords".to_string())));
+        assert_eq!(
+            stages.last(),
+            Some(&Stage::Text {
+                done: 30,
+                total: 30
+            })
+        );
+    }
+
+    #[test]
+    fn a_part_whose_speakers_cannot_be_told_ends_the_writing() {
+        let pcm = tone(30.0);
+        let mut tell = |_: &[f32], first: bool| {
+            if first {
+                Ok(Vec::new())
+            } else {
+                Err("lost".to_string())
+            }
+        };
+        let out = in_parts(
+            &pcm,
+            10 * RATE as usize,
+            "S",
+            Some(&mut tell),
+            |_| Ok("words".to_string()),
+            |_| {},
+        );
+        assert_eq!(out, Err("lost".to_string()));
+    }
+
+    #[test]
+    fn the_parts_cover_the_recording_and_none_is_a_scrap() {
+        assert_eq!(parts_of(24, 10), vec![0..10, 10..24]);
+        assert_eq!(parts_of(30, 10), vec![0..10, 10..20, 20..30]);
+        assert_eq!(parts_of(4, 10), vec![0..4]);
+        assert!(parts_of(0, 10).is_empty());
+    }
+
+    #[test]
+    fn what_came_before_is_not_written_down_again() {
+        let before = "so we start with the basic services and then we add more of them later";
+        let heard = "So we start with the basic services, and then we add more of them later. Any questions?";
+        assert_eq!(without_echo(heard, Some(before)), "Any questions?");
+        // Said back with a word dropped in the middle, both halves go.
+        let before = "and then to the beginning of the. The the bank over there, we have been talking about it before";
+        let heard = "And then to the beginning of the bank over there. We have been talking about it before.";
+        assert_eq!(without_echo(heard, Some(before)), "");
+    }
+
+    #[test]
+    fn a_few_words_said_again_stay() {
+        let before = "we can do that for you next week";
+        assert_eq!(
+            without_echo("Yes, we can do that for you.", Some(before)),
+            "Yes, we can do that for you."
+        );
+        assert_eq!(without_echo("Anything at all.", None), "Anything at all.");
+    }
+
+    #[test]
+    fn what_came_before_is_told_in_writing_without_spaces() {
+        let before = "我们先从基础的服务开始然后再慢慢增加其他的服务";
+        let heard = "我们先从基础的服务开始，然后再慢慢增加其他的服务。还有问题吗？";
+        assert_eq!(without_echo(heard, Some(before)), "还有问题吗？");
+        assert_eq!(
+            without_echo("我们先从基础开始。", Some(before)),
+            "我们先从基础开始。"
         );
     }
 

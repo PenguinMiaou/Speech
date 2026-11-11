@@ -62,3 +62,67 @@ describe('the words of a meeting whose times are known', () => {
     expect(onSeek).toHaveBeenCalledWith(10, false)
   })
 })
+
+describe('the words of a meeting that was put right', () => {
+  it('show what was taken out struck through and what was put in marked', () => {
+    shown({
+      text: 'Speaker 1  00:10\nWe use Tauri here',
+      before: 'Speaker 1  00:10\nwe use tori here',
+    })
+    expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toEqual([
+      'we',
+      'tori',
+    ])
+    expect([...document.querySelectorAll('ins')].map((fresh) => fresh.textContent)).toEqual([
+      'We',
+      'Tauri',
+    ])
+  })
+
+  it('are shown plainly where nothing changed', () => {
+    shown({ before: text })
+    expect(document.querySelector('del')).toBeNull()
+    expect(document.querySelector('ins')).toBeNull()
+  })
+})
+
+describe('who speaks', () => {
+  const three = 'Speaker 1  00:10\na\n\nSpeaker 1  00:20\nb\n\nSpeaker 2  00:30\nc'
+
+  it('is named once while the same person goes on', () => {
+    shown({ text: three })
+    expect(screen.getAllByText('Speaker 1')).toHaveLength(1)
+    expect(screen.getByText('00:20')).toBeTruthy()
+  })
+
+  it('is one person where two numbers go by one name', () => {
+    shown({ text: three, names: { 1: 'Ann', 2: 'Ann' } })
+    expect(screen.getAllByText('Ann')).toHaveLength(1)
+  })
+
+  it('can be put right for one paragraph, or for all that speaker said', () => {
+    const onSpeaker = vi.fn()
+    shown({ text: three, onSpeaker, allLabel: 'all' })
+    fireEvent.click(screen.getByRole('button', { name: 'Speaker 2' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Speaker 2' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Speaker 1' }))
+    expect(onSpeaker).toHaveBeenLastCalledWith(6, 1, false)
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Speaker 2' }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'all' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Speaker 3' }))
+    expect(onSpeaker).toHaveBeenLastCalledWith(6, 3, true)
+  })
+
+  it('can be given a name where they speak', () => {
+    const onName = vi.fn()
+    shown({ text: three, onSpeaker: vi.fn(), onName, nameLabel: 'name' })
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'Speaker 2' }))
+    const name = screen.getByRole('textbox', { name: 'name' })
+    fireEvent.change(name, { target: { value: 'Ann' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(onName).toHaveBeenCalledWith(2, 'Ann')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+})

@@ -126,6 +126,7 @@ pub async fn meeting_title(
 /// which is told the spellings in the user's dictionary. `pieces` is what each person said.
 #[tauri::command]
 pub async fn meeting_polish(
+    app: tauri::AppHandle,
     pieces: Vec<String>,
     config_state: tauri::State<'_, storage::ConfigManager>,
     dictionary: tauri::State<'_, storage::DictionaryStore>,
@@ -142,8 +143,46 @@ pub async fn meeting_polish(
     }
     let mut words = dictionary.words().await;
     words.reverse();
-    words.truncate(80);
-    crate::minutes::polish(&client, &config, &api_key, pieces, &words).await
+    use tauri::Emitter;
+    let (pieces, terms) =
+        crate::minutes::polish(&client, &config, &api_key, pieces, &words, |done, total| {
+            let _ = app.emit(
+                "meeting:polishing",
+                serde_json::json!({ "step": "words", "done": done, "total": total }),
+            );
+        })
+        .await?;
+    // The spellings the model could not be sure of, for the user to settle once.
+    let _ = app.emit("meeting:terms", terms);
+    Ok(pieces)
+}
+
+/// Checks who said what in a meeting by the sense of it, with the language model chosen
+/// in the settings. As many pieces come back, in the same order, with every word kept.
+#[tauri::command]
+pub async fn meeting_speakers_check(
+    app: tauri::AppHandle,
+    pieces: Vec<crate::minutes::Said>,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Vec<crate::minutes::Said>, String> {
+    use tauri::Emitter;
+    let config = config_state.load().await.map_err(|e| e.to_string())?;
+    let api_key =
+        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    crate::minutes::check_speakers(&client, &config, &api_key, pieces, |done, total| {
+        let _ = app.emit(
+            "meeting:polishing",
+            serde_json::json!({ "step": "speakers", "done": done, "total": total }),
+        );
+    })
+    .await
 }
 
 /// Learns from a correction the user made to the meeting's words: a word put right goes

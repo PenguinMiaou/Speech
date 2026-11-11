@@ -466,6 +466,14 @@ pub fn speaker_confirm(
     crate::voiceprints::confirm(&names)
 }
 
+/// The speakers of the meeting in hand who are no people of their own, and whom each is
+/// taken for. `said` is how much each speaker said; `most` is how many people met, 0 if
+/// that is not told.
+#[tauri::command]
+pub fn speaker_fewer(said: std::collections::HashMap<u32, usize>, most: usize) -> Vec<(u32, u32)> {
+    crate::voiceprints::merged(&said, most)
+}
+
 #[tauri::command]
 pub fn speaker_voices() -> Vec<String> {
     crate::voiceprints::remembered()

@@ -16,6 +16,8 @@ let drop: (paths: string[]) => void = () => {}
 let report: (progress: tauri.FileTranscribeProgress) => void = () => {}
 let hear: (segment: tauri.MeetingSegment) => void = () => {}
 let write: (text: string) => void = () => {}
+let tidied: (progress: tauri.MeetingPolishing) => void = () => {}
+let ask: (terms: tauri.MeetingTerm[]) => void = () => {}
 let name: (names: Record<string, string>) => void = () => {}
 
 function installed(speakers: boolean) {
@@ -35,6 +37,7 @@ async function ready() {
 describe('MeetingCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(tauri.speakerFewer).mockReset()
     window.localStorage.clear()
     useMeetingStore.setState(initialMeeting)
     vi.mocked(tauri.onFileDropped).mockImplementation(async (handler) => {
@@ -47,6 +50,14 @@ describe('MeetingCard', () => {
     })
     vi.mocked(tauri.onMeetingSegment).mockImplementation(async (handler) => {
       hear = handler
+      return () => {}
+    })
+    vi.mocked(tauri.onMeetingPolishing).mockImplementation(async (handler) => {
+      tidied = handler
+      return () => {}
+    })
+    vi.mocked(tauri.onMeetingTerms).mockImplementation(async (handler) => {
+      ask = handler
       return () => {}
     })
     vi.mocked(tauri.onFileTranscribeWritten).mockImplementation(async (handler) => {
@@ -85,7 +96,7 @@ describe('MeetingCard', () => {
       languages: [],
     })
     act(() => report({ stage: 'text', done: 3, total: 12 }))
-    expect(screen.getByText('meeting.working 3 12')).toBeTruthy()
+    expect(screen.getByText('meeting.working 25')).toBeTruthy()
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25')
 
     await act(async () => finish('first line\nsecond line'))
@@ -112,7 +123,6 @@ describe('MeetingCard', () => {
     vi.mocked(tauri.transcribeFile).mockReturnValue(new Promise((resolve) => (finish = resolve)))
     await ready()
     act(() => drop(['/tmp/talk.m4a']))
-    await waitFor(() => expect(tauri.onFileTranscribeWritten).toHaveBeenCalled())
     act(() => write('the first minute'))
     expect(screen.getByText('the first minute')).toBeTruthy()
     await act(async () => finish('the first minute and the rest'))
@@ -178,6 +188,37 @@ describe('MeetingCard', () => {
     })
     act(() => report({ stage: 'speakers', done: 0, total: 0 }))
     expect(screen.getByText('meeting.findingSpeakers')).toBeTruthy()
+    const state = (step: string) => screen.getByLabelText(step).getAttribute('data-state')
+    expect(state('meeting.stepRead')).toBe('done')
+    expect(state('meeting.stepSpeakers')).toBe('now')
+    expect(state('meeting.stepText')).toBe('next')
+  })
+
+  it('still knows how far the file has got after another page was open', async () => {
+    vi.mocked(tauri.transcribeFile).mockReturnValue(new Promise(() => {}))
+    const { unmount } = render(<MeetingCard />)
+    await waitFor(() => expect(tauri.speakerModelsStatus).toHaveBeenCalled())
+    act(() => drop(['/tmp/a.mp3']))
+    unmount()
+    act(() => report({ stage: 'speakers', done: 0, total: 0 }))
+    act(() => write('meeting.speakerLabel 1  00:00\nso far'))
+    render(<MeetingCard />)
+    expect(screen.getByText('meeting.findingSpeakers')).toBeTruthy()
+    expect(screen.getByText('so far')).toBeTruthy()
+  })
+
+  it('shows how long the file has been worked on', async () => {
+    vi.mocked(tauri.transcribeFile).mockReturnValue(new Promise(() => {}))
+    await ready()
+    vi.useFakeTimers()
+    try {
+      act(() => drop(['/tmp/a.mp3']))
+      expect(screen.getByRole('timer').textContent).toBe('00:00')
+      act(() => void vi.advanceTimersByTime(65_000))
+      expect(screen.getByRole('timer').textContent).toBe('01:05')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves speakers alone once the user has switched that off', async () => {
@@ -212,6 +253,24 @@ describe('MeetingCard', () => {
     await screen.findByRole('button', { name: 'meeting.stop' })
     fireEvent.change(screen.getByLabelText('meeting.addLanguage'), { target: { value: 'en' } })
     expect(tauri.meetingLanguages).toHaveBeenCalledWith(['en'])
+  })
+
+  it('settles who spoke when a recording ends', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
+    vi.mocked(tauri.speakerFewer).mockResolvedValue([[2, 1]])
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    act(() => hear({ speaker: 1, start_ms: 0, text: 'hello there' }))
+    act(() => hear({ speaker: 2, start_ms: 5_000, text: 'ok' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
+    await waitFor(() => expect(tauri.meetingSave).toHaveBeenCalled())
+    expect(vi.mocked(tauri.meetingSave).mock.calls[0][0].transcript).toBe(
+      'meeting.speakerLabel 1  00:00\nhello there\n\nmeeting.speakerLabel 1  00:05\nok',
+    )
+    expect(tauri.speakerFewer).toHaveBeenCalledWith({ 1: 10, 2: 2 }, 0)
   })
 
   it('takes corrections while the meeting is still being recorded', async () => {
@@ -297,12 +356,181 @@ describe('MeetingCard', () => {
     await screen.findByText('we use tori')
     fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
     expect(tauri.meetingPolish).toHaveBeenCalledWith(['we use tori', 'ok'])
-    await screen.findByText('We use Tauri.')
-    expect(screen.getByLabelText('meeting.result').textContent).toBe(
-      'meeting.speakerLabel 1  00:00\nWe use Tauri.\n\nmeeting.speakerLabel 2  00:04\nOK.',
+    await waitFor(() =>
+      expect(useMeetingStore.getState().text).toBe(
+        'meeting.speakerLabel 1  00:00\nWe use Tauri.\n\nmeeting.speakerLabel 2  00:04\nOK.',
+      ),
     )
-    fireEvent.click(screen.getByRole('button', { name: 'meeting.unpolish' }))
+    // What changed is shown: the words taken out struck through, the new ones marked.
+    expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toContain('tori')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.unpolish' }))
     await screen.findByText('we use tori')
+  })
+
+  it('shows how far the tidying has got, the words first and then who said them', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('meeting.speakerLabel 1  00:00\nwe use tori')
+    vi.mocked(tauri.meetingPolish).mockReturnValue(new Promise(() => {}))
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('we use tori')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    const now = () =>
+      screen.getByRole('progressbar', { name: 'meeting.polish' }).getAttribute('aria-valuenow')
+    act(() => tidied({ step: 'words', done: 1, total: 2 }))
+    expect(now()).toBe('25')
+    act(() => tidied({ step: 'speakers', done: 1, total: 2 }))
+    expect(now()).toBe('75')
+    // Each step is a node: the one that is over is ticked, the one going on is marked.
+    const state = (step: string) => screen.getByLabelText(step).getAttribute('data-state')
+    expect(state('meeting.stepWords')).toBe('done')
+    expect(state('meeting.stepSpeakers')).toBe('now')
+  })
+
+  it('shows in the list how far a meeting that is being tidied has got', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1, preview: 'first words', has_minutes: false },
+      { id: 'm-2', started_at: 2, preview: 'other words', has_minutes: false },
+    ])
+    await ready()
+    await screen.findByText('first words')
+    act(() =>
+      useMeetingStore.setState({
+        tidying: { id: 'm-1', fraction: 0.4, since: Date.now() - 60_000, steps: 2 },
+      }),
+    )
+    const bars = screen.getAllByRole('progressbar', { name: 'meeting.polish' })
+    expect(bars).toHaveLength(1)
+    expect(bars[0].getAttribute('aria-valuenow')).toBe('40')
+    // A minute for two fifths: a minute and a half to go.
+    expect(screen.getByText('01:30')).toBeTruthy()
+  })
+
+  it('puts right who said what after the words, keeping every word', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nit is done so you\n\nmeeting.speakerLabel 2  00:04\nkeep a copy',
+    )
+    vi.mocked(tauri.meetingPolish).mockResolvedValue(['It is done. So you', 'keep a copy?'])
+    vi.mocked(tauri.meetingSpeakersCheck).mockResolvedValue([
+      { speaker: 1, text: 'It is done.' },
+      { speaker: 2, text: 'So you keep a copy?' },
+    ])
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('it is done so you')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    await waitFor(() =>
+      expect(useMeetingStore.getState().text).toBe(
+        'meeting.speakerLabel 1  00:00\nIt is done.\n\nmeeting.speakerLabel 2  00:04\nSo you keep a copy?',
+      ),
+    )
+    expect(tauri.meetingSpeakersCheck).toHaveBeenCalledWith([
+      { speaker: 1, text: 'It is done. So you' },
+      { speaker: 2, text: 'keep a copy?' },
+    ])
+  })
+
+  it('gives a paragraph to another speaker when its name is chosen anew', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok',
+    )
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('hello')
+    fireEvent.doubleClick(screen.getByRole('button', { name: 'meeting.speakerLabel 2' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.speakerLabel 1' }))
+    expect(screen.getByLabelText('meeting.result').textContent).toBe(
+      'meeting.speakerLabel 1  00:00\nhello\n\n00:04\nok',
+    )
+  })
+
+  it('takes the surplus speakers for the most alike when told how many people met', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok\n\nmeeting.speakerLabel 3  00:08\nyes',
+    )
+    vi.mocked(tauri.speakerFewer).mockImplementation((_, most) =>
+      Promise.resolve(most === 2 ? [[3, 1]] : []),
+    )
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('hello')
+    act(() => useMeetingStore.setState({ voicesAtHand: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.people 3' }))
+    const people = screen.getByRole('spinbutton', { name: 'meeting.people 3' })
+    fireEvent.change(people, { target: { value: '2' } })
+    fireEvent.keyDown(people, { key: 'Enter' })
+    await waitFor(() =>
+      expect(screen.getByLabelText('meeting.result').textContent).toBe(
+        'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok\n\nmeeting.speakerLabel 1  00:08\nyes',
+      ),
+    )
+    expect(tauri.speakerFewer).toHaveBeenCalledWith({ 1: 5, 2: 2, 3: 3 }, 2)
+  })
+
+  it('shows the number of people as plain words where the voices are not at hand', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok',
+    )
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('hello')
+    act(() => useMeetingStore.setState({ voicesAtHand: false }))
+    expect(screen.queryByRole('button', { name: 'meeting.people 2' })).toBeNull()
+    expect(screen.getByText('meeting.people 2')).toBeTruthy()
+  })
+
+  it('takes a speaker who said next to nothing for the one they sound like', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok\n\nmeeting.speakerLabel 3  00:08\nyes',
+    )
+    vi.mocked(tauri.speakerFewer).mockResolvedValue([[3, 1]])
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('hello')
+    expect(screen.getByLabelText('meeting.result').textContent).toBe(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nok\n\nmeeting.speakerLabel 1  00:08\nyes',
+    )
+    expect(tauri.speakerFewer).toHaveBeenCalledWith({ 1: 5, 2: 2, 3: 3 }, 0)
+  })
+
+  it('asks once how the terms it was unsure of are written, and writes them that way', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('we use Tori and tori')
+    vi.mocked(tauri.meetingPolish).mockImplementation(async () => {
+      ask([{ spelling: 'Tauri', others: ['Tori', 'tori'] }])
+      return ['We use Tori and tori.']
+    })
+    vi.mocked(tauri.addDictionaryEntry).mockResolvedValue()
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('we use Tori and tori')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    const term = await screen.findByRole('textbox', { name: 'Tori, tori' })
+    expect((term as HTMLInputElement).value).toBe('Tauri')
+    fireEvent.change(term, { target: { value: 'Tauri 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.termsApply' }))
+    await waitFor(() =>
+      expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0].transcript).toBe(
+        'We use Tauri 2 and Tauri 2.',
+      ),
+    )
+    expect(tauri.addDictionaryEntry).toHaveBeenCalledWith('Tauri 2', null)
+    expect(screen.queryByRole('textbox', { name: 'Tori, tori' })).toBeNull()
+  })
+
+  it('lets the question about the terms be put away', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('we use Tori')
+    vi.mocked(tauri.meetingPolish).mockImplementation(async () => {
+      ask([{ spelling: 'Tauri', others: ['Tori'] }])
+      return ['We use Tori.']
+    })
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('we use Tori')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    await screen.findByRole('textbox', { name: 'Tori' })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.termsSkip' }))
+    expect(screen.queryByRole('textbox', { name: 'Tori' })).toBeNull()
+    expect(tauri.addDictionaryEntry).not.toHaveBeenCalled()
   })
 
   it('says so when the text could not be tidied up', async () => {
@@ -328,7 +556,7 @@ describe('MeetingCard', () => {
     await screen.findByRole('button', { name: 'meeting.stop' })
     act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
-    await screen.findByText('What was said.')
+    await waitFor(() => expect(useMeetingStore.getState().text).toContain('What was said.'))
     expect(tauri.meetingPolish).toHaveBeenCalledWith(['what was said'])
     expect(window.localStorage.getItem('meeting.polishAfter')).toBe('1')
   })

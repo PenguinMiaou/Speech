@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AudioLines,
@@ -12,15 +12,21 @@ import {
   Pause,
   Play,
   SlidersHorizontal,
+  Check,
+  FileAudio,
+  Hourglass,
+  SpellCheck,
+  Type,
   Sparkles,
   Square,
   Trash2,
-  Undo2,
   Users,
   Search,
   MessageCircleQuestion,
+  X,
 } from 'lucide-react'
 import {
+  addDictionaryEntry,
   copyText,
   forgetSpeaker,
   installSpeakerModels,
@@ -32,7 +38,6 @@ import {
   meetingDelete,
   meetingGet,
   meetingLanguages,
-  meetingPolish,
   meetingsAsk,
   meetingsList,
   meetingsSearch,
@@ -41,19 +46,17 @@ import {
   meetingRecordStart,
   meetingRecordStop,
   onFileDropped,
-  onFileTranscribeProgress,
-  onFileTranscribeWritten,
   onSpeakerModelsProgress,
   onWordTimesProgress,
   pickMediaFile,
   rememberSpeaker,
+  speakerFewer,
   saveMeetingAudio,
   saveTextFile,
   speakerModelsStatus,
   wordTimesStatus,
   speakerVoices,
   transcribeFile,
-  type FileTranscribeProgress,
   type MeetingSummary,
   type TranscribeOptions,
 } from '../../lib/tauri'
@@ -66,16 +69,20 @@ import { TARGET_LANGUAGES } from '../../lib/constants'
 import { LogoSelect } from '../Settings/shared/LogoSelect'
 import {
   clock,
+  remaining,
   meetingText,
   subtitles,
   timesOf,
   renameSpeakers,
+  saidBy,
   speakerColor,
   speakersIn,
-  spokenLines,
   stampNote,
   stampedNotes,
   withLines,
+  withSpeakerAt,
+  withSpeakersJoined,
+  withSpellings,
 } from '../../lib/meeting-text'
 import {
   editParagraph,
@@ -84,9 +91,9 @@ import {
   nameFromMinutes,
   nameMeeting,
   recoverMeeting,
-  tellSpeakersAgain,
   timeWords,
   persistMeeting,
+  tidyMeeting,
   useMeetingStore,
   whenTranslated,
   type MeetingPhase,
@@ -149,6 +156,76 @@ function remember(on: boolean, key = SPEAKERS_KEY) {
 
 /** Record a meeting or hand over a recording, and the local model writes it out. */
 /** A meeting's date and time as the reader's own locale writes them, to the minute. */
+/** Work that goes on step by step: a node for each step, ticked once it is over, with a
+ * bar that fills as the step under way goes on, and the time all of it still takes once
+ * that can be told. `within` is how far the step under way has got, or null if it has
+ * nothing to count. */
+function Going({
+  label,
+  steps,
+  at,
+  within,
+  value,
+  left,
+}: {
+  label: string
+  steps: { label: string; icon: ReactNode }[]
+  at: number
+  within: number | null
+  value: number
+  left: number | null
+}) {
+  return (
+    <div className="flex w-full items-center gap-3">
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+        className="flex flex-1 items-center gap-1.5"
+      >
+        {steps.map((step, index) => {
+          const state = index < at ? 'done' : index === at ? 'now' : 'next'
+          const filled = state === 'done' ? 100 : state === 'now' ? (within ?? 1) * 100 : 0
+          return (
+            <Fragment key={step.label}>
+              <span
+                aria-label={step.label}
+                title={step.label}
+                data-state={state}
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+                  state === 'done'
+                    ? 'bg-accent text-white'
+                    : state === 'now'
+                      ? 'text-accent ring-1 ring-accent'
+                      : 'text-text-tertiary ring-1 ring-border'
+                }`}
+              >
+                {state === 'done' ? <Check size={12} strokeWidth={3} /> : step.icon}
+              </span>
+              <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-bg-tertiary">
+                <span
+                  className="absolute inset-y-0 left-0 overflow-hidden rounded-full bg-accent transition-[width] duration-500"
+                  style={{ width: `${filled}%` }}
+                >
+                  {state === 'now' && <span className="going-sweep" />}
+                </span>
+              </span>
+            </Fragment>
+          )
+        })}
+      </div>
+      {left !== null && (
+        <span className="flex items-center gap-1 text-[12px] tabular-nums text-text-tertiary">
+          <Hourglass size={12} />
+          {clock(left)}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function when(time: number): string {
   return new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
@@ -174,6 +251,12 @@ export function MeetingCard() {
     translating,
     translatingAt,
     sorting,
+    tidying,
+    unpolished,
+    terms,
+    progress,
+    soFar,
+    workingSince,
     times,
   } = useMeetingStore()
   const [past, setPast] = useState<MeetingSummary[]>([])
@@ -230,6 +313,8 @@ export function MeetingCard() {
   }, [query])
   const [showOptions, setShowOptions] = useState(false)
   const [showMore, setShowMore] = useState(false)
+  const [counting, setCounting] = useState(false)
+  const voicesAtHand = useMeetingStore((state) => state.voicesAtHand)
   const player = useRef<AudioHandle>(null)
   const label = t('meeting.speakerLabel')
   const refreshPast = () =>
@@ -258,7 +343,9 @@ export function MeetingCard() {
   const setText = (text: string | null) => set({ text })
   const setError = (error: string | null) => set({ error })
   const setKept = (kept: string | null) => set({ kept })
-  const [progress, setProgress] = useState<FileTranscribeProgress | null>(null)
+  const going = tidying !== null
+  /** Counts the seconds while a file is worked on, so that the time shown moves. */
+  const [, tick] = useState(0)
   const [level, setLevel] = useState({ seconds: 0, volume: 0, waiting: 0 })
   const liveRef = useRef<HTMLDivElement>(null)
   const [speakers, setSpeakers] = useState(false)
@@ -270,11 +357,8 @@ export function MeetingCard() {
     rememberedChoice(LANGUAGES_KEY, '').split(',').filter(Boolean).slice(0, MOST_LANGUAGES),
   )
   const [polishAfter, setPolishAfter] = useState(() => remembered(POLISH_KEY))
-  const [polishing, setPolishing] = useState(false)
-  const [unpolished, setUnpolished] = useState<string | null>(null)
   const [position, setPosition] = useState(0)
   /** The text of the file being transcribed, as far as it is written out. */
-  const [soFar, setSoFar] = useState('')
   const [paused, setPaused] = useState(false)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [download, setDownload] = useState<number | null>(null)
@@ -284,9 +368,8 @@ export function MeetingCard() {
   const [timesDownload, setTimesDownload] = useState<number | null>(null)
   const exactTimes = useRef(false)
   exactTimes.current = wordTimes && timesInstalled
-  /** After a recording: who spoke, told again from the whole, then the time of each word. */
-  const hearAgain = () =>
-    tellSpeakersAgain(label).then(() => (exactTimes.current ? timeWords(label) : undefined))
+  /** After a recording: the time of each word, where the model for that is installed. */
+  const hearAgain = () => (exactTimes.current ? timeWords(label) : Promise.resolve())
   const [voices, setVoices] = useState<string[]>([])
   const [tab, setTab] = useState('text')
   const [models, setModels] = useState<string[]>([])
@@ -303,14 +386,24 @@ export function MeetingCard() {
     languages,
   }
 
+  /** The text with each speaker who said next to nothing and sounds like another given
+   * to that other. A voice that sounds like nobody else stays a person. */
+  const settle = (text: string): Promise<string> => {
+    const said = saidBy(text, label)
+    if (Object.keys(said).length < 2) return Promise.resolve(text)
+    return Promise.resolve(speakerFewer(said, 0))
+      .then((pairs) => (pairs?.length ? withSpeakersJoined(text, label, pairs) : text))
+      .catch(() => text)
+  }
   const enter = (next: Phase) => set({ phase: next })
   const now = () => useMeetingStore.getState().phase
 
   const finish = (work: Promise<string>) => {
     enter('working')
-    setProgress(null)
-    setSoFar('')
     set({
+      progress: null,
+      soFar: '',
+      workingSince: Date.now(),
       text: null,
       recorded: false,
       error: null,
@@ -325,8 +418,9 @@ export function MeetingCard() {
       times: [],
     })
     work
+      .then((result) => settle(result ?? ''))
       .then((result) => {
-        setText(result ?? '')
+        setText(result)
         keep()
         // The next file begins a meeting of its own, so this one is named first.
         return waitingRef.current.length > 0 ? named.current : undefined
@@ -371,9 +465,13 @@ export function MeetingCard() {
   transcribeAllRef.current = transcribeAll
 
   useEffect(() => {
+    if (phase !== 'working' && !going) return
+    const ticking = window.setInterval(() => tick((seconds) => seconds + 1), 1000)
+    return () => window.clearInterval(ticking)
+  }, [phase, going])
+
+  useEffect(() => {
     const dropped = Promise.resolve(onFileDropped((paths) => transcribeAllRef.current(paths)))
-    const reported = Promise.resolve(onFileTranscribeProgress(setProgress))
-    const written = Promise.resolve(onFileTranscribeWritten(setSoFar))
     listenToMeeting()
     void recoverMeeting(label).then((found) => {
       if (found) void keep().then(hearAgain)
@@ -415,8 +513,6 @@ export function MeetingCard() {
     return () => {
       void timing.then((stop) => stop?.())
       void dropped.then((stop) => stop?.())
-      void reported.then((stop) => stop?.())
-      void written.then((stop) => stop?.())
       void downloading.then((stop) => stop?.())
     }
   }, [])
@@ -507,7 +603,6 @@ export function MeetingCard() {
       me: null,
       times: [],
     })
-    setUnpolished(null)
     setPaused(false)
     setLevel({ seconds: 0, volume: 0, waiting: 0 })
     enter('recording')
@@ -527,6 +622,7 @@ export function MeetingCard() {
     void Promise.resolve(meetingRecordPause(next)).catch(() => setPaused(!next))
   }
 
+  const heardNow = () => useMeetingStore.getState().paragraphs
   const stop = (discard: boolean) => {
     if (now() !== 'recording') return
     enter('finishing')
@@ -534,12 +630,11 @@ export function MeetingCard() {
     Promise.resolve(meetingRecordStop(discard))
       .then(() => (discard ? undefined : whenTranslated()))
       // The sound becomes the meeting's own once the meeting is kept; that sets `kept`.
-      .then(() => {
-        if (discard) return
+      .then(() => (discard ? undefined : settle(meetingText(heardNow(), label))))
+      .then((said) => {
+        if (said === undefined) return
         // From here on the meeting is its text, which the user can go on correcting.
-        const heard = useMeetingStore.getState().paragraphs
-        const said = meetingText(heard, label)
-        set({ recorded: true, text: said, editing: null, times: timesOf(heard) })
+        set({ recorded: true, text: said, editing: null, times: timesOf(heardNow()) })
         // Heard whole, the meeting tells its speakers apart better than window by window.
         void keep().then(hearAgain)
         if (polishAfter) polish(said)
@@ -566,11 +661,45 @@ export function MeetingCard() {
     progress && progress.stage === 'text' && progress.total > 0
       ? Math.round((progress.done / progress.total) * 100)
       : null
+  const left =
+    percent !== null && workingSince !== null ? remaining(workingSince, percent / 100) : null
+  const stepSpeakers = { label: t('meeting.stepSpeakers'), icon: <Users size={11} /> }
+  const tidyingBar = tidying && (
+    <Going
+      label={t('meeting.polish')}
+      steps={[
+        { label: t('meeting.stepWords'), icon: <SpellCheck size={11} /> },
+        ...(tidying.steps > 1 ? [stepSpeakers] : []),
+      ]}
+      at={Math.min(tidying.steps - 1, Math.floor(tidying.fraction * tidying.steps))}
+      within={
+        tidying.fraction * tidying.steps -
+        Math.min(tidying.steps - 1, Math.floor(tidying.fraction * tidying.steps))
+      }
+      value={Math.round(tidying.fraction * 100)}
+      left={remaining(tidying.since, tidying.fraction)}
+    />
+  )
+  // A file is read, its speakers are told apart where that is asked for, and it is written.
+  const told = optionsRef.current.speakerLabel !== null
+  const workingBar = (
+    <Going
+      label={t('meeting.title')}
+      steps={[
+        { label: t('meeting.stepRead'), icon: <FileAudio size={11} /> },
+        ...(told ? [stepSpeakers] : []),
+        { label: t('meeting.stepText'), icon: <Type size={11} /> },
+      ]}
+      at={progress === null ? 0 : progress.stage === 'speakers' ? 1 : told ? 2 : 1}
+      within={percent === null ? null : percent / 100}
+      value={percent ?? 0}
+      left={left}
+    />
+  )
   const open = (summary: MeetingSummary) =>
     void Promise.resolve(meetingGet(summary.id))
       .then((meeting) => {
         if (!meeting || now() !== 'idle') return
-        setUnpolished(null)
         setPosition(0)
         set({
           id: meeting.id,
@@ -638,35 +767,51 @@ export function MeetingCard() {
       className="mt-3 w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none placeholder:text-text-tertiary"
     />
   )
-  const polish = (source: string | null = written) => {
-    if (!source?.trim() || polishing) return
-    const at = spokenLines(source, label)
-    const lines = source.split('\n')
-    setPolishing(true)
-    setError(null)
-    Promise.resolve(meetingPolish(at.map((index) => lines[index])))
-      .then((better) => {
-        // Only a meeting that is still the one sent off takes the answer.
-        if (useMeetingStore.getState().text !== source) return
-        const next = withLines(source, at, better ?? [])
-        if (next === source) return
-        setUnpolished(source)
-        set({ text: next })
+  const polish = (source: string | null = written) =>
+    void tidyMeeting(label, source ?? undefined).then(refreshPast)
+  const before = unpolished?.id === id ? unpolished.text : undefined
+  const unpolish = () => {
+    if (before === undefined) return
+    set({ text: before, unpolished: null })
+    persist()
+  }
+  /** Keeps a speaker's name with the meeting, and with the voice where that is at hand. */
+  const nameKept = (number: number, name: string) =>
+    useMeetingStore.getState().voicesAtHand &&
+    void Promise.resolve(rememberSpeaker(number, name))
+      .then((all) => all && setVoices(all))
+      .catch(() => {})
+      .finally(persist)
+  /** Writes each term the one way the user settled on, wherever the meeting says it,
+   * and keeps the spelling in the dictionary. A term left empty stays as it is. */
+  const settleTerms = (spellings: string[]) => {
+    if (written === null || !terms) return
+    const settled = terms.list
+      .map((term, index) => ({
+        spelling: spellings[index]?.trim() ?? '',
+        others: [...term.others, term.spelling],
+      }))
+      .filter((term) => term.spelling !== '')
+    set({ text: withSpellings(written, label, settled), terms: null })
+    for (const term of settled)
+      void Promise.resolve(addDictionaryEntry(term.spelling, null)).catch(() => {})
+    persist()
+  }
+  /** Takes the surplus speakers for the most alike of the `most` who said the most. */
+  const fewer = (most: number) => {
+    setCounting(false)
+    if (written === null || !(most >= 1) || most >= speakerNumbers.length) return
+    void Promise.resolve(speakerFewer(saidBy(written, label), most))
+      .then((pairs) => {
+        if (!pairs?.length) return
+        set({ text: withSpeakersJoined(written, label, pairs) })
         persist()
       })
-      .catch((reason) =>
-        setError(
-          String(reason).includes('llm_not_configured')
-            ? 'meeting.error.llm_not_configured'
-            : 'meeting.polishFailed',
-        ),
-      )
-      .finally(() => setPolishing(false))
+      .catch(() => {})
   }
-  const unpolish = () => {
-    if (unpolished === null) return
-    set({ text: unpolished })
-    setUnpolished(null)
+  const giveTo = (line: number, speaker: number, all: boolean) => {
+    if (written === null) return
+    set({ text: withSpeakerAt(written, label, line, speaker, all) })
     persist()
   }
   const correct = (line: number, before: string, after: string) => {
@@ -678,7 +823,6 @@ export function MeetingCard() {
   const chosenModel = model ?? (models.includes(dictationModel) ? dictationModel : models[0])
 
   const close = () => {
-    setUnpolished(null)
     setPosition(0)
     set({
       text: null,
@@ -740,9 +884,35 @@ export function MeetingCard() {
               <p className="m-0 mt-1 flex flex-wrap gap-x-4 text-[12px] tabular-nums text-text-secondary">
                 {startedAt > 0 && <span>{when(startedAt)}</span>}
                 {duration > 0 && <span>{clock(duration)}</span>}
-                {speakerNumbers.length > 0 && (
-                  <span>{t('meeting.people', { count: speakerNumbers.length })}</span>
-                )}
+                {speakerNumbers.length > 0 &&
+                  (voicesAtHand && speakerNumbers.length > 1 ? (
+                    counting ? (
+                      <input
+                        type="number"
+                        autoFocus
+                        min={1}
+                        max={speakerNumbers.length}
+                        defaultValue={speakerNumbers.length}
+                        aria-label={t('meeting.people', { count: speakerNumbers.length })}
+                        onBlur={(event) => fewer(Number(event.target.value))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') fewer(Number(event.currentTarget.value))
+                          if (event.key === 'Escape') setCounting(false)
+                        }}
+                        className="h-[18px] w-10 rounded-[4px] border border-border bg-bg-primary px-1 text-[12px] tabular-nums outline-none"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCounting(true)}
+                        className="cursor-pointer border-none bg-transparent p-0 text-[12px] tabular-nums text-text-secondary underline decoration-dotted underline-offset-2 hover:text-text-primary"
+                      >
+                        {t('meeting.people', { count: speakerNumbers.length })}
+                      </button>
+                    )
+                  ) : (
+                    <span>{t('meeting.people', { count: speakerNumbers.length })}</span>
+                  ))}
               </p>
             </>
           ) : (
@@ -820,17 +990,6 @@ export function MeetingCard() {
         )}
         {detail && (
           <div className="relative flex shrink-0 items-center gap-2">
-            {unpolished !== null && (
-              <button
-                type="button"
-                onClick={unpolish}
-                aria-label={t('meeting.unpolish')}
-                title={t('meeting.unpolish')}
-                className="btn-quiet px-2.5"
-              >
-                <Undo2 size={16} />
-              </button>
-            )}
             {sorting && (
               <span
                 role="status"
@@ -844,13 +1003,13 @@ export function MeetingCard() {
             <button
               type="button"
               onClick={() => polish()}
-              disabled={polishing}
-              aria-busy={polishing}
+              disabled={going}
+              aria-busy={going}
               aria-label={t('meeting.polish')}
               title={t('meeting.polish')}
               className="btn-quiet px-2.5 disabled:opacity-50"
             >
-              <Sparkles size={16} className={polishing ? 'animate-pulse' : undefined} />
+              <Sparkles size={16} className={going ? 'animate-pulse' : undefined} />
             </button>
             <button
               type="button"
@@ -886,6 +1045,11 @@ export function MeetingCard() {
                 onClick={() => setShowMore(false)}
                 className="absolute right-0 top-full z-20 mt-1 flex min-w-[168px] flex-col rounded-[8px] border border-border bg-bg-elevated py-1 shadow-lg"
               >
+                {before !== undefined && (
+                  <button type="button" role="menuitem" onClick={unpolish} className={item}>
+                    {t('meeting.unpolish')}
+                  </button>
+                )}
                 {kept && id && (
                   <>
                     <button
@@ -1105,8 +1269,11 @@ export function MeetingCard() {
               {progress?.stage === 'speakers'
                 ? t('meeting.findingSpeakers')
                 : percent !== null && progress
-                  ? t('meeting.working', { done: progress.done, total: progress.total })
+                  ? t('meeting.working', { percent })
                   : t('meeting.reading')}
+              <span role="timer" className="ml-3 tabular-nums text-text-tertiary">
+                {clock(Math.max(0, Math.floor((Date.now() - (workingSince ?? Date.now())) / 1000)))}
+              </span>
               {waiting.length > 0 && (
                 <span className="ml-3 inline-flex items-center gap-1 text-text-tertiary">
                   <Files size={13} />
@@ -1116,20 +1283,7 @@ export function MeetingCard() {
                 </span>
               )}
             </p>
-            {percent !== null && (
-              <div
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent}
-                className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-tertiary"
-              >
-                <div
-                  className="h-full rounded-full bg-accent transition-[width] duration-300"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            )}
+            <div className="mt-2">{workingBar}</div>
           </div>
           {soFar && (
             <div className="mt-4 opacity-80">
@@ -1208,6 +1362,7 @@ export function MeetingCard() {
                       <span className="ml-4">{clock(summary.duration_s ?? 0)}</span>
                     )}
                   </span>
+                  {tidying?.id === summary.id && tidyingBar}
                 </button>
                 {summary.has_minutes && (
                   <span className="text-[12px] text-text-tertiary">{t('meeting.tabMinutes')}</span>
@@ -1280,6 +1435,57 @@ export function MeetingCard() {
                 ))}
               </ul>
             )}
+            {tidying?.id === id && tidyingBar}
+            {terms?.id === id && !tidying && written !== null && (
+              <form
+                aria-label={t('meeting.terms')}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const asked = new FormData(event.currentTarget)
+                  settleTerms(
+                    terms.list.map((_, index) => String(asked.get(`term-${index}`) ?? '')),
+                  )
+                }}
+                className="flex flex-col gap-2 rounded-[10px] border border-border bg-bg-secondary px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2 text-[12px] text-text-secondary">
+                  <SpellCheck size={13} />
+                  <span className="flex-1">{t('meeting.terms')}</span>
+                  <button
+                    type="submit"
+                    aria-label={t('meeting.termsApply')}
+                    title={t('meeting.termsApply')}
+                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] border-none bg-accent text-white"
+                  >
+                    <Check size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('meeting.termsSkip')}
+                    title={t('meeting.termsSkip')}
+                    onClick={() => set({ terms: null })}
+                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:text-text-primary"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                  {terms.list.map((term, index) => (
+                    <li key={term.spelling} className="flex min-w-0 items-center gap-2.5">
+                      <input
+                        name={`term-${index}`}
+                        defaultValue={term.spelling}
+                        aria-label={term.others.join(', ')}
+                        className="h-7 w-[160px] shrink-0 rounded-[7px] border border-border bg-bg-primary px-2 text-[12px] font-medium outline-none"
+                      />
+                      <span className="min-w-0 truncate text-[12px] text-text-tertiary">
+                        {term.others.join(', ')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </form>
+            )}
             {speakerNumbers.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {speakerNumbers.map((number) => (
@@ -1287,13 +1493,7 @@ export function MeetingCard() {
                     key={number}
                     value={names[number] ?? ''}
                     onChange={(event) => set({ names: { ...names, [number]: event.target.value } })}
-                    onBlur={(event) =>
-                      useMeetingStore.getState().voicesAtHand &&
-                      void Promise.resolve(rememberSpeaker(number, event.target.value))
-                        .then((all) => all && setVoices(all))
-                        .catch(() => {})
-                        .finally(persist)
-                    }
+                    onBlur={(event) => nameKept(number, event.target.value)}
                     aria-label={`${label} ${number}`}
                     placeholder={`${label} ${number}`}
                     style={{ color: speakerColor(number) }}
@@ -1311,6 +1511,14 @@ export function MeetingCard() {
               position={kept ? position : undefined}
               times={times}
               onEdit={correct}
+              before={before}
+              onSpeaker={giveTo}
+              allLabel={t('meeting.allOfSpeaker')}
+              onName={(number, name) => {
+                set({ names: { ...names, [number]: name } })
+                nameKept(number, name)
+              }}
+              nameLabel={t('meeting.speakerName')}
             />
           </div>
           <div hidden={tab !== 'minutes'}>

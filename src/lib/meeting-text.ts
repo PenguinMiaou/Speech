@@ -160,6 +160,59 @@ export function withLines(text: string, at: number[], lines: (string | undefined
   return all.join('\n')
 }
 
+/** Seconds still to go for work begun at `since` that has got `fraction` of the way, or
+ * null while too little is done to tell. */
+export function remaining(since: number, fraction: number, now = Date.now()): number | null {
+  if (fraction < 0.03 || fraction >= 1) return null
+  return Math.max(1, Math.round(((now - since) / 1000) * ((1 - fraction) / fraction)))
+}
+
+/** What each speaker said, for the lines numbered in `spokenLines`: the speaker named in
+ * the heading above, or null where no speaker is told. */
+export function speakersOf(text: string, speakerLabel: string): (number | null)[] {
+  let speaker: number | null = null
+  return transcriptLines(text, speakerLabel).flatMap((line) => {
+    if (!('text' in line)) {
+      speaker = line.speaker || null
+      return []
+    }
+    return line.text.trim() !== '' ? [speaker] : []
+  })
+}
+
+/** The transcript with the spoken lines given to the speakers in `checked` and saying
+ * what it says, one for one. A heading takes the speaker of the first line under it. */
+export function withSpeakersChecked(
+  text: string,
+  speakerLabel: string,
+  checked: { speaker: number; text: string }[],
+): string {
+  const parsed = transcriptLines(text, speakerLabel)
+  const all = text.split('\n')
+  let heading = -1
+  let fresh = false
+  let order = 0
+  parsed.forEach((line, index) => {
+    if (!('text' in line)) {
+      heading = index
+      fresh = true
+      return
+    }
+    if (line.text.trim() === '') return
+    const now = checked[order]
+    order += 1
+    if (!now) return
+    const words = now.text.replace(/\s*\n\s*/g, ' ').trim()
+    if (words) all[index] = words
+    const above = heading >= 0 ? parsed[heading] : null
+    if (fresh && above && !('text' in above) && above.speaker && now.speaker > 0) {
+      all[heading] = `${speakerLabel} ${now.speaker}  ${above.time}`
+    }
+    fresh = false
+  })
+  return all.join('\n')
+}
+
 const STAMP = /^\[(\d[\d:]*)\] ?/
 
 /** A note being typed during a meeting, with the line the caret is in marked with the
@@ -254,6 +307,95 @@ export function transcriptLines(text: string, speakerLabel: string): TranscriptL
     if (found) return { speaker: Number(found[1] ?? 0), time: found[2] }
     return /^(\d+:)?\d{2}:\d{2}$/.test(line) ? { speaker: null, time: line } : { text: line }
   })
+}
+
+/** The transcript with the heading at `line` given to `speaker`, and with `all` every
+ * heading of the speaker it named before. */
+export function withSpeakerAt(
+  text: string,
+  speakerLabel: string,
+  line: number,
+  speaker: number,
+  all: boolean,
+): string {
+  const lines = text.split('\n')
+  const parsed = transcriptLines(text, speakerLabel)
+  const at = parsed[line]
+  if (!at || 'text' in at || at.speaker === null) return text
+  const was = at.speaker
+  return lines
+    .map((each, index) => {
+      const heading = parsed[index]
+      if ('text' in heading || heading.speaker === null) return each
+      if (index !== line && !(all && heading.speaker === was)) return each
+      return `${speakerLabel}${speaker > 0 ? ` ${speaker}` : ''}  ${heading.time}`
+    })
+    .join('\n')
+}
+
+/** How much each numbered speaker said, in characters. */
+export function saidBy(text: string, speakerLabel: string): Record<number, number> {
+  const said: Record<number, number> = {}
+  let speaker: number | null = null
+  for (const line of transcriptLines(text, speakerLabel)) {
+    if (!('text' in line)) speaker = line.speaker
+    else if (speaker) said[speaker] = (said[speaker] ?? 0) + line.text.replace(/\s/g, '').length
+  }
+  return said
+}
+
+/** The transcript with all that the first speaker of each pair said given to the second. */
+export function withSpeakersJoined(
+  text: string,
+  speakerLabel: string,
+  pairs: [number, number][],
+): string {
+  const taken = new Map(pairs)
+  const parsed = transcriptLines(text, speakerLabel)
+  return text
+    .split('\n')
+    .map((each, index) => {
+      const heading = parsed[index]
+      if ('text' in heading || !heading.speaker) return each
+      const other = taken.get(heading.speaker)
+      return other ? `${speakerLabel} ${other}  ${heading.time}` : each
+    })
+    .join('\n')
+}
+
+/** A term and the other ways a meeting writes it. */
+export interface Spelling {
+  spelling: string
+  others: string[]
+}
+
+/** The transcript with each term written its one way wherever it was said. A spelling
+ * inside a longer word is left alone, and so are the headings. */
+export function withSpellings(text: string, speakerLabel: string, terms: Spelling[]): string {
+  const escaped = (word: string) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const whole = (word: string) =>
+    `${/^[A-Za-z0-9]/.test(word) ? '(?<![A-Za-z0-9])' : ''}${escaped(word)}${
+      /[A-Za-z0-9]$/.test(word) ? '(?![A-Za-z0-9])' : ''
+    }`
+  const rules = terms
+    .map(({ spelling, others }) => ({
+      spelling,
+      found: [...others]
+        .filter((other) => other && other !== spelling)
+        .sort((a, b) => b.length - a.length)
+        .map(whole),
+    }))
+    .filter((rule) => rule.spelling.trim() && rule.found.length > 0)
+    .map((rule) => ({ ...rule, found: new RegExp(rule.found.join('|'), 'g') }))
+  const parsed = transcriptLines(text, speakerLabel)
+  return text
+    .split('\n')
+    .map((line, index) =>
+      'text' in parsed[index]
+        ? rules.reduce((now, rule) => now.replace(rule.found, () => rule.spelling), line)
+        : line,
+    )
+    .join('\n')
 }
 
 /** How much each speaker said into the microphone and how much otherwise, in characters. */

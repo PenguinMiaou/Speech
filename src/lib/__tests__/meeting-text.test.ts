@@ -23,6 +23,13 @@ import {
   withSpeakers,
   type Paragraph,
   type Sides,
+  remaining,
+  saidBy,
+  speakersOf,
+  withSpeakerAt,
+  withSpeakersChecked,
+  withSpeakersJoined,
+  withSpellings,
 } from '../meeting-text'
 
 const said = (speaker: number | null, start_ms: number, text: string) => ({
@@ -403,5 +410,93 @@ describe('the words of a meeting heard again for their times', () => {
       times[1],
       { end_ms: 70000, chars: 10, marks: [[0, 65200]] },
     ])
+  })
+})
+
+describe('withSpeakerAt', () => {
+  const text = 'S 1  00:10\na\n\nS 2  00:20\nb\n\nS 2  00:30\nc\n\nS  00:40\nd'
+
+  it('gives one paragraph to another speaker', () => {
+    expect(withSpeakerAt(text, 'S', 3, 1, false)).toBe(
+      'S 1  00:10\na\n\nS 1  00:20\nb\n\nS 2  00:30\nc\n\nS  00:40\nd',
+    )
+  })
+
+  it('gives all that speaker said to another', () => {
+    expect(withSpeakerAt(text, 'S', 3, 1, true)).toBe(
+      'S 1  00:10\na\n\nS 1  00:20\nb\n\nS 1  00:30\nc\n\nS  00:40\nd',
+    )
+  })
+
+  it('leaves the text alone where the line is no heading', () => {
+    expect(withSpeakerAt(text, 'S', 1, 2, true)).toBe(text)
+  })
+})
+
+describe('withSpeakersChecked', () => {
+  const text = 'S 1  00:10\na b\n\nS 2  00:20\nc d\n\n00:30\ne'
+
+  it('tells who said each spoken line', () => {
+    expect(speakersOf(text, 'S')).toEqual([1, 2, null])
+  })
+
+  it('gives the lines their checked speakers and words', () => {
+    const checked = [
+      { speaker: 1, text: 'a b c' },
+      { speaker: 1, text: 'd' },
+      { speaker: 0, text: 'e' },
+    ]
+    expect(withSpeakersChecked(text, 'S', checked)).toBe(
+      'S 1  00:10\na b c\n\nS 1  00:20\nd\n\n00:30\ne',
+    )
+  })
+
+  it('leaves a line alone that came back empty or not at all', () => {
+    expect(withSpeakersChecked(text, 'S', [{ speaker: 1, text: '' }])).toBe(text)
+  })
+})
+
+describe('remaining', () => {
+  it('tells how long the rest takes at the pace so far', () => {
+    expect(remaining(0, 0.25, 60_000)).toBe(180)
+    expect(remaining(0, 0.5, 60_000)).toBe(60)
+  })
+
+  it('does not guess from next to nothing, nor once all is done', () => {
+    expect(remaining(0, 0.01, 60_000)).toBeNull()
+    expect(remaining(0, 1, 60_000)).toBeNull()
+  })
+})
+
+describe('fewer speakers', () => {
+  const text = 'S 1  00:10\nabcd\nef\n\nS 2  00:20\ngh\n\nS 1  00:30\ni\n\nS  00:40\njk\n\n00:50\nl'
+
+  it('counts what each numbered speaker said', () => {
+    expect(saidBy(text, 'S')).toEqual({ 1: 7, 2: 2 })
+  })
+
+  it('gives all a speaker said to the one they are taken for', () => {
+    expect(
+      withSpeakersJoined(text, 'S', [
+        [2, 1],
+        [5, 1],
+      ]),
+    ).toBe('S 1  00:10\nabcd\nef\n\nS 1  00:20\ngh\n\nS 1  00:30\ni\n\nS  00:40\njk\n\n00:50\nl')
+  })
+})
+
+describe('withSpellings', () => {
+  it('writes a term one way wherever it was said', () => {
+    const text = 'S 1  00:10\nwe use Tori and tauri\n\nS 2  00:20\n套瑞很好，Tori 也是'
+    expect(
+      withSpellings(text, 'S', [{ spelling: 'Tauri', others: ['Tori', 'tauri', '套瑞'] }]),
+    ).toBe('S 1  00:10\nwe use Tauri and Tauri\n\nS 2  00:20\nTauri很好，Tauri 也是')
+  })
+
+  it('leaves a longer word that holds the spelling, and the headings, alone', () => {
+    const text = 'Art 1  00:10\nArt met Arthur, art'
+    expect(withSpellings(text, 'Art', [{ spelling: 'Bart', others: ['Art', 'art'] }])).toBe(
+      'Art 1  00:10\nBart met Arthur, Bart',
+    )
   })
 })

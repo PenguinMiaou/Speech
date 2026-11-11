@@ -9,6 +9,15 @@ import {
   meetingTitle,
   meetingTranslate,
   meetingWordTimes,
+  type FileTranscribeProgress,
+  meetingGet,
+  meetingPolish,
+  meetingSpeakersCheck,
+  onFileTranscribeProgress,
+  onMeetingPolishing,
+  onMeetingTerms,
+  type MeetingTerm,
+  onFileTranscribeWritten,
   onMeetingError,
   onMeetingInterim,
   onMeetingNames,
@@ -18,6 +27,10 @@ import {
   type MeetingSegment,
 } from '../lib/tauri'
 import {
+  speakersOf,
+  spokenLines,
+  withLines,
+  withSpeakersChecked,
   addSegment,
   addTranslation,
   meetingText,
@@ -40,6 +53,19 @@ export type MeetingPhase = 'idle' | 'recording' | 'finishing' | 'working'
  * its text is kept while another page is open. */
 export interface MeetingState {
   phase: MeetingPhase
+  /** How far the file being transcribed has got, what is written out of it so far, and
+   * when the work on it began. */
+  progress: FileTranscribeProgress | null
+  soFar: string
+  workingSince: number | null
+  /** The meeting being put right in steps: which one, how far, since when, and whether
+   * who said what is checked after the words. */
+  tidying: { id: string; fraction: number; since: number; steps: number } | null
+  /** The text of a meeting as it was before it was put right, to show what changed and
+   * to go back to. */
+  unpolished: { id: string; text: string } | null
+  /** The terms the polish model could not be sure how to spell, to be asked about once. */
+  terms: { id: string; list: MeetingTerm[] } | null
   paragraphs: Paragraph[]
   /** The text of a transcribed file. */
   text: string | null
@@ -91,6 +117,12 @@ const given = (id: string, title: string) => `${id}\n${title}`
 
 export const initialMeeting: MeetingState = {
   phase: 'idle',
+  progress: null,
+  soFar: '',
+  workingSince: null,
+  tidying: null,
+  unpolished: null,
+  terms: null,
   paragraphs: [],
   text: null,
   recorded: false,
@@ -389,6 +421,82 @@ export function listenToMeeting() {
   void Promise.resolve(
     onMeetingError(() => useMeetingStore.setState({ error: 'meeting.error.failed' })),
   ).catch(() => {})
+  // A file goes on being transcribed while another page is open.
+  void Promise.resolve(
+    onFileTranscribeProgress((progress) => useMeetingStore.setState({ progress })),
+  ).catch(() => {})
+  void Promise.resolve(
+    onFileTranscribeWritten((soFar) => useMeetingStore.setState({ soFar })),
+  ).catch(() => {})
+  void Promise.resolve(
+    onMeetingPolishing(({ step, done, total }) =>
+      useMeetingStore.setState(({ tidying }) => {
+        if (!tidying || total <= 0) return {}
+        const before = step === 'speakers' ? 1 : 0
+        return { tidying: { ...tidying, fraction: (before + done / total) / tidying.steps } }
+      }),
+    ),
+  ).catch(() => {})
+  void Promise.resolve(
+    onMeetingTerms((list) =>
+      useMeetingStore.setState(({ tidying }) =>
+        tidying && list.length > 0 ? { terms: { id: tidying.id, list } } : {},
+      ),
+    ),
+  ).catch(() => {})
+}
+
+/** Puts a meeting right in steps: first the words that were misheard, then, where the
+ * speakers are told apart, who said what by the sense of it. It goes on while another
+ * page or meeting is open, and its result is kept with the meeting either way. */
+export function tidyMeeting(speakerLabel: string, source?: string): Promise<void> {
+  const state = useMeetingStore.getState()
+  const text = source ?? state.text
+  const id = state.id
+  if (!text?.trim() || !id || state.tidying) return Promise.resolve()
+  const at = spokenLines(text, speakerLabel)
+  const lines = text.split('\n')
+  const speakers = speakersOf(text, speakerLabel)
+  const told = speakers.some((speaker) => speaker !== null)
+  useMeetingStore.setState({
+    tidying: { id, fraction: 0, since: Date.now(), steps: told ? 2 : 1 },
+    error: null,
+  })
+  return Promise.resolve(meetingPolish(at.map((index) => lines[index])))
+    .then((better) => {
+      const worded = withLines(text, at, better ?? [])
+      if (!told) return worded
+      const now = worded.split('\n')
+      const pieces = at.map((line, order) => ({ speaker: speakers[order] ?? 0, text: now[line] }))
+      // The words that were put right stand even when the speakers could not be checked.
+      return Promise.resolve(meetingSpeakersCheck(pieces))
+        .then((checked) => (checked ? withSpeakersChecked(worded, speakerLabel, checked) : worded))
+        .catch(() => worded)
+    })
+    .then((next) => {
+      if (next === text) return
+      const now = useMeetingStore.getState()
+      if (now.id === id) {
+        // Only a meeting that is still as it was sent off takes the answer.
+        if (now.text !== text) return
+        useMeetingStore.setState({ text: next, unpolished: { id, text } })
+        return persistMeeting(speakerLabel)
+      }
+      return Promise.resolve(meetingGet(id)).then((kept) => {
+        if (!kept || kept.transcript !== text) return
+        useMeetingStore.setState({ unpolished: { id, text } })
+        return meetingSave({ ...kept, transcript: next })
+      })
+    })
+    .catch((reason) => {
+      if (useMeetingStore.getState().id !== id) return
+      useMeetingStore.setState({
+        error: String(reason).includes('llm_not_configured')
+          ? 'meeting.error.llm_not_configured'
+          : 'meeting.polishFailed',
+      })
+    })
+    .finally(() => useMeetingStore.setState({ tidying: null }))
 }
 
 // The notes of a running recording are kept from moment to moment, so that a recording

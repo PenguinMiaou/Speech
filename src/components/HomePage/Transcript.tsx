@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import { changes } from '../../lib/word-diff'
 import {
   charsSaid,
   secondsAt,
@@ -22,6 +23,17 @@ interface Props {
   /** When the words under each heading were said, in order. With these a click goes to
    * the word, and the paragraph being played shows how far the sound has got. */
   times?: Times[]
+  /** The text as it was before it was put right. Where a line differs from it, what was
+   * taken out is struck through and what was put in is marked. */
+  before?: string
+  /** Given when who speaks can be put right: called with the heading's line, the speaker
+   * it now belongs to, and whether all that the speaker before said goes along. */
+  onSpeaker?: (line: number, speaker: number, all: boolean) => void
+  /** What the choice to take all a speaker said along is called. */
+  allLabel?: string
+  /** Given when a speaker can be named where they speak, with what that field is called. */
+  onName?: (speaker: number, name: string) => void
+  nameLabel?: string
 }
 
 /** The place in the words that was clicked, where the browser can tell. */
@@ -45,8 +57,35 @@ export function Transcript({
   onEdit,
   position,
   times,
+  before,
+  onSpeaker,
+  allLabel,
+  onName,
+  nameLabel,
 }: Props) {
   const lines = transcriptLines(text, speakerLabel)
+  const was = before === undefined ? [] : transcriptLines(before, speakerLabel)
+  const earlier = (index: number) => {
+    const line = was.length === lines.length ? was[index] : undefined
+    return line && 'text' in line ? line.text : undefined
+  }
+  const called = (speaker: number) =>
+    names[speaker]?.trim() || (speaker > 0 ? `${speakerLabel} ${speaker}` : speakerLabel)
+  // The heading whose speaker is being put right, and whether all they said goes along.
+  const [choosing, setChoosing] = useState<number | null>(null)
+  const [all, setAll] = useState(false)
+  const numbers = [
+    ...new Set(lines.flatMap((line) => ('text' in line || !line.speaker ? [] : [line.speaker]))),
+  ].sort((a, b) => a - b)
+  // Who spoke just before each heading, by the name shown.
+  let last: string | null = null
+  const goesOn = lines.map((line) => {
+    if ('text' in line || line.speaker === null) return false
+    const name = called(line.speaker)
+    const same = name === last
+    last = name
+    return same
+  })
   const headings = lines.filter((line) => !('text' in line)).length
   // The times belong to the words right under each heading, while they answer the
   // headings one for one.
@@ -94,6 +133,26 @@ export function Transcript({
   const words = (line: { text: string }, index: number) => {
     const start = starts[index]
     if (line.text.trim() === '' || (!onEdit && start === null)) return line.text
+    const old = earlier(index)
+    if (old !== undefined && old !== line.text) {
+      return (
+        <span data-line={index}>
+          {changes(old, line.text).map((part, at) =>
+            part.kind === 'gone' ? (
+              <del key={at} className="select-none text-text-tertiary">
+                {part.text}
+              </del>
+            ) : part.kind === 'new' ? (
+              <ins key={at} className="rounded-[3px] bg-accent/10 text-accent no-underline">
+                {part.text}
+              </ins>
+            ) : (
+              part.text
+            ),
+          )}
+        </span>
+      )
+    }
     const ahead = start !== null && position !== undefined && position > 0 && start > position
     return (
       <span
@@ -145,12 +204,81 @@ export function Transcript({
             words(line, index)
           ) : (
             <>
-              {line.speaker !== null && (
+              {line.speaker !== null && !goesOn[index] && (
                 <>
-                  <span className="font-medium" style={{ color: speakerColor(line.speaker) }}>
-                    {names[line.speaker]?.trim() ||
-                      (line.speaker > 0 ? `${speakerLabel} ${line.speaker}` : speakerLabel)}
-                  </span>
+                  {onSpeaker ? (
+                    <span className="relative">
+                      <button
+                        type="button"
+                        aria-expanded={choosing === index}
+                        onDoubleClick={() => {
+                          setAll(false)
+                          setChoosing(choosing === index ? null : index)
+                        }}
+                        className="cursor-pointer border-none bg-transparent p-0 font-medium"
+                        style={{ color: speakerColor(line.speaker) }}
+                      >
+                        {called(line.speaker)}
+                      </button>
+                      {choosing === index && (
+                        <span
+                          role="menu"
+                          className="absolute left-0 top-full z-20 mt-1 flex min-w-[168px] select-none flex-col whitespace-nowrap rounded-[8px] border border-border bg-bg-elevated py-1 text-[13px] shadow-lg"
+                        >
+                          {onName && line.speaker > 0 && (
+                            <input
+                              autoFocus
+                              aria-label={nameLabel}
+                              placeholder={nameLabel}
+                              defaultValue={names[line.speaker] ?? ''}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Escape') setChoosing(null)
+                                if (event.key !== 'Enter' || line.speaker === null) return
+                                onName(line.speaker, event.currentTarget.value.trim())
+                                setChoosing(null)
+                              }}
+                              className="mx-2 mb-1 rounded-[6px] border border-border bg-bg-primary px-2 py-1 text-[13px] text-text-primary outline-none focus:border-accent"
+                            />
+                          )}
+                          {[...numbers, (numbers[numbers.length - 1] ?? 0) + 1]
+                            .filter((number) => number !== line.speaker)
+                            .map((number) => (
+                              <button
+                                key={number}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setChoosing(null)
+                                  onSpeaker(index, number, all)
+                                }}
+                                className="cursor-pointer border-none bg-transparent px-3 py-1.5 text-left font-medium hover:bg-bg-secondary"
+                                style={{ color: speakerColor(number) }}
+                              >
+                                {called(number)}
+                              </button>
+                            ))}
+                          {allLabel && (
+                            <button
+                              type="button"
+                              role="menuitemcheckbox"
+                              aria-checked={all}
+                              onClick={() => setAll(!all)}
+                              className="flex cursor-pointer items-center gap-2 border-x-0 border-b-0 border-t border-border bg-transparent px-3 py-1.5 text-left text-text-secondary hover:bg-bg-secondary"
+                            >
+                              <span
+                                className={`h-3 w-3 rounded-[3px] border border-border ${all ? 'bg-accent' : ''}`}
+                              />
+                              {allLabel}
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="font-medium" style={{ color: speakerColor(line.speaker) }}>
+                      {called(line.speaker)}
+                    </span>
+                  )}
                   {'  '}
                 </>
               )}

@@ -222,4 +222,46 @@ mod tests {
         assert!(options.vocabulary.is_empty());
         assert_eq!(options.prompt, None);
     }
+    /// Tries a model that tells speakers apart by itself, on a real recording, and says
+    /// how much each speaker has and when each turn falls; none of the words. Run with
+    /// `OT_MODEL=<gguf> OT_WAV=<16 kHz mono 16-bit wav> cargo test --release
+    /// tells_speakers_with_the_model_itself -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn tells_speakers_with_the_model_itself() {
+        let wav = std::fs::read(std::env::var("OT_WAV").unwrap()).unwrap();
+        let pcm = crate::eval::decode_wav(&wav).unwrap();
+        let model = Model::load(std::env::var("OT_MODEL").unwrap()).unwrap();
+        let mut session = model.session().unwrap();
+        let options = RunOptions {
+            diarize: transcribe_cpp::Diarize::On,
+            ..Default::default()
+        };
+        let started = std::time::Instant::now();
+        let transcript = session.run(&pcm, &options).unwrap();
+        println!(
+            "audio {:.0}s took {:.1}s, {} characters, {} segments, {} speaker turns",
+            pcm.len() as f32 / 16_000.0,
+            started.elapsed().as_secs_f32(),
+            transcript.text.chars().count(),
+            transcript.segments.len(),
+            transcript.speaker_segments.len()
+        );
+        let mut said: std::collections::BTreeMap<i32, (usize, usize)> = Default::default();
+        for segment in &transcript.segments {
+            let entry = said.entry(segment.speaker_id).or_default();
+            entry.0 += 1;
+            entry.1 += segment.text.chars().count();
+        }
+        println!("segments and characters by speaker {said:?}");
+        for segment in &transcript.segments {
+            println!(
+                "turn {:>7} - {:>7} speaker {} characters {}",
+                segment.t0_ms,
+                segment.t1_ms,
+                segment.speaker_id,
+                segment.text.chars().count()
+            );
+        }
+    }
 }

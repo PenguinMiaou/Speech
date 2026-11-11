@@ -979,6 +979,15 @@ export function rememberSpeaker(speaker: number, name: string): Promise<string[]
   return invoke('speaker_remember', { speaker, name })
 }
 
+/** The surplus speakers of the meeting in hand and whom each is taken for, when it had
+ * `most` people. `said` is how much each speaker said. */
+export function speakerFewer(
+  said: Record<number, number>,
+  most: number,
+): Promise<[number, number][]> {
+  return invoke('speaker_fewer', { said, most })
+}
+
 /** Learns from the names a meeting ended with: each named speaker's voice becomes one
  * more sample of that person. */
 export function speakerConfirm(names: Record<number, string>): Promise<string[]> {
@@ -1082,6 +1091,38 @@ export function meetingTranslate(text: string, target: string): Promise<string> 
  * person said; as many come back, in the same order. */
 export function meetingPolish(pieces: string[]): Promise<string[]> {
   return invoke('meeting_polish', { pieces })
+}
+
+/** How far putting a meeting right has got: the words first, then who said them. */
+export interface MeetingPolishing {
+  step: 'words' | 'speakers'
+  done: number
+  total: number
+}
+
+export function onMeetingPolishing(
+  handler: (progress: MeetingPolishing) => void,
+): Promise<UnlistenFn> {
+  return listen<MeetingPolishing>('meeting:polishing', (event) => handler(event.payload))
+}
+
+/** A term the polish model could not be sure how to spell: the spelling it chose and the
+ * other ways the meeting writes it. */
+export interface MeetingTerm {
+  spelling: string
+  others: string[]
+}
+
+export function onMeetingTerms(handler: (terms: MeetingTerm[]) => void): Promise<UnlistenFn> {
+  return listen<MeetingTerm[]>('meeting:terms', (event) => handler(event.payload))
+}
+
+/** Checks who said what by the sense of it, with the polish model. As many pieces come
+ * back, in the same order, with every word kept. */
+export function meetingSpeakersCheck(
+  pieces: { speaker: number; text: string }[],
+): Promise<{ speaker: number; text: string }[]> {
+  return invoke('meeting_speakers_check', { pieces })
 }
 
 /** A title for a meeting, written by the polish model from what was said. Empty when no

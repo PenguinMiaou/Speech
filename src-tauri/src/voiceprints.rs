@@ -148,6 +148,90 @@ pub fn hear(voices: Vec<SpeakerVoice>, fresh: bool) {
     }
 }
 
+/// Who each surplus speaker is taken for when the meeting had `most` people: those who
+/// said the most stay, and every other goes to the most alike voice among them. A
+/// speaker whose voice is not at hand stays as told.
+fn fewer(
+    heard: &HashMap<u32, Vec<f32>>,
+    said: &HashMap<u32, usize>,
+    most: usize,
+) -> Vec<(u32, u32)> {
+    if most == 0 || said.len() <= most {
+        return Vec::new();
+    }
+    let mut speakers: Vec<(u32, usize)> = said.iter().map(|(who, words)| (*who, *words)).collect();
+    speakers.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let (kept, surplus) = speakers.split_at(most);
+    let mut pairs: Vec<(u32, u32)> = surplus
+        .iter()
+        .filter_map(|(who, _)| {
+            let voice = heard.get(who)?;
+            kept.iter()
+                .filter_map(|(other, _)| Some((alike(voice, heard.get(other)?), *other)))
+                .max_by(|a, b| a.0.total_cmp(&b.0).then(b.1.cmp(&a.1)))
+                .map(|(_, other)| (*who, other))
+        })
+        .collect();
+    pairs.sort_unstable();
+    pairs
+}
+
+/// A speaker who said less than this many characters in all, and less than a twentieth
+/// of everything said, may be no person of their own.
+const GHOST_SAID: usize = 80;
+const GHOST_SHARE: usize = 20;
+/// Such a speaker whose voice is at least this alike to a person's is that person.
+const LIKELY_ONE_PERSON: f32 = 0.5;
+
+/// The speakers who said next to nothing and sound like someone who said more, each with
+/// that someone. One who sounds like nobody else stays a person.
+fn ghosts(heard: &HashMap<u32, Vec<f32>>, said: &HashMap<u32, usize>) -> Vec<(u32, u32)> {
+    let all: usize = said.values().sum();
+    let ghost = |words: usize| words < GHOST_SAID && words * GHOST_SHARE < all;
+    let mut pairs: Vec<(u32, u32)> = said
+        .iter()
+        .filter(|(_, words)| ghost(**words))
+        .filter_map(|(who, _)| {
+            let voice = heard.get(who)?;
+            said.iter()
+                .filter(|(_, words)| !ghost(**words))
+                .filter_map(|(other, _)| Some((alike(voice, heard.get(other)?), *other)))
+                .max_by(|a, b| a.0.total_cmp(&b.0).then(b.1.cmp(&a.1)))
+                .filter(|(score, _)| *score >= LIKELY_ONE_PERSON)
+                .map(|(_, other)| (*who, other))
+        })
+        .collect();
+    pairs.sort_unstable();
+    pairs
+}
+
+/// Whom each speaker that is no person of their own is taken for: the ghosts, and with
+/// `most` above zero the speakers beyond that many as well.
+fn settled(
+    heard: &HashMap<u32, Vec<f32>>,
+    said: &HashMap<u32, usize>,
+    most: usize,
+) -> Vec<(u32, u32)> {
+    let mut pairs = ghosts(heard, said);
+    let mut left = said.clone();
+    for (ghost, person) in &pairs {
+        let words = left.remove(ghost).unwrap_or(0);
+        *left.entry(*person).or_default() += words;
+    }
+    pairs.extend(fewer(heard, &left, most));
+    pairs.sort_unstable();
+    pairs
+}
+
+/// The speakers of the meeting in hand who are no people of their own, and whom each is
+/// taken for. Each said `said` characters; `most` is how many people met, 0 if not told.
+pub fn merged(said: &HashMap<u32, usize>, most: usize) -> Vec<(u32, u32)> {
+    heard()
+        .as_ref()
+        .map(|heard| settled(heard, said, most))
+        .unwrap_or_default()
+}
+
 /// The remembered names of the speakers in the meeting in hand.
 pub fn names() -> HashMap<u32, String> {
     let (Some(store), Some(heard)) = (store(), heard().clone()) else {
@@ -299,5 +383,57 @@ mod tests {
         let store = scratch("old");
         std::fs::write(&store, r#"[{"name":"Ann","embedding":[1.0,0.0]}]"#).unwrap();
         assert_eq!(read(&store), vec![print("Ann", &[1.0, 0.0])]);
+    }
+    #[test]
+    fn surplus_speakers_go_to_the_most_alike_of_those_who_said_most() {
+        let heard = HashMap::from([
+            (1, vec![1.0, 0.0, 0.0]),
+            (2, vec![0.0, 1.0, 0.0]),
+            (3, vec![0.9, 0.3, 0.0]),
+            (4, vec![0.2, 0.9, 0.1]),
+        ]);
+        let said = HashMap::from([(1, 500), (2, 300), (3, 40), (4, 12)]);
+        assert_eq!(fewer(&heard, &said, 2), vec![(3, 1), (4, 2)]);
+        assert_eq!(fewer(&heard, &said, 3), vec![(4, 2)]);
+        assert!(fewer(&heard, &said, 4).is_empty());
+        assert!(fewer(&heard, &said, 0).is_empty());
+    }
+
+    #[test]
+    fn a_speaker_whose_voice_is_not_at_hand_is_left_alone() {
+        let heard = HashMap::from([(1, vec![1.0, 0.0]), (2, vec![0.0, 1.0])]);
+        let said = HashMap::from([(1, 500), (2, 30), (7, 20)]);
+        assert_eq!(fewer(&heard, &said, 1), vec![(2, 1)]);
+        let said = HashMap::from([(7, 500), (1, 30), (2, 20)]);
+        assert_eq!(fewer(&heard, &said, 2), vec![(2, 1)]);
+    }
+    #[test]
+    fn a_speaker_who_said_next_to_nothing_and_sounds_like_another_is_that_other() {
+        let heard = HashMap::from([
+            (1, vec![1.0, 0.0, 0.0]),
+            (2, vec![0.0, 1.0, 0.0]),
+            (3, vec![0.9, 0.3, 0.0]),
+            (4, vec![0.0, 0.0, 1.0]),
+        ]);
+        // 3 sounds like 1; 4 said as little but sounds like no one and stays a person.
+        let said = HashMap::from([(1, 3000), (2, 900), (3, 30), (4, 30)]);
+        assert_eq!(ghosts(&heard, &said), vec![(3, 1)]);
+        // In a short talk nobody says much, and all are kept.
+        let said = HashMap::from([(1, 300), (2, 90), (3, 30)]);
+        assert!(ghosts(&heard, &said).is_empty());
+    }
+
+    #[test]
+    fn the_people_left_are_counted_after_the_ghosts_are_gone() {
+        let heard = HashMap::from([
+            (1, vec![1.0, 0.0, 0.0]),
+            (2, vec![0.0, 1.0, 0.0]),
+            (3, vec![0.9, 0.3, 0.0]),
+            (4, vec![0.3, 0.9, 0.0]),
+        ]);
+        let said = HashMap::from([(1, 3000), (2, 900), (3, 30), (4, 400)]);
+        assert_eq!(settled(&heard, &said, 0), vec![(3, 1)]);
+        assert_eq!(settled(&heard, &said, 3), vec![(3, 1)]);
+        assert_eq!(settled(&heard, &said, 2), vec![(3, 1), (4, 2)]);
     }
 }

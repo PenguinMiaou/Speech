@@ -64,6 +64,41 @@ pub fn again(recording: &Path) -> Result<Vec<SpeakerTurn>, String> {
     heard_whole(command, &segmentation, &voice, &scratch, recording)
 }
 
+/// Who spoke when in a recording, and the voice of each.
+pub type Heard = (Vec<SpeakerTurn>, Vec<ot_stt_protocol::SpeakerVoice>);
+
+/// The recording heard whole last, by a mark of its sound, with what was found in it.
+static LAST_WHOLE: std::sync::Mutex<Option<(u64, Heard)>> = std::sync::Mutex::new(None);
+
+fn mark(pcm: &[f32]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    pcm.len().hash(&mut hasher);
+    for sample in pcm.iter().step_by(97) {
+        sample.to_bits().hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// Who spoke when in the whole of `pcm`, heard with `hear` unless the same recording was
+/// heard last. Hearing an hour takes many minutes, and both the step after a recording
+/// and writing it out again ask for it; whoever asks second waits for the first.
+pub fn whole(
+    pcm: &[f32],
+    hear: impl FnOnce(&[f32]) -> Result<Heard, String>,
+) -> Result<Heard, String> {
+    let mut last = LAST_WHOLE.lock().unwrap_or_else(|error| error.into_inner());
+    let mark = mark(pcm);
+    if let Some((known, heard)) = last.as_ref() {
+        if *known == mark {
+            return Ok(heard.clone());
+        }
+    }
+    let heard = hear(pcm)?;
+    *last = Some((mark, heard.clone()));
+    Ok(heard)
+}
+
 fn heard_whole(
     command: crate::local_stt::WorkerCommand,
     segmentation: &Path,
@@ -72,14 +107,16 @@ fn heard_whole(
     recording: &Path,
 ) -> Result<Vec<SpeakerTurn>, String> {
     let pcm = crate::file_transcribe::decode(recording)?;
-    let worker = crate::local_stt::WorkerSupervisor::new(
-        command,
-        crate::local_stt::REQUEST_TIMEOUT,
-        std::time::Duration::from_secs(60),
-    );
-    let found = worker.diarize(segmentation, voice, &pcm, scratch);
-    worker.stop();
-    let (turns, _) = found.map_err(|error| crate::local_stt::supervisor::failure_code(&error))?;
+    let (turns, _) = whole(&pcm, |pcm| {
+        let worker = crate::local_stt::WorkerSupervisor::new(
+            command,
+            crate::local_stt::REQUEST_TIMEOUT,
+            std::time::Duration::from_secs(60),
+        );
+        let found = worker.diarize(segmentation, voice, pcm, scratch);
+        worker.stop();
+        found.map_err(|error| crate::local_stt::supervisor::failure_code(&error).to_string())
+    })?;
     Ok(merge_turns(&turns))
 }
 
@@ -144,6 +181,30 @@ pub fn transcript(turns: &[(SpeakerTurn, String)], speaker_label: &str) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recording_is_heard_whole_once_for_all_who_ask() {
+        let pcm: Vec<f32> = (0..4000).map(|i| (i as f32 * 0.01).sin()).collect();
+        let other: Vec<f32> = (0..4000).map(|i| (i as f32 * 0.02).sin()).collect();
+        let turn = SpeakerTurn {
+            start_ms: 0,
+            end_ms: 250,
+            speaker: 1,
+        };
+        let asked = std::cell::Cell::new(0);
+        let hear = |_: &[f32]| {
+            asked.set(asked.get() + 1);
+            Ok::<_, String>((vec![turn], Vec::new()))
+        };
+        assert_eq!(whole(&pcm, hear).unwrap().0, vec![turn]);
+        assert_eq!(whole(&pcm, hear).unwrap().0, vec![turn]);
+        whole(&other, hear).unwrap();
+        assert_eq!(asked.get(), 2);
+        // What failed is tried again by the next who asks.
+        let failing: Vec<f32> = vec![0.5; 100];
+        assert!(whole(&failing, |_| Err("no".to_string())).is_err());
+        assert!(whole(&failing, hear).is_ok());
+    }
 
     /// Run by hand on a real recording: `OT_WORKER OT_SEG OT_EMB OT_WAV`.
     #[test]
