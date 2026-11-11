@@ -534,45 +534,9 @@ impl AppConfig {
     }
 
     fn normalize_hotkey_settings(&mut self) {
-        self.migrate_platform_typed_hotkeys();
         self.hotkeys.dictation_mode =
             normalize_hotkey_mode(&self.hotkeys.dictation_mode).to_string();
         self.sync_legacy_hotkey_fields_from_typed();
-    }
-
-    fn migrate_platform_typed_hotkeys(&mut self) {
-        #[cfg(target_os = "windows")]
-        {
-            if self.hotkeys.dictation.to_hotkey_string().as_deref() == Some("RightAlt") {
-                if let Some(binding) = ShortcutBinding::from_hotkey("Ctrl+/") {
-                    self.hotkeys.dictation = binding.clone();
-                    self.hotkeys.dictation_bindings = vec![binding];
-                }
-                self.hotkeys.dictation_mode = "hold".to_string();
-            }
-            if self
-                .hotkeys
-                .ask
-                .as_ref()
-                .and_then(ShortcutBinding::to_hotkey_string)
-                .as_deref()
-                == Some("RightAlt+Space")
-            {
-                self.hotkeys.ask = ShortcutBinding::from_hotkey("Ctrl+.");
-                self.hotkeys.ask_bindings = self.hotkeys.ask.clone().into_iter().collect();
-            }
-            if self
-                .hotkeys
-                .translate
-                .as_ref()
-                .and_then(ShortcutBinding::to_hotkey_string)
-                .as_deref()
-                == Some("RightAlt+LeftShift")
-            {
-                self.hotkeys.translate = None;
-                self.hotkeys.translate_bindings.clear();
-            }
-        }
     }
 
     fn sync_legacy_hotkey_fields_from_typed(&mut self) {
@@ -3355,6 +3319,22 @@ mod tests {
                 .as_ref()
                 .and_then(ShortcutBinding::to_hotkey_string),
             Some("Fn+LeftShift".to_string())
+        );
+    }
+
+    #[test]
+    fn a_shortcut_the_user_chose_is_kept_whatever_the_platform() {
+        let mut config = AppConfig::new_install_default();
+        let chosen = ShortcutBinding::from_hotkey("RightAlt").expect("RightAlt parses");
+        config.hotkeys.dictation = chosen.clone();
+        config.hotkeys.dictation_bindings = vec![chosen];
+        config.hotkeys.dictation_mode = "toggle".to_string();
+        config.normalize_values();
+        assert_eq!(config.hotkey, "RightAlt");
+        assert_eq!(config.hotkey_mode, "toggle");
+        assert_eq!(
+            config.hotkeys.dictation.to_hotkey_string().as_deref(),
+            Some("RightAlt")
         );
     }
 
