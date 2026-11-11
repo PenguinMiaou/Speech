@@ -855,6 +855,14 @@
     "titlePlaceholder": "Name this meeting",
     "more": "More",
     "deleteThis": "Delete meeting",
-    "people": "{{count}} speakers"
+    "people": "{{count}} speakers",
+    "language": "Meeting languages",
+    "languageAuto": "Detect language",
+    "polish": "Tidy up the text (by the polish model)",
+    "polishAfter": "Tidy up the text when it ends (by the polish model)",
+    "unpolish": "Undo tidy-up",
+    "polishFailed": "The text could not be tidied up",
+    "addLanguage": "Add a language",
+    "removeLanguage": "Remove {{name}}"
   }
 }

@@ -855,6 +855,14 @@
     "titlePlaceholder": "Nommer cette réunion",
     "more": "Plus",
     "deleteThis": "Supprimer la réunion",
-    "people": "{{count}} intervenants"
+    "people": "{{count}} intervenants",
+    "language": "Langues de la réunion",
+    "languageAuto": "Détecter la langue",
+    "polish": "Mettre le texte au propre (via le modèle de correction)",
+    "polishAfter": "Mettre le texte au propre à la fin (via le modèle de correction)",
+    "unpolish": "Annuler la mise au propre",
+    "polishFailed": "Le texte n’a pas pu être mis au propre",
+    "addLanguage": "Ajouter une langue",
+    "removeLanguage": "Retirer {{name}}"
   }
 }

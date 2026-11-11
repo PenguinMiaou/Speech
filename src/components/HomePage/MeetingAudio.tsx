@@ -4,28 +4,38 @@ import { Pause, Play } from 'lucide-react'
 import { clock } from '../../lib/meeting-text'
 
 export interface AudioHandle {
-  /** Plays from this many seconds into the meeting. */
-  seek: (seconds: number) => void
+  /** Moves to this many seconds into the meeting, and plays from there unless told not to. */
+  seek: (seconds: number, play?: boolean) => void
+}
+
+interface Props {
+  src: string
+  /** Told where the sound is, in seconds, whenever that changes. */
+  onPosition?: (seconds: number) => void
 }
 
 /** Plays a meeting's kept sound: play or pause, where it is, and a bar to move along it. */
-export const MeetingAudio = forwardRef<AudioHandle, { src: string }>(function MeetingAudio(
-  { src },
+export const MeetingAudio = forwardRef<AudioHandle, Props>(function MeetingAudio(
+  { src, onPosition },
   ref,
 ) {
   const { t } = useTranslation()
   const audio = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
-  const [at, setAt] = useState(0)
+  const [at, setPosition] = useState(0)
   const [length, setLength] = useState(0)
+  const setAt = (seconds: number) => {
+    setPosition(seconds)
+    onPosition?.(seconds)
+  }
 
   useImperativeHandle(ref, () => ({
-    seek: (seconds) => {
+    seek: (seconds, play = true) => {
       const player = audio.current
       if (!player) return
       player.currentTime = seconds
       setAt(seconds)
-      void Promise.resolve(player.play()).catch(() => {})
+      if (play) void Promise.resolve(player.play()).catch(() => {})
     },
   }))
 

@@ -17,6 +17,10 @@ pub enum Request {
     Transcribe {
         vocabulary: Vec<String>,
         prompt: Option<String>,
+        /// The language spoken (an ISO code), when the caller knows it. An older app sends
+        /// none, and the model then tells the language itself.
+        #[serde(default)]
+        language: Option<String>,
         pcm_bytes: u32,
     },
     /// Starts keeping only the voice in `voice_sample` for the recording now beginning.
@@ -135,10 +139,25 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
+    fn a_request_without_a_language_is_still_read() {
+        let old = br#"{"Transcribe":{"vocabulary":[],"prompt":null,"pcm_bytes":8}}"#;
+        assert_eq!(
+            serde_json::from_slice::<Request>(old).unwrap(),
+            Request::Transcribe {
+                vocabulary: vec![],
+                prompt: None,
+                language: None,
+                pcm_bytes: 8,
+            }
+        );
+    }
+
+    #[test]
     fn frame_round_trip() {
         let request = Request::Transcribe {
             vocabulary: vec!["TypeScript".into()],
             prompt: Some("前文".into()),
+            language: Some("en".into()),
             pcm_bytes: 8,
         };
         let mut buffer = Vec::new();

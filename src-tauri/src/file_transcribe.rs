@@ -128,6 +128,94 @@ pub fn pieces(pcm: &[f32]) -> Vec<Range<usize>> {
     cut
 }
 
+/// The most languages a meeting can be said to be held in.
+pub const MOST_LANGUAGES: usize = 3;
+
+/// The languages the user named, tidied: no blanks, none twice, no more than three.
+pub fn chosen_languages(languages: Vec<String>) -> Vec<String> {
+    let mut chosen: Vec<String> = Vec::new();
+    for code in languages {
+        let code = code.trim().to_lowercase();
+        if !code.is_empty() && !chosen.contains(&code) && chosen.len() < MOST_LANGUAGES {
+            chosen.push(code);
+        }
+    }
+    chosen
+}
+
+/// Whether the language the model heard is one of those the meeting is held in.
+/// Cantonese counts as Chinese.
+pub fn spoken_in(languages: &[String], heard: &str) -> bool {
+    let plain = |code: &str| {
+        let code = code.trim().to_lowercase();
+        let code = code
+            .split(['-', '_'])
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        if code == "yue" {
+            "zh".to_string()
+        } else {
+            code
+        }
+    };
+    languages.iter().any(|code| plain(code) == plain(heard))
+}
+
+/// Recognizes speech in a meeting held in `languages`. One language is told to the model.
+/// With several the model tells the language itself, and words it hears in a language
+/// that is not among them are recognized again as the first one.
+pub fn recognize_in(
+    supervisor: &crate::local_stt::WorkerSupervisor,
+    model: &Path,
+    pcm: &[f32],
+    vocabulary: &[String],
+    before: Option<&str>,
+    languages: &[String],
+) -> Result<String, String> {
+    let ask = |language: Option<String>| {
+        supervisor
+            .transcribe_heard(
+                model,
+                pcm,
+                vocabulary.to_vec(),
+                before.map(str::to_string),
+                language,
+            )
+            .map_err(|error| error.to_string())
+    };
+    let only = (languages.len() == 1).then(|| languages[0].clone());
+    let (text, heard) = ask(only)?;
+    let elsewhere = languages.len() > 1 && heard.is_some_and(|code| !spoken_in(languages, &code));
+    if elsewhere && !text.trim().is_empty() {
+        return ask(Some(languages[0].clone())).map(|(text, _)| text);
+    }
+    Ok(text)
+}
+
+/// Runs `attempt` again after each of the `waits` until it succeeds. A recognizer that
+/// crashed or timed out is started afresh by the next request, so trying again often works.
+pub fn patiently<T>(
+    waits: &[std::time::Duration],
+    mut attempt: impl FnMut() -> Result<T, String>,
+) -> Result<T, String> {
+    let mut outcome = attempt();
+    for wait in waits {
+        if outcome.is_ok() {
+            break;
+        }
+        std::thread::sleep(*wait);
+        outcome = attempt();
+    }
+    outcome
+}
+
+/// How long to wait before each further try at a piece that could not be recognized.
+pub const TRY_AGAIN_AFTER: [std::time::Duration; 2] = [
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(4),
+];
+
 /// What the caller wants from a transcription.
 #[derive(Debug, Clone, Default)]
 pub struct Options {
@@ -137,10 +225,12 @@ pub struct Options {
     pub model_id: Option<String>,
     /// Words from the user's dictionary the model should expect.
     pub vocabulary: Vec<String>,
+    /// The languages spoken, when the user named them: three at most.
+    pub languages: Vec<String>,
 }
 
 /// What a caller hears while a recording is being worked on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stage {
     /// Finding who spoke when. It has no steps to count.
     Speakers,
@@ -148,6 +238,8 @@ pub enum Stage {
         done: usize,
         total: usize,
     },
+    /// The text written out so far, for the caller to show while the rest is worked on.
+    Written(String),
 }
 
 /// The pieces to recognize, each with the index of the turn it belongs to.
@@ -261,6 +353,7 @@ pub fn transcribe_pcm(
         &model,
         speakers.as_ref(),
         &options.vocabulary,
+        &options.languages,
         pcm,
         progress,
     )
@@ -278,6 +371,7 @@ fn recognize(
     model: &Path,
     speakers: Option<&SpeakerModels>,
     vocabulary: &[String],
+    languages: &[String],
     pcm: &[f32],
     mut progress: impl FnMut(Stage),
 ) -> Result<String, String> {
@@ -293,36 +387,85 @@ fn recognize(
         None => None,
     };
     let planned = plan(pcm, turns.as_deref());
+    let label = speakers
+        .map(|models| models.label.as_str())
+        .unwrap_or_default();
     let mut said = Vec::new();
     progress(Stage::Text {
         done: 0,
         total: planned.len(),
     });
     for (index, (turn, piece)) in planned.iter().enumerate() {
-        let text = supervisor
-            .transcribe(model, &pcm[piece.clone()], vocabulary.to_vec(), None)
-            .map_err(|error| error.to_string())?;
+        let text = patiently(&TRY_AGAIN_AFTER, || {
+            recognize_in(
+                supervisor,
+                model,
+                &pcm[piece.clone()],
+                vocabulary,
+                None,
+                languages,
+            )
+        })?;
         let text = text.trim();
         if !text.is_empty() {
             said.push((*turn, text.to_string()));
+            progress(Stage::Written(assemble(&said, turns.as_deref(), label)));
         }
         progress(Stage::Text {
             done: index + 1,
             total: planned.len(),
         });
     }
-    Ok(assemble(
-        &said,
-        turns.as_deref(),
-        speakers
-            .map(|models| models.label.as_str())
-            .unwrap_or_default(),
-    ))
+    Ok(assemble(&said, turns.as_deref(), label))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_meeting_is_held_in_three_languages_at_most() {
+        let named = ["en", " ZH ", "en", "", "ja", "ko"]
+            .map(str::to_string)
+            .to_vec();
+        assert_eq!(chosen_languages(named), vec!["en", "zh", "ja"]);
+    }
+
+    #[test]
+    fn the_language_heard_is_checked_against_those_of_the_meeting() {
+        let held_in = ["en".to_string(), "zh".to_string()];
+        assert!(spoken_in(&held_in, "EN"));
+        assert!(spoken_in(&held_in, "zh-CN"));
+        assert!(spoken_in(&held_in, "yue"));
+        assert!(!spoken_in(&held_in, "ja"));
+    }
+
+    #[test]
+    fn a_piece_that_fails_is_tried_again_until_it_works() {
+        let none = [std::time::Duration::ZERO; 2];
+        let mut tries = 0;
+        let outcome = patiently(&none, || {
+            tries += 1;
+            if tries < 3 {
+                Err("worker crashed".to_string())
+            } else {
+                Ok("words")
+            }
+        });
+        assert_eq!((outcome, tries), (Ok("words"), 3));
+        let mut tries = 0;
+        let outcome: Result<(), String> = patiently(&none, || {
+            tries += 1;
+            Err("still down".to_string())
+        });
+        assert_eq!((outcome, tries), (Err("still down".to_string()), 3));
+        let mut tries = 0;
+        let _ = patiently(&none, || {
+            tries += 1;
+            Ok::<_, String>(())
+        });
+        assert_eq!(tries, 1);
+    }
 
     #[test]
     fn without_speakers_the_plan_is_the_plain_cut() {
@@ -403,6 +546,7 @@ mod tests {
             &supervisor,
             &var("OT_MODEL"),
             Some(&speakers),
+            &[],
             &[],
             &pcm,
             |_| {},

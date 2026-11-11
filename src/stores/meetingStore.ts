@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import {
   meetingAudioKeep,
+  meetingLearn,
   meetingSave,
+  meetingTitle,
   meetingTranslate,
   onMeetingError,
   onMeetingInterim,
@@ -10,7 +12,13 @@ import {
   speakerConfirm,
   type MeetingSegment,
 } from '../lib/tauri'
-import { addSegment, addTranslation, meetingText, type Paragraph } from '../lib/meeting-text'
+import {
+  addSegment,
+  addTranslation,
+  meetingText,
+  withParagraphText,
+  type Paragraph,
+} from '../lib/meeting-text'
 
 export type MeetingPhase = 'idle' | 'recording' | 'finishing' | 'working'
 
@@ -47,6 +55,8 @@ export interface MeetingState {
   duration: number
   /** A guess at the words being said now, shown until the settled words replace it. */
   interim: string
+  /** The paragraph the user is changing while the recording runs, if any. */
+  editing: number | null
 }
 
 export const initialMeeting: MeetingState = {
@@ -66,6 +76,7 @@ export const initialMeeting: MeetingState = {
   interim: '',
   title: '',
   duration: 0,
+  editing: null,
 }
 
 export const useMeetingStore = create<MeetingState>(() => initialMeeting)
@@ -73,7 +84,8 @@ export const useMeetingStore = create<MeetingState>(() => initialMeeting)
 /** Keeps the meeting in hand among the past meetings, once it has text. */
 export function persistMeeting(speakerLabel: string): Promise<void> {
   const state = useMeetingStore.getState()
-  const transcript = state.recorded ? meetingText(state.paragraphs, speakerLabel) : state.text
+  const transcript =
+    state.text ?? (state.recorded ? meetingText(state.paragraphs, speakerLabel) : null)
   if (!transcript?.trim()) return Promise.resolve()
   let { id, startedAt } = state
   if (!id) {
@@ -109,13 +121,33 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
     .catch(() => {})
 }
 
+/** Names the meeting in hand after what was said in it, unless it has a name already.
+ * A meeting that cannot be named stays unnamed. */
+export function nameMeeting(speakerLabel: string): Promise<void> {
+  const state = useMeetingStore.getState()
+  const transcript =
+    state.text ?? (state.recorded ? meetingText(state.paragraphs, speakerLabel) : null)
+  const id = state.id
+  if (!id || state.title.trim() || !transcript?.trim()) return Promise.resolve()
+  return Promise.resolve(meetingTitle(transcript))
+    .then((title) => {
+      const now = useMeetingStore.getState()
+      // The user may have named it, or opened another meeting, in the meantime.
+      if (!title?.trim() || now.id !== id || now.title.trim()) return
+      useMeetingStore.setState({ title: title.trim() })
+      return persistMeeting(speakerLabel)
+    })
+    .catch(() => {})
+}
+
 let translating: Promise<void> = Promise.resolve()
 
 /** Takes in one more piece of the meeting and, when asked to, has it translated. Pieces are
  * translated one after another so that they land in the order they were said. */
 export function takeSegment(segment: MeetingSegment): Promise<void> {
-  const before = useMeetingStore.getState().paragraphs
-  const paragraphs = addSegment(before, segment)
+  const { paragraphs: before, editing } = useMeetingStore.getState()
+  // A paragraph the user is changing is left alone; what follows starts a new one.
+  const paragraphs = addSegment(before, segment, editing === before.length - 1)
   if (paragraphs === before) return Promise.resolve()
   useMeetingStore.setState({ paragraphs, interim: '' })
   const target = useMeetingStore.getState().translateTo
@@ -131,6 +163,28 @@ export function takeSegment(segment: MeetingSegment): Promise<void> {
       .catch(() => useMeetingStore.setState({ error: 'meeting.translateFailed' })),
   )
   return translating
+}
+
+/** Resolves once every piece waiting to be translated has been. */
+export function whenTranslated(): Promise<void> {
+  return translating
+}
+
+/** Tells the dictionary, and the recognizer of a running recording, which words the user
+ * put right. */
+export function learnFrom(before: string, after: string) {
+  if (before.trim() === after.trim()) return
+  void Promise.resolve(meetingLearn(before, after)).catch(() => {})
+}
+
+/** Takes the words of a paragraph as the user corrected them during the recording. */
+export function editParagraph(index: number, text: string) {
+  const before = useMeetingStore.getState().paragraphs
+  const paragraphs = withParagraphText(before, index, text)
+  if (paragraphs !== before) {
+    useMeetingStore.setState({ paragraphs })
+    learnFrom(before[index].text, paragraphs[index].text)
+  }
 }
 
 let listening = false

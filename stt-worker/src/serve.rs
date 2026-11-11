@@ -26,6 +26,8 @@ pub trait Engine {
         vocabulary: Vec<String>,
         prompt: Option<String>,
     ) -> Result<EngineOutput, EngineError>;
+    /// Names the language of the audio that follows, or leaves it to the model with `None`.
+    fn set_language(&mut self, _language: Option<String>) {}
     /// Starts isolating the voice in `voice_sample` for a new recording.
     fn isolate_begin(
         &mut self,
@@ -190,6 +192,7 @@ pub fn serve<R: Read, W: Write, E: Engine>(
             Request::Transcribe {
                 vocabulary,
                 prompt,
+                language,
                 pcm_bytes,
             } => {
                 if pcm_bytes > MAX_PCM_BYTES {
@@ -206,6 +209,7 @@ pub fn serve<R: Read, W: Write, E: Engine>(
                         elapsed_ms: 0,
                     }
                 } else {
+                    engine.set_language(language);
                     match engine.transcribe(&pcm, vocabulary, prompt) {
                         Ok(output) => Response::Transcript {
                             text: output.text,
@@ -231,6 +235,7 @@ mod tests {
     struct FakeEngine {
         fail_load: bool,
         calls: Vec<(usize, Vec<String>, Option<String>)>,
+        languages: Vec<Option<String>>,
         isolating: Option<Vec<f32>>,
     }
 
@@ -282,6 +287,9 @@ mod tests {
                 text: "你好".into(),
                 language: Some("zh".into()),
             })
+        }
+        fn set_language(&mut self, language: Option<String>) {
+            self.languages.push(language);
         }
         fn isolate_begin(&mut self, _: &str, _: &str, _: &str) -> Result<(), EngineError> {
             self.isolating = Some(Vec::new());
@@ -447,6 +455,7 @@ mod tests {
             Request::Transcribe {
                 vocabulary: vec!["TypeScript".into()],
                 prompt: Some("前文".into()),
+                language: Some("en".into()),
                 pcm_bytes: (samples * 4) as u32,
             },
             vec![0.25; samples],
@@ -512,6 +521,13 @@ mod tests {
     }
 
     #[test]
+    fn transcribe_tells_the_engine_the_language() {
+        let mut engine = FakeEngine::default();
+        run(&[load_frame(), transcribe_frame(MIN_SAMPLES)], &mut engine);
+        assert_eq!(engine.languages, vec![Some("en".to_string())]);
+    }
+
+    #[test]
     fn very_short_audio_returns_empty_without_calling_engine() {
         let mut engine = FakeEngine::default();
         let responses = run(
@@ -538,6 +554,7 @@ mod tests {
             Request::Transcribe {
                 vocabulary: vec![],
                 prompt: None,
+                language: None,
                 pcm_bytes: MAX_PCM_BYTES + 4,
             },
             vec![],

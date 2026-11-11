@@ -855,6 +855,14 @@
     "titlePlaceholder": "Meeting benennen",
     "more": "Mehr",
     "deleteThis": "Meeting löschen",
-    "people": "{{count}} Sprecher"
+    "people": "{{count}} Sprecher",
+    "language": "Sprachen der Besprechung",
+    "languageAuto": "Sprache erkennen",
+    "polish": "Text bereinigen (über das Korrekturmodell)",
+    "polishAfter": "Text nach dem Ende bereinigen (über das Korrekturmodell)",
+    "unpolish": "Bereinigung rückgängig machen",
+    "polishFailed": "Der Text konnte nicht bereinigt werden",
+    "addLanguage": "Sprache hinzufügen",
+    "removeLanguage": "{{name}} entfernen"
   }
 }

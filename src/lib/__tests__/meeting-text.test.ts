@@ -5,7 +5,10 @@ import {
   meetingText,
   renameSpeakers,
   speakersIn,
+  spokenLines,
   transcriptLines,
+  withLines,
+  withParagraphText,
   type Paragraph,
 } from '../meeting-text'
 
@@ -28,7 +31,7 @@ describe('meeting text', () => {
 
   it('lets a speaker go on across two windows in one paragraph', () => {
     let paragraphs = addSegment([], said(1, 0, 'the first half'))
-    paragraphs = addSegment(paragraphs, said(1, 30_000, 'and the rest'))
+    paragraphs = addSegment(paragraphs, said(1, 12_000, 'and the rest'))
     expect(paragraphs).toEqual([{ speaker: 1, startMs: 0, text: 'the first half and the rest' }])
   })
 
@@ -97,6 +100,37 @@ describe('meeting text', () => {
       { speaker: 0, time: '00:07' },
       { text: '嗯' },
     ])
+  })
+
+  it('gives a speaker who goes on for long a new paragraph with its own time', () => {
+    const first = addSegment([], said(1, 0, '开头'))
+    const soon = addSegment(first, said(1, 20_000, '接着'))
+    expect(soon).toHaveLength(1)
+    const later = addSegment(soon, said(1, 31_000, '半分钟后'))
+    expect(later.map((each) => each.startMs)).toEqual([0, 31_000])
+  })
+
+  it('starts a new paragraph after one the user is changing', () => {
+    const first = addSegment([], said(1, 0, '第一句'))
+    expect(addSegment(first, said(1, 5_000, '第二句'), true)).toHaveLength(2)
+    expect(addSegment(first, said(1, 5_000, '第二句'))).toHaveLength(1)
+  })
+
+  it('takes the words of a paragraph as the user corrected them', () => {
+    const first = addSegment([], said(1, 0, '我们用套瑞'))
+    expect(withParagraphText(first, 0, ' 我们用\nTauri ')[0].text).toBe('我们用 Tauri')
+    expect(withParagraphText(first, 0, '  ')).toBe(first)
+    expect(withParagraphText(first, 3, '别的')).toBe(first)
+  })
+
+  it('replaces only the lines that are words someone said', () => {
+    const text = '说话人 1  00:00\n我们用套瑞\n\n说话人 2  00:04\n好'
+    const at = spokenLines(text, '说话人')
+    expect(at).toEqual([1, 4])
+    expect(withLines(text, at, ['我们用 Tauri。', '好。'])).toBe(
+      '说话人 1  00:00\n我们用 Tauri。\n\n说话人 2  00:04\n好。',
+    )
+    expect(withLines(text, at, ['', undefined])).toBe(text)
   })
 
   it('takes a line that only looks like a heading as words', () => {

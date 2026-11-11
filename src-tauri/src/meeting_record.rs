@@ -14,11 +14,22 @@ use crate::speakers::SpeakerTurn;
 const RATE: usize = 16_000;
 /// The most audio that may wait to be recognized, should recognition fall behind.
 const LONGEST_SAMPLES: usize = 3 * 60 * 60 * RATE;
-/// A window is cut at the quietest moment between these two lengths. On real meetings,
-/// speakers are told apart as steadily in 20-second windows as in 30-second ones, and the
-/// text arrives sooner.
-const EARLIEST_CUT: usize = 12 * RATE;
+/// A window is cut at the first pause after the shorter length, so that words settle
+/// soon after they are said, and at the quietest moment before the longer one when the
+/// talk never pauses.
+const EARLIEST_CUT: usize = 6 * RATE;
 const WINDOW: usize = 20 * RATE;
+/// A pause is this many quiet steps in a row.
+const PAUSE_STEPS: usize = 2;
+/// A step is quiet when it carries less than this share of a loud step's energy.
+const QUIET_SHARE: u64 = 16;
+/// After this many windows in a row that could not be recognized even when tried again,
+/// recognition gives up. The sound is still kept and can be written out afterwards.
+const MOST_LOST_WINDOWS: usize = 3;
+/// How much of what was just said is given to the recognizer as what came before.
+const CONTEXT_CHARS: usize = 200;
+/// The most words the recognizer is given.
+const MOST_WORDS: usize = 30;
 /// The quietest moment is looked for in steps of a fifth of a second.
 const STEP: usize = RATE / 5;
 /// A last window shorter than this holds no word.
@@ -116,6 +127,10 @@ pub fn with_system_sound(
 }
 
 struct Recording {
+    /// The words the recognizer is given; corrections made during the meeting join them.
+    vocabulary: Arc<Mutex<Vec<String>>>,
+    /// The languages the meeting is held in, which the user may change while it runs.
+    languages: Arc<Mutex<Vec<String>>>,
     capture: AudioCaptureHandle,
     system: Option<crate::system_audio::SystemAudioHandle>,
     waiting: Arc<Mutex<Waiting>>,
@@ -134,22 +149,74 @@ fn locked(waiting: &Mutex<Waiting>) -> std::sync::MutexGuard<'_, Waiting> {
 }
 
 /// Where to cut the next window off the waiting audio, if there is enough of it: at the
-/// quietest moment of a full window, or everything left once the recording has ended.
+/// first pause once enough has been said, at the quietest moment of a full window that
+/// has no pause, or everything left once the recording has ended.
 pub fn cut_point(samples: &[i16], finishing: bool) -> Option<usize> {
-    if samples.len() < WINDOW {
-        return (finishing && !samples.is_empty()).then_some(samples.len());
+    let whole = (finishing && !samples.is_empty()).then_some(samples.len());
+    if samples.len() < EARLIEST_CUT + PAUSE_STEPS * STEP {
+        return whole;
     }
-    let energy = |from: usize| -> u64 {
-        samples[from..from + STEP]
-            .iter()
-            .map(|sample| (*sample as i64 * *sample as i64) as u64)
-            .sum()
-    };
-    let quietest = (EARLIEST_CUT..=WINDOW - STEP)
-        .step_by(STEP)
-        .min_by_key(|from| energy(*from))
-        .unwrap_or(WINDOW - STEP);
-    Some(quietest + STEP / 2)
+    let within = samples.len().min(WINDOW);
+    let energies: Vec<u64> = samples[..within]
+        .chunks_exact(STEP)
+        .map(|step| {
+            step.iter()
+                .map(|sample| (*sample as i64 * *sample as i64) as u64)
+                .sum()
+        })
+        .collect();
+    let mut sorted = energies.clone();
+    sorted.sort_unstable();
+    let loud = sorted[sorted.len() * 4 / 5];
+    let quiet = |energy: u64| energy < loud / QUIET_SHARE;
+    let first = EARLIEST_CUT / STEP;
+    let pause = (first..energies.len().saturating_sub(PAUSE_STEPS - 1))
+        .find(|at| energies[*at..*at + PAUSE_STEPS].iter().all(|e| quiet(*e)));
+    if let Some(at) = pause {
+        return Some(at * STEP + PAUSE_STEPS * STEP / 2);
+    }
+    if samples.len() < WINDOW {
+        return whole;
+    }
+    let quietest = (first..energies.len())
+        .min_by_key(|at| energies[*at])
+        .unwrap_or(energies.len() - 1);
+    Some(quietest * STEP + STEP / 2)
+}
+
+/// The end of what was said so far, for the recognizer to go on from.
+fn context(said: &str) -> Option<String> {
+    let skip = said.chars().count().saturating_sub(CONTEXT_CHARS);
+    let tail: String = said.chars().skip(skip).collect();
+    let tail = tail.trim();
+    (!tail.is_empty()).then(|| tail.to_string())
+}
+
+/// True for words in a script the meeting's language is not written in: a meeting held
+/// in a language of Latin letters that comes out mostly in Chinese, Japanese or Korean
+/// characters was misheard.
+pub fn out_of_language(text: &str, languages: &[String]) -> bool {
+    const LATIN: [&str; 10] = ["en", "fr", "de", "es", "pt", "it", "vi", "id", "nl", "tr"];
+    if languages.is_empty() || !languages.iter().all(|code| LATIN.contains(&code.as_str())) {
+        return false;
+    }
+    let east = |c: char| matches!(c, '\u{3040}'..='\u{30ff}' | '\u{4e00}'..='\u{9fff}' | '\u{ac00}'..='\u{d7af}');
+    let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+    let foreign = text.chars().filter(|c| east(*c)).count();
+    letters > 0 && foreign * 2 > letters
+}
+
+/// The recognizer's words with `words` put first; the newest words count most.
+pub fn with_words(known: &[String], words: &[String]) -> Vec<String> {
+    let mut all: Vec<String> = Vec::new();
+    for word in words.iter().chain(known) {
+        let word = word.trim();
+        if !word.is_empty() && !all.iter().any(|kept| kept.eq_ignore_ascii_case(word)) {
+            all.push(word.to_string());
+        }
+    }
+    all.truncate(MOST_WORDS);
+    all
 }
 
 /// A window's recognized pieces as paragraphs, timed from the start of the meeting.
@@ -190,11 +257,21 @@ pub fn window_segments(
         .collect()
 }
 
+/// What the recognizer is told about the audio it gets.
+#[derive(Clone, Default)]
+struct Told {
+    vocabulary: Vec<String>,
+    /// What was said just before.
+    before: Option<String>,
+    /// The languages the meeting is held in; empty when the model is to tell.
+    languages: Vec<String>,
+}
+
 fn recognize_window(
     supervisor: &crate::local_stt::WorkerSupervisor,
     model: &std::path::Path,
     speakers: Option<&SpeakerModels>,
-    vocabulary: &[String],
+    told: &Told,
     window: &[i16],
     offset_ms: u64,
     first: bool,
@@ -221,11 +298,16 @@ fn recognize_window(
     };
     let mut said = Vec::new();
     for (turn, piece) in crate::file_transcribe::plan(&pcm, turns.as_deref()) {
-        let text = supervisor
-            .transcribe(model, &pcm[piece], vocabulary.to_vec(), None)
-            .map_err(|error| error.to_string())?;
+        let text = crate::file_transcribe::recognize_in(
+            supervisor,
+            model,
+            &pcm[piece],
+            &told.vocabulary,
+            told.before.as_deref(),
+            &told.languages,
+        )?;
         let text = text.trim();
-        if !text.is_empty() {
+        if !text.is_empty() && !out_of_language(text, &told.languages) {
             said.push((turn, text.to_string()));
         }
     }
@@ -234,7 +316,7 @@ fn recognize_window(
 
 /// Recognizes window after window until the recording has ended and nothing waits.
 /// How much new audio there must be before the unsettled words are guessed at again.
-const GUESS_EVERY: usize = 5 * RATE / 2;
+const GUESS_EVERY: usize = RATE;
 /// A guess that takes longer than this is no use; the machine then waits for settled words.
 const SLOWEST_GUESS: std::time::Duration = std::time::Duration::from_secs(6);
 
@@ -279,17 +361,37 @@ impl Guessing {
     }
 }
 
+/// Counts one more window lost; true once too many were lost in a row.
+fn gives_up(lost: &mut usize) -> bool {
+    *lost += 1;
+    *lost >= MOST_LOST_WINDOWS
+}
+
 fn work(
     waiting: Arc<Mutex<Waiting>>,
     supervisor: Arc<crate::local_stt::WorkerSupervisor>,
     model: std::path::PathBuf,
     speakers: Option<SpeakerModels>,
-    vocabulary: Vec<String>,
+    vocabulary: Arc<Mutex<Vec<String>>>,
+    languages: Arc<Mutex<Vec<String>>>,
     mut report: impl FnMut(Result<Heard, String>),
 ) {
     let mut first = true;
     let mut guessing = Guessing::default();
+    let mut said = String::new();
+    let mut lost = 0;
     loop {
+        let told = Told {
+            vocabulary: vocabulary
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clone(),
+            before: context(&said),
+            languages: languages
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clone(),
+        };
         let (window, offset_ms) = {
             let mut waiting = locked(&waiting);
             match cut_point(&waiting.pending, waiting.finishing) {
@@ -314,7 +416,16 @@ fn work(
                         .any(|sample| sample.unsigned_abs() >= SILENT_PEAK);
                     if loud {
                         let pcm: Vec<f32> = heard.iter().map(|s| *s as f32 / 32_768.0).collect();
-                        match supervisor.transcribe(&model, &pcm, vocabulary.clone(), None) {
+                        let guessed = crate::file_transcribe::recognize_in(
+                            &supervisor,
+                            &model,
+                            &pcm,
+                            &told.vocabulary,
+                            told.before.as_deref(),
+                            &told.languages,
+                        );
+                        match guessed {
+                            Ok(text) if out_of_language(&text, &told.languages) => {}
                             Ok(text) => report(Ok(Heard::Guess(text.trim().to_string()))),
                             // Settled words still come; only the guesses stop.
                             Err(_) => guessing.off = true,
@@ -329,18 +440,35 @@ fn work(
         if window.len() < SHORTEST_WINDOW || peak.unwrap_or(0) < SILENT_PEAK {
             continue;
         }
-        match recognize_window(
-            &supervisor,
-            &model,
-            speakers.as_ref(),
-            &vocabulary,
-            &window,
-            offset_ms,
-            first,
-        ) {
-            Ok(segments) => segments
-                .into_iter()
-                .for_each(|segment| report(Ok(Heard::Said(segment)))),
+        let recognized =
+            crate::file_transcribe::patiently(&crate::file_transcribe::TRY_AGAIN_AFTER, || {
+                recognize_window(
+                    &supervisor,
+                    &model,
+                    speakers.as_ref(),
+                    &told,
+                    &window,
+                    offset_ms,
+                    first,
+                )
+            });
+        match recognized {
+            Ok(segments) => {
+                lost = 0;
+                segments.into_iter().for_each(|segment| {
+                    said.push_str(&segment.text);
+                    said.push(' ');
+                    report(Ok(Heard::Said(segment)))
+                })
+            }
+            // One window that cannot be recognized is passed over, and what follows is
+            // still written out. Audio that piled up meanwhile is caught up on window
+            // by window.
+            Err(error) if !gives_up(&mut lost) => {
+                tracing::warn!("[Meeting] a window at {offset_ms} ms was passed over: {error}");
+                guessing.settled();
+                continue;
+            }
             Err(error) => {
                 let mut waiting = locked(&waiting);
                 waiting.dropped = true;
@@ -375,6 +503,28 @@ pub fn is_recording() -> bool {
     active().is_some()
 }
 
+/// Changes the languages the running recording is held in.
+pub fn set_languages(languages: Vec<String>) {
+    if let Some(recording) = active().as_ref() {
+        *recording
+            .languages
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) =
+            crate::file_transcribe::chosen_languages(languages);
+    }
+}
+
+/// Gives the recognizer of the running recording more words to listen for.
+pub fn add_words(words: &[String]) {
+    if let Some(recording) = active().as_ref() {
+        let mut known = recording
+            .vocabulary
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        *known = with_words(&known, words);
+    }
+}
+
 /// Starts recording from `input_device` (empty for the system default). Every paragraph
 /// recognized, and an error that ends recognition, goes to `report`.
 pub async fn start(
@@ -383,6 +533,7 @@ pub async fn start(
     system_sound: bool,
     model_id: Option<String>,
     vocabulary: Vec<String>,
+    languages: Vec<String>,
     report: impl FnMut(Result<Heard, String>) + Send + 'static,
 ) -> Result<(), String> {
     if is_recording() {
@@ -464,9 +615,18 @@ pub async fn start(
         }
     });
     let queue = waiting.clone();
-    let worker =
-        std::thread::spawn(move || work(queue, supervisor, model, speakers, vocabulary, report));
+    let vocabulary = Arc::new(Mutex::new(with_words(&vocabulary, &[])));
+    let words = vocabulary.clone();
+    let languages = Arc::new(Mutex::new(crate::file_transcribe::chosen_languages(
+        languages,
+    )));
+    let held_in = languages.clone();
+    let worker = std::thread::spawn(move || {
+        work(queue, supervisor, model, speakers, words, held_in, report)
+    });
     *active() = Some(Recording {
+        vocabulary,
+        languages,
         capture,
         system,
         waiting,
@@ -545,7 +705,7 @@ mod tests {
         assert!(!guessing.due(RATE / 2), "too little to guess at");
         assert!(guessing.due(3 * RATE));
         guessing.took(3 * RATE, std::time::Duration::from_millis(400));
-        assert!(!guessing.due(4 * RATE), "nothing much new yet");
+        assert!(!guessing.due(3 * RATE + RATE / 2), "nothing much new yet");
         assert!(guessing.due(3 * RATE + GUESS_EVERY));
     }
 
@@ -641,7 +801,12 @@ mod tests {
             supervisor,
             var("OT_MODEL"),
             Some(speakers),
-            Vec::new(),
+            Arc::default(),
+            Arc::new(Mutex::new(
+                std::env::var("OT_LANGUAGES")
+                    .map(|all| all.split(',').map(str::to_string).collect())
+                    .unwrap_or_default(),
+            )),
             |outcome| {
                 let Heard::Said(segment) = outcome.unwrap() else {
                     return;
@@ -682,18 +847,69 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_cut_until_a_full_window_waits() {
+    fn talk_without_a_pause_is_not_cut_until_a_full_window_waits() {
         assert_eq!(cut_point(&tone(19, 5_000), false), None);
         assert_eq!(cut_point(&[], true), None);
+        let cut = cut_point(&tone(21, 5_000), false).unwrap();
+        assert!((EARLIEST_CUT..=WINDOW).contains(&cut), "{cut}");
     }
 
     #[test]
-    fn a_window_is_cut_in_the_pause_nearest_its_end() {
-        let mut samples = tone(15, 5_000);
-        samples.extend(tone(1, 0));
-        samples.extend(tone(10, 5_000));
+    fn words_settle_at_the_first_pause_once_enough_was_said() {
+        let mut samples = tone(8, 5_000);
+        samples.extend(tone(1, 40));
+        samples.extend(tone(2, 5_000));
         let cut = cut_point(&samples, false).unwrap();
-        assert!((15 * RATE..16 * RATE).contains(&cut), "{cut}");
+        assert!((8 * RATE..9 * RATE).contains(&cut), "{cut}");
+    }
+
+    #[test]
+    fn a_pause_too_early_does_not_cut() {
+        let mut samples = tone(2, 5_000);
+        samples.extend(tone(1, 0));
+        samples.extend(tone(5, 5_000));
+        assert_eq!(cut_point(&samples, false), None);
+    }
+
+    #[test]
+    fn the_recognizer_goes_on_from_the_end_of_what_was_said() {
+        assert_eq!(context(""), None);
+        assert_eq!(context("so far "), Some("so far".to_string()));
+        let long = "字".repeat(CONTEXT_CHARS + 50);
+        assert_eq!(context(&long).unwrap().chars().count(), CONTEXT_CHARS);
+    }
+
+    #[test]
+    fn chinese_heard_in_an_english_meeting_is_a_mishearing() {
+        let held_in = |codes: &[&str]| {
+            codes
+                .iter()
+                .map(|code| code.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert!(out_of_language("谢谢大家", &held_in(&["en"])));
+        assert!(out_of_language("谢谢大家", &held_in(&["en", "fr"])));
+        assert!(!out_of_language("Thanks everyone", &held_in(&["en"])));
+        assert!(!out_of_language("We met 王艳 today", &held_in(&["en"])));
+        assert!(!out_of_language("谢谢大家", &held_in(&["en", "zh"])));
+        assert!(!out_of_language("谢谢大家", &[]));
+    }
+
+    #[test]
+    fn recognition_goes_on_past_a_lost_window_and_gives_up_after_several() {
+        let mut lost = 0;
+        assert!(!gives_up(&mut lost));
+        assert!(!gives_up(&mut lost));
+        assert!(gives_up(&mut lost));
+    }
+
+    #[test]
+    fn corrected_words_come_first_and_none_twice() {
+        let known = vec!["Tauri".to_string(), "Rust".to_string()];
+        let all = with_words(&known, &["rust".to_string(), "Qwen".to_string()]);
+        assert_eq!(all, vec!["rust", "Qwen", "Tauri"]);
+        let many: Vec<String> = (0..40).map(|n| format!("w{n}")).collect();
+        assert_eq!(with_words(&many, &[]).len(), MOST_WORDS);
     }
 
     #[test]

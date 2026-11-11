@@ -9,8 +9,10 @@ import {
   FolderOpen,
   Mic,
   SlidersHorizontal,
+  Sparkles,
   Square,
   Trash2,
+  Undo2,
 } from 'lucide-react'
 import {
   copyText,
@@ -22,12 +24,15 @@ import {
   meetingAudioDelete,
   meetingDelete,
   meetingGet,
+  meetingLanguages,
+  meetingPolish,
   meetingsList,
   meetingRecordLevel,
   meetingRecordStart,
   meetingRecordStop,
   onFileDropped,
   onFileTranscribeProgress,
+  onFileTranscribeWritten,
   onSpeakerModelsProgress,
   pickMediaFile,
   rememberSpeaker,
@@ -53,14 +58,21 @@ import {
   renameSpeakers,
   speakerColor,
   speakersIn,
+  spokenLines,
+  withLines,
 } from '../../lib/meeting-text'
 import {
+  editParagraph,
+  learnFrom,
   listenToMeeting,
+  nameMeeting,
   persistMeeting,
   useMeetingStore,
+  whenTranslated,
   type MeetingPhase,
 } from '../../stores/meetingStore'
 import { MeetingMinutes } from './MeetingMinutes'
+import { MeetingLanguages, MOST_LANGUAGES } from './MeetingLanguages'
 
 const KNOWN_ERRORS = [
   'file_not_audio',
@@ -75,22 +87,34 @@ const SPEAKERS_KEY = 'meeting.speakers'
 const SYSTEM_SOUND_KEY = 'meeting.systemSound'
 const TRANSLATE_KEY = 'meeting.translate'
 const TRANSLATE_TO_KEY = 'meeting.translateTo'
+const LANGUAGES_KEY = 'meeting.languages'
+const POLISH_KEY = 'meeting.polishAfter'
 
-function rememberedTarget(): string {
+function rememberedChoice(key: string, fallback: string): string {
   try {
-    return window.localStorage.getItem(TRANSLATE_TO_KEY) || 'en'
+    return window.localStorage.getItem(key) || fallback
   } catch {
-    return 'en'
+    return fallback
+  }
+}
+
+function rememberChoice(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // The choice then lasts for this window only.
   }
 }
 
 type Phase = MeetingPhase
 
-function remembered(key = SPEAKERS_KEY): boolean {
+/** A switch as the user left it; `fallback` until it has been touched. */
+function remembered(key = SPEAKERS_KEY, fallback = false): boolean {
   try {
-    return window.localStorage.getItem(key) === '1'
+    const kept = window.localStorage.getItem(key)
+    return kept === null ? fallback : kept === '1'
   } catch {
-    return false
+    return fallback
   }
 }
 
@@ -125,6 +149,7 @@ export function MeetingCard() {
     id,
     interim,
     title,
+    editing,
   } = useMeetingStore()
   const [past, setPast] = useState<MeetingSummary[]>([])
   const [showOptions, setShowOptions] = useState(false)
@@ -136,10 +161,14 @@ export function MeetingCard() {
       .then((all) => setPast(all ?? []))
       .catch(() => {})
   const persist = () => void persistMeeting(label).then(refreshPast)
+  /** Keeps a meeting that has just been written out, then names it after what was said. */
+  const keep = () =>
+    void persistMeeting(label)
+      .then(() => nameMeeting(label))
+      .then(refreshPast)
   const set = useMeetingStore.setState
   const setText = (text: string | null) => set({ text })
   const setError = (error: string | null) => set({ error })
-  const setRecorded = (recorded: boolean) => set({ recorded })
   const setKept = (kept: string | null) => set({ kept })
   const [progress, setProgress] = useState<FileTranscribeProgress | null>(null)
   const [level, setLevel] = useState({ seconds: 0, volume: 0, waiting: 0 })
@@ -148,17 +177,31 @@ export function MeetingCard() {
   const [speakersInstalled, setSpeakersInstalled] = useState(false)
   const [systemSound, setSystemSound] = useState(() => remembered(SYSTEM_SOUND_KEY))
   const [translate, setTranslate] = useState(() => remembered(TRANSLATE_KEY))
-  const [target, setTarget] = useState(rememberedTarget)
+  const [target, setTarget] = useState(() => rememberedChoice(TRANSLATE_TO_KEY, 'en'))
+  const [languages, setLanguages] = useState(() =>
+    rememberedChoice(LANGUAGES_KEY, '').split(',').filter(Boolean).slice(0, MOST_LANGUAGES),
+  )
+  const [polishAfter, setPolishAfter] = useState(() => remembered(POLISH_KEY))
+  const [polishing, setPolishing] = useState(false)
+  const [unpolished, setUnpolished] = useState<string | null>(null)
+  const [position, setPosition] = useState(0)
+  /** The text of the file being transcribed, as far as it is written out. */
+  const [soFar, setSoFar] = useState('')
   const [download, setDownload] = useState<number | null>(null)
   const [voices, setVoices] = useState<string[]>([])
   const [tab, setTab] = useState('text')
   const [models, setModels] = useState<string[]>([])
   const [model, setModel] = useState<string | null>(null)
-  const optionsRef = useRef<TranscribeOptions>({ speakerLabel: null, modelId: null })
+  const optionsRef = useRef<TranscribeOptions>({
+    speakerLabel: null,
+    modelId: null,
+    languages: [],
+  })
 
   optionsRef.current = {
     speakerLabel: speakers && speakersInstalled ? t('meeting.speakerLabel') : null,
     modelId: model,
+    languages,
   }
 
   const enter = (next: Phase) => set({ phase: next })
@@ -167,6 +210,7 @@ export function MeetingCard() {
   const finish = (work: Promise<string>) => {
     enter('working')
     setProgress(null)
+    setSoFar('')
     set({
       text: null,
       recorded: false,
@@ -183,7 +227,7 @@ export function MeetingCard() {
     work
       .then((result) => {
         setText(result ?? '')
-        persist()
+        keep()
       })
       .catch((reason) => {
         const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
@@ -206,6 +250,7 @@ export function MeetingCard() {
       }),
     )
     const reported = Promise.resolve(onFileTranscribeProgress(setProgress))
+    const written = Promise.resolve(onFileTranscribeWritten(setSoFar))
     listenToMeeting()
     const downloading = Promise.resolve(
       onSpeakerModelsProgress(({ downloaded, total }) =>
@@ -216,7 +261,8 @@ export function MeetingCard() {
       .then((status) => {
         if (!status) return
         setSpeakersInstalled(status.installed)
-        setSpeakers(status.installed && remembered())
+        // Telling speakers apart is on until the user turns it off.
+        setSpeakers(status.installed && remembered(SPEAKERS_KEY, true))
       })
       .catch(() => {})
     refreshPast()
@@ -231,6 +277,7 @@ export function MeetingCard() {
     return () => {
       void dropped.then((stop) => stop?.())
       void reported.then((stop) => stop?.())
+      void written.then((stop) => stop?.())
       void downloading.then((stop) => stop?.())
     }
   }, [])
@@ -247,9 +294,10 @@ export function MeetingCard() {
   }, [phase])
 
   useEffect(() => {
+    // The newest words stay in view, except while the user is changing earlier ones.
     const live = liveRef.current
-    if (live) live.scrollTop = live.scrollHeight
-  }, [paragraphs, interim])
+    if (live && editing === null) live.scrollTop = live.scrollHeight
+  }, [paragraphs, interim, editing])
 
   const toggleSpeakers = (on: boolean) => {
     if (!on || speakersInstalled) {
@@ -270,6 +318,13 @@ export function MeetingCard() {
       .finally(() => setDownload(null))
   }
 
+  const changeLanguages = (next: string[]) => {
+    setLanguages(next)
+    rememberChoice(LANGUAGES_KEY, next.join(','))
+    // A meeting being recorded goes on in the languages now named.
+    if (now() === 'recording') void Promise.resolve(meetingLanguages(next)).catch(() => {})
+  }
+
   const bySpeaker = speakers && speakersInstalled
 
   const record = () => {
@@ -288,17 +343,19 @@ export function MeetingCard() {
       title: '',
       duration: 0,
       interim: '',
+      editing: null,
       translateTo: translate ? target : null,
     })
+    setUnpolished(null)
     setLevel({ seconds: 0, volume: 0, waiting: 0 })
     enter('recording')
-    Promise.resolve(meetingRecordStart(inputDevice, bySpeaker, systemSound, model)).catch(
-      (reason) => {
-        const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
-        setError(`meeting.error.${code ?? 'microphone'}`)
-        enter('idle')
-      },
-    )
+    Promise.resolve(
+      meetingRecordStart(inputDevice, bySpeaker, systemSound, model, languages),
+    ).catch((reason) => {
+      const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
+      setError(`meeting.error.${code ?? 'microphone'}`)
+      enter('idle')
+    })
   }
 
   const stop = (discard: boolean) => {
@@ -306,10 +363,15 @@ export function MeetingCard() {
     enter('finishing')
     set({ interim: '', duration: level.seconds })
     Promise.resolve(meetingRecordStop(discard))
+      .then(() => (discard ? undefined : whenTranslated()))
       // The sound becomes the meeting's own once the meeting is kept; that sets `kept`.
       .then(() => {
-        setRecorded(!discard)
-        if (!discard) persist()
+        if (discard) return
+        // From here on the meeting is its text, which the user can go on correcting.
+        const said = meetingText(useMeetingStore.getState().paragraphs, label)
+        set({ recorded: true, text: said, editing: null })
+        keep()
+        if (polishAfter) polish(said)
       })
       .catch(() => setError('meeting.error.failed'))
       .finally(() => enter('idle'))
@@ -337,6 +399,8 @@ export function MeetingCard() {
     void Promise.resolve(meetingGet(summary.id))
       .then((meeting) => {
         if (!meeting || now() !== 'idle') return
+        setUnpolished(null)
+        setPosition(0)
         set({
           id: meeting.id,
           startedAt: meeting.started_at,
@@ -366,7 +430,7 @@ export function MeetingCard() {
       })
       .catch(() => {})
 
-  const written = recorded ? meetingText(paragraphs, label) : text
+  const written = text ?? (recorded ? meetingText(paragraphs, label) : null)
   const speakerNumbers = written ? speakersIn(written, label) : []
   const result = written === null ? null : renameSpeakers(written, label, names)
   const notesBox = (
@@ -380,9 +444,48 @@ export function MeetingCard() {
       className="mt-3 w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none placeholder:text-text-tertiary"
     />
   )
+  const polish = (source: string | null = written) => {
+    if (!source?.trim() || polishing) return
+    const at = spokenLines(source, label)
+    const lines = source.split('\n')
+    setPolishing(true)
+    setError(null)
+    Promise.resolve(meetingPolish(at.map((index) => lines[index])))
+      .then((better) => {
+        // Only a meeting that is still the one sent off takes the answer.
+        if (useMeetingStore.getState().text !== source) return
+        const next = withLines(source, at, better ?? [])
+        if (next === source) return
+        setUnpolished(source)
+        set({ text: next })
+        persist()
+      })
+      .catch((reason) =>
+        setError(
+          String(reason).includes('llm_not_configured')
+            ? 'meeting.error.llm_not_configured'
+            : 'meeting.polishFailed',
+        ),
+      )
+      .finally(() => setPolishing(false))
+  }
+  const unpolish = () => {
+    if (unpolished === null) return
+    set({ text: unpolished })
+    setUnpolished(null)
+    persist()
+  }
+  const correct = (line: number, before: string, after: string) => {
+    if (written === null) return
+    set({ text: withLines(written, [line], [after]) })
+    learnFrom(before, after)
+    persist()
+  }
   const chosenModel = model ?? (models.includes(dictationModel) ? dictationModel : models[0])
 
-  const close = () =>
+  const close = () => {
+    setUnpolished(null)
+    setPosition(0)
     set({
       text: null,
       recorded: false,
@@ -395,6 +498,7 @@ export function MeetingCard() {
       duration: 0,
       kept: null,
     })
+  }
   const removeThis = () => {
     const open = id
     close()
@@ -507,6 +611,28 @@ export function MeetingCard() {
         )}
         {detail && (
           <div className="relative flex shrink-0 items-center gap-2">
+            {unpolished !== null && (
+              <button
+                type="button"
+                onClick={unpolish}
+                aria-label={t('meeting.unpolish')}
+                title={t('meeting.unpolish')}
+                className="btn-quiet px-2.5"
+              >
+                <Undo2 size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => polish()}
+              disabled={polishing}
+              aria-busy={polishing}
+              aria-label={t('meeting.polish')}
+              title={t('meeting.polish')}
+              className="btn-quiet px-2.5 disabled:opacity-50"
+            >
+              <Sparkles size={16} className={polishing ? 'animate-pulse' : undefined} />
+            </button>
             <button
               type="button"
               onClick={() => void copyText(result ?? '')}
@@ -600,11 +726,7 @@ export function MeetingCard() {
                 value={target}
                 onChange={(event) => {
                   setTarget(event.target.value)
-                  try {
-                    window.localStorage.setItem(TRANSLATE_TO_KEY, event.target.value)
-                  } catch {
-                    // The choice then lasts for this window only.
-                  }
+                  rememberChoice(TRANSLATE_TO_KEY, event.target.value)
                 }}
                 className="h-8 rounded-[8px] border border-border bg-bg-primary px-2 text-[12px] text-text-primary outline-none"
               >
@@ -615,6 +737,15 @@ export function MeetingCard() {
                 ))}
               </select>
             )}
+            <Toggle
+              checked={polishAfter}
+              onChange={(on) => {
+                setPolishAfter(on)
+                remember(on, POLISH_KEY)
+              }}
+              label={t('meeting.polishAfter')}
+            />
+            <MeetingLanguages chosen={languages} onChange={changeLanguages} />
             {download !== null && (
               <span className="text-[12px] text-text-secondary">
                 {t('meeting.downloadingSpeakers', { percent: download })}
@@ -668,7 +799,10 @@ export function MeetingCard() {
       )}
 
       {busy && (
-        <div className="flex flex-col border-t border-border pt-4">
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          {phase === 'recording' && (
+            <MeetingLanguages chosen={languages} onChange={changeLanguages} />
+          )}
           <div
             ref={liveRef}
             role="log"
@@ -692,7 +826,28 @@ export function MeetingCard() {
                       </span>
                     </p>
                   )}
-                  <p>{paragraph.text}</p>
+                  <p
+                    contentEditable={phase === 'recording' ? 'plaintext-only' : undefined}
+                    suppressContentEditableWarning
+                    spellCheck={false}
+                    data-paragraph={index}
+                    onFocus={() => set({ editing: index })}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        event.currentTarget.blur()
+                      }
+                    }}
+                    onBlur={(event) => {
+                      const typed = (event.currentTarget.textContent ?? '').trim()
+                      if (typed) editParagraph(index, typed)
+                      else event.currentTarget.textContent = paragraph.text
+                      set({ editing: null })
+                    }}
+                    className="rounded-[3px] outline-none focus:bg-bg-secondary"
+                  >
+                    {paragraph.text}
+                  </p>
                   {paragraph.translation && (
                     <p className="text-text-secondary">{paragraph.translation}</p>
                   )}
@@ -735,6 +890,16 @@ export function MeetingCard() {
               </div>
             )}
           </div>
+          {soFar && (
+            <div className="mt-4 opacity-80">
+              <Transcript
+                text={soFar}
+                names={names}
+                speakerLabel={label}
+                label={t('meeting.live')}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -807,7 +972,14 @@ export function MeetingCard() {
             ))}
           </div>
           <div hidden={tab !== 'text'} className="flex flex-col gap-4">
-            {kept && <MeetingAudio ref={player} src={audioSource(kept)} />}
+            {kept && (
+              <MeetingAudio
+                key={kept}
+                ref={player}
+                src={audioSource(kept)}
+                onPosition={setPosition}
+              />
+            )}
             {speakerNumbers.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {speakerNumbers.map((number) => (
@@ -835,7 +1007,9 @@ export function MeetingCard() {
               names={names}
               speakerLabel={label}
               label={t('meeting.result')}
-              onSeek={kept ? (seconds) => player.current?.seek(seconds) : undefined}
+              onSeek={kept ? (seconds, play) => player.current?.seek(seconds, play) : undefined}
+              position={kept ? position : undefined}
+              onEdit={correct}
             />
           </div>
           <div hidden={tab !== 'minutes'}>

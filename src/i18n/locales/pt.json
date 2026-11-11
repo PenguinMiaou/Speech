@@ -766,7 +766,7 @@
   },
   "snippets": {
     "title": "Trechos",
-    "hint": "Diga só a frase e o texto dela é inserido como está, sem passar pelo modelo de polimento",
+    "hint": "Diga só a frase e o texto dela é inserido como está, sem passar pelo modelo de revisão",
     "phrase": "Frase a dizer, como “meu e-mail”",
     "text": "Texto a inserir",
     "add": "Adicionar",
@@ -855,6 +855,14 @@
     "titlePlaceholder": "Dê um nome à reunião",
     "more": "Mais",
     "deleteThis": "Excluir reunião",
-    "people": "{{count}} participantes"
+    "people": "{{count}} participantes",
+    "language": "Idiomas da reunião",
+    "languageAuto": "Detectar idioma",
+    "polish": "Arrumar o texto (pelo modelo de revisão)",
+    "polishAfter": "Arrumar o texto ao terminar (pelo modelo de revisão)",
+    "unpolish": "Desfazer a arrumação",
+    "polishFailed": "Não foi possível arrumar o texto",
+    "addLanguage": "Adicionar um idioma",
+    "removeLanguage": "Remover {{name}}"
   }
 }

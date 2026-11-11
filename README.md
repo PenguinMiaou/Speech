@@ -30,12 +30,15 @@ Speech is a fork of [OpenTypeless](https://github.com/tover0314-w/opentypeless) 
 
 The Meetings page records a meeting, or takes an audio or video file you choose or drop in (mp3, m4a, wav, flac, ogg, mp4, mov, mkv, up to 3 hours), and the model on this machine turns it into text.
 
-- **Words as they are said.** A guess at the words being said appears in grey every few seconds and is replaced by the settled paragraph about every 12 to 20 seconds. A slow machine guesses less often or not at all.
-- **Speakers.** With "Tell speakers apart" on, each paragraph carries who spoke and when, each speaker in a colour of their own. The first time, two models totalling 34 MB are downloaded.
+- **Words as they are said.** A guess at the words being said appears in grey about every second and is replaced by the settled words at the first pause after six seconds of talk, or after 20 seconds without a pause. A slow machine guesses less often or not at all. A stretch that cannot be recognized is tried again and then passed over, and the rest is still written out.
+- **Corrections while it runs.** Click the settled words to change them, during the meeting or afterwards. A word you put right goes into the dictionary, and the recognizer listens for it for the rest of the meeting.
+- **Languages.** Name up to three languages the meeting is held in, before or during the recording; with none named the model tells the language itself.
+- **Speakers.** "Tell speakers apart" is on once its models are installed; each paragraph carries who spoke and when, each speaker in a colour of their own. The first time, two models totalling 34 MB are downloaded.
 - **Voices remembered by name.** Give a speaker a name and the app remembers that voice on this machine; the same person gets the name in later meetings. Remembered voices are listed under Options and can be removed.
 - **Both sides of a call.** With "Include computer sound" on, what the computer plays is recorded together with the microphone (macOS 14.6 or Windows 10 and later).
-- **Audio kept with the meeting.** It can be played in the app, a click on a time in the text jumps there, and it can be saved elsewhere or transcribed again as a whole. It stays until you delete the audio or the meeting.
+- **Audio kept with the meeting.** It can be played in the app; words the sound has not reached yet are grey, a click on words moves the sound there, a click on a time plays from there, and it can be saved elsewhere or transcribed again as a whole. It stays until you delete the audio or the meeting.
 - **Minutes and questions.** "Write minutes" fills in a template, the built-in one, one by chapter, or a Markdown or text file you import. Notes you type during the meeting steer the minutes. You can also ask a question about a meeting.
+- **Tidy-up and title.** The star button has the polish model put the whole text right (misheard words, punctuation, sentence breaks) with the spellings in your dictionary; it can be undone, and can run by itself when a recording ends. A meeting you have not named is named by the polish model from the first 4,000 characters of its text.
 - **Live translation.** With "Translate live" on, each settled paragraph is translated and shown under the original.
 - **Export.** Text and minutes can be saved as plain text, Markdown or a Word document.
 
@@ -43,7 +46,7 @@ The Meetings page records a meeting, or takes an audio or video file you choose 
   <img src="docs/images/speech-meeting.png" width="760" alt="A meeting with its name, length, audio player and the text by speaker" />
 </p>
 
-Recognition, speaker separation and voice matching run on this machine. Minutes, questions and live translation send the meeting text, and the notes you typed, to the polish model chosen in Settings; with those left unused, no meeting text leaves the machine. Words from your dictionary are given to the recognizer as words to expect, and a recording goes on while you use other pages.
+Recognition, speaker separation and voice matching run on this machine. Minutes, questions, tidy-up and live translation send the meeting text, and the notes you typed, to the polish model chosen in Settings. With a polish model set up, the first 4,000 characters of a finished meeting are also sent to it once, for the title. With no polish model set up, no meeting text leaves the machine. Words from your dictionary are given to the recognizer as words to expect, and a recording goes on while you use other pages.
 
 ## What this fork adds
 

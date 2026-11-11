@@ -855,6 +855,14 @@
     "titlePlaceholder": "会議に名前を付ける",
     "more": "その他",
     "deleteThis": "会議を削除",
-    "people": "{{count}} 人"
+    "people": "{{count}} 人",
+    "language": "会議の言語",
+    "languageAuto": "自動で判別",
+    "polish": "全文を整える（整文モデル経由）",
+    "polishAfter": "終了後に全文を整える（整文モデル経由）",
+    "unpolish": "整える前に戻す",
+    "polishFailed": "全文を整えられませんでした",
+    "addLanguage": "言語を追加",
+    "removeLanguage": "{{name}} を外す"
   }
 }

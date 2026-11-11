@@ -14,11 +14,14 @@ pub struct EvalArgs {
     pub label: String,
     pub vocabulary: Vec<String>,
     pub use_context: bool,
+    /// The language every clip is in, when the run names one.
+    pub language: Option<String>,
 }
 
 pub fn parse_args(args: &[String]) -> Result<EvalArgs, String> {
     let (mut model, mut dir, mut label, mut vocab_file, mut use_context) =
         (None, None, None, None, false);
+    let mut language = None;
     let mut iter = args.iter();
     while let Some(flag) = iter.next() {
         let mut value = || {
@@ -32,6 +35,7 @@ pub fn parse_args(args: &[String]) -> Result<EvalArgs, String> {
             "--label" => label = Some(value()?),
             "--vocab-file" => vocab_file = Some(value()?),
             "--context" => use_context = true,
+            "--language" => language = Some(value()?),
             other => return Err(format!("unknown flag {other}")),
         }
     }
@@ -48,6 +52,7 @@ pub fn parse_args(args: &[String]) -> Result<EvalArgs, String> {
         label: label.ok_or("--label is required")?,
         vocabulary,
         use_context,
+        language,
     })
 }
 
@@ -103,6 +108,7 @@ pub fn run<E: Engine>(args: &EvalArgs, engine: &mut E) -> Result<(), String> {
         .load(&args.model)
         .map_err(|e| format!("{}: {}", e.code, e.message))?;
     println!("backend {backend}");
+    engine.set_language(args.language.clone());
 
     let results = args.dir.join("results");
     fs::create_dir_all(&results).map_err(|e| e.to_string())?;

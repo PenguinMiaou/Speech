@@ -836,6 +836,8 @@ export interface TranscribeOptions {
   /** The word that names a speaker. When set, the text is written out by speaker. */
   speakerLabel: string | null
   modelId: string | null
+  /** The languages spoken, as ISO codes: three at most, none to let the model tell. */
+  languages: string[]
 }
 
 /** Turns an audio or video file into text with the speech model on this machine. */
@@ -856,8 +858,20 @@ export function meetingRecordStart(
   bySpeaker: boolean,
   systemSound: boolean,
   modelId: string | null,
+  languages: string[],
 ): Promise<void> {
-  return invoke('meeting_record_start', { inputDevice, bySpeaker, systemSound, modelId })
+  return invoke('meeting_record_start', {
+    inputDevice,
+    bySpeaker,
+    systemSound,
+    modelId,
+    languages,
+  })
+}
+
+/** Changes the languages the meeting being recorded is held in. */
+export function meetingLanguages(languages: string[]): Promise<void> {
+  return invoke('meeting_languages', { languages })
 }
 
 /** `waiting` is the seconds recorded and not yet recognized. */
@@ -1011,6 +1025,23 @@ export function meetingTranslate(text: string, target: string): Promise<string> 
   return invoke('meeting_translate', { text, target })
 }
 
+/** Puts the words of a whole meeting right with the polish model. `pieces` is what each
+ * person said; as many come back, in the same order. */
+export function meetingPolish(pieces: string[]): Promise<string[]> {
+  return invoke('meeting_polish', { pieces })
+}
+
+/** A title for a meeting, written by the polish model from what was said. Empty when no
+ * model is set up. */
+export function meetingTitle(transcript: string): Promise<string> {
+  return invoke('meeting_title', { transcript })
+}
+
+/** Learns the words the user corrected in a meeting's text. Returns the words learned. */
+export function meetingLearn(before: string, after: string): Promise<string[]> {
+  return invoke('meeting_learn', { before, after })
+}
+
 export function minutesTemplates(): Promise<MinutesTemplate[]> {
   return invoke('minutes_templates')
 }
@@ -1100,6 +1131,11 @@ export function onFileTranscribeProgress(
   return listen<FileTranscribeProgress>('file-transcribe:progress', (event) =>
     handler(event.payload),
   )
+}
+
+/** The text of the file being transcribed, as far as it is written out. */
+export function onFileTranscribeWritten(handler: (text: string) => void): Promise<UnlistenFn> {
+  return listen<string>('file-transcribe:written', (event) => handler(event.payload))
 }
 
 /** Files dropped on this window, as paths on disk. */

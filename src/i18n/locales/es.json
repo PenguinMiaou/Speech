@@ -855,6 +855,14 @@
     "titlePlaceholder": "Pon nombre a la reunión",
     "more": "Más",
     "deleteThis": "Eliminar reunión",
-    "people": "{{count}} participantes"
+    "people": "{{count}} participantes",
+    "language": "Idiomas de la reunión",
+    "languageAuto": "Detectar idioma",
+    "polish": "Pulir el texto (con el modelo de pulido)",
+    "polishAfter": "Pulir el texto al terminar (con el modelo de pulido)",
+    "unpolish": "Deshacer el pulido",
+    "polishFailed": "No se pudo pulir el texto",
+    "addLanguage": "Añadir un idioma",
+    "removeLanguage": "Quitar {{name}}"
   }
 }

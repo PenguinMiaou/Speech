@@ -8,6 +8,8 @@ use transcribe_cpp::{Feature, Model, RunOptions, Session};
 pub struct RealEngine {
     session: Option<Session>,
     accepts: Hints,
+    /// The language the next audio is in, when the caller knows it.
+    language: Option<String>,
     /// The isolation model kept between recordings, with the files it was opened from.
     voice_model: Option<(String, VoxLock)>,
     isolating: Option<(String, Isolator<VoxLock>)>,
@@ -140,6 +142,10 @@ impl Engine for RealEngine {
         Ok(backend)
     }
 
+    fn set_language(&mut self, language: Option<String>) {
+        self.language = language.filter(|code| !code.trim().is_empty());
+    }
+
     fn transcribe(
         &mut self,
         pcm: &[f32],
@@ -150,7 +156,8 @@ impl Engine for RealEngine {
             .session
             .as_mut()
             .ok_or_else(|| engine_error("not_loaded", "no model loaded"))?;
-        let options = run_options(vocabulary, prompt, self.accepts);
+        let mut options = run_options(vocabulary, prompt, self.accepts);
+        options.language = self.language.clone();
         let transcript = session
             .run(pcm, &options)
             .map_err(|e| engine_error("transcribe_failed", e))?;

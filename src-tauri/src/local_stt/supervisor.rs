@@ -460,6 +460,32 @@ impl WorkerSupervisor {
         vocabulary: Vec<String>,
         prompt: Option<String>,
     ) -> Result<String, LocalSttError> {
+        self.transcribe_in(model_path, pcm, vocabulary, prompt, None)
+    }
+
+    /// Recognizes speech known to be in `language` (an ISO code); `None` leaves the
+    /// language to the model.
+    pub fn transcribe_in(
+        &self,
+        model_path: &Path,
+        pcm: &[f32],
+        vocabulary: Vec<String>,
+        prompt: Option<String>,
+        language: Option<String>,
+    ) -> Result<String, LocalSttError> {
+        self.transcribe_heard(model_path, pcm, vocabulary, prompt, language)
+            .map(|(text, _)| text)
+    }
+
+    /// The same, with the language the model heard when it was left to tell.
+    pub fn transcribe_heard(
+        &self,
+        model_path: &Path,
+        pcm: &[f32],
+        vocabulary: Vec<String>,
+        prompt: Option<String>,
+        language: Option<String>,
+    ) -> Result<(String, Option<String>), LocalSttError> {
         let pcm_bytes = pcm.len().saturating_mul(4);
         if pcm_bytes > MAX_PCM_BYTES as usize {
             return Err(LocalSttError::Engine {
@@ -473,6 +499,7 @@ impl WorkerSupervisor {
         let mut payload = encode(&Request::Transcribe {
             vocabulary,
             prompt,
+            language,
             pcm_bytes: pcm_bytes as u32,
         })?;
         payload.reserve(pcm_bytes);
@@ -484,7 +511,7 @@ impl WorkerSupervisor {
         let audio_time = Duration::from_secs_f64(pcm.len() as f64 / SAMPLE_RATE_HZ);
         let running = state.as_mut().expect("worker was just loaded");
         match exchange(running, payload, self.request_timeout + audio_time) {
-            Ok(Response::Transcript { text, .. }) => Ok(text),
+            Ok(Response::Transcript { text, language, .. }) => Ok((text, language)),
             Ok(Response::Error { code, message }) => Err(LocalSttError::Engine { code, message }),
             Ok(other) => {
                 *state = None;

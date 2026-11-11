@@ -58,12 +58,75 @@ pub fn diarize(
     let mut by_length: Vec<&SpeakerVoice> = voices.iter().collect();
     by_length.sort_by_key(|voice| std::cmp::Reverse(spoke(voice.speaker)));
     let pairs = same_people(&by_length);
-    if pairs.is_empty() {
+    let (turns, voices) = if pairs.is_empty() {
+        (turns, voices)
+    } else {
+        let turns = joined(&turns, &pairs);
+        let voices = voices_of(&extractor, pcm, &turns);
+        (turns, voices)
+    };
+    // A long meeting leaves dozens of numbers that each said a few seconds: coughs,
+    // laughter, two people at once. They are not people of their own.
+    let whole = without_fragments(&turns, &voices);
+    if whole == turns {
         return Ok((turns, voices));
     }
-    let turns = joined(&turns, &pairs);
-    let voices = voices_of(&extractor, pcm, &turns);
-    Ok((turns, voices))
+    let voices = voices_of(&extractor, pcm, &whole);
+    Ok((whole, voices))
+}
+
+/// A speaker who said less than this in all, and less than a twentieth of everything
+/// said, is a fragment and not a person of their own.
+const FRAGMENT_MS: u64 = 20_000;
+const FRAGMENT_SHARE: u64 = 20;
+/// A fragment whose voice is at least this alike to a person's is that person's;
+/// otherwise it goes to whoever was speaking around it.
+const LIKELY_ONE_PERSON: f32 = 0.5;
+
+/// The turns with every fragment given to a person: the one it sounds most like, or else
+/// the one speaking just before it. Numbered again in order of appearance.
+fn without_fragments(turns: &[SpeakerTurn], voices: &[SpeakerVoice]) -> Vec<SpeakerTurn> {
+    let mut spoke: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
+    for turn in turns {
+        *spoke.entry(turn.speaker).or_default() += turn.end_ms.saturating_sub(turn.start_ms);
+    }
+    let all: u64 = spoke.values().sum();
+    let fragment =
+        |speaker: u32| spoke[&speaker] < FRAGMENT_MS && spoke[&speaker] * FRAGMENT_SHARE < all;
+    if !turns.iter().any(|turn| fragment(turn.speaker))
+        || turns.iter().all(|turn| fragment(turn.speaker))
+    {
+        return turns.to_vec();
+    }
+    let voice = |speaker: u32| voices.iter().find(|voice| voice.speaker == speaker);
+    let sounds_like = |speaker: u32| -> Option<u32> {
+        let own = voice(speaker)?;
+        voices
+            .iter()
+            .filter(|person| !fragment(person.speaker))
+            .map(|person| (alike(&person.embedding, &own.embedding), person.speaker))
+            .max_by(|a, b| a.0.total_cmp(&b.0))
+            .filter(|(score, _)| *score >= LIKELY_ONE_PERSON)
+            .map(|(_, person)| person)
+    };
+    let first_person = turns
+        .iter()
+        .map(|turn| turn.speaker)
+        .find(|speaker| !fragment(*speaker));
+    let mut speaking = first_person.unwrap_or(0);
+    number_by_first_appearance(turns.iter().map(|turn| {
+        let speaker = if fragment(turn.speaker) {
+            sounds_like(turn.speaker).unwrap_or(speaking)
+        } else {
+            speaking = turn.speaker;
+            turn.speaker
+        };
+        (
+            turn.start_ms as f32 / 1000.0,
+            turn.end_ms as f32 / 1000.0,
+            speaker as i32,
+        )
+    }))
 }
 
 /// Two speakers whose voices are at least this alike are one person. Measured on real
@@ -303,6 +366,51 @@ fn number_by_first_appearance(segments: impl Iterator<Item = (f32, f32, i32)>) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn said(start_s: u64, end_s: u64, speaker: u32) -> SpeakerTurn {
+        SpeakerTurn {
+            start_ms: start_s * 1000,
+            end_ms: end_s * 1000,
+            speaker,
+        }
+    }
+
+    fn sounding(speaker: u32, embedding: [f32; 2]) -> SpeakerVoice {
+        SpeakerVoice {
+            speaker,
+            embedding: embedding.to_vec(),
+        }
+    }
+
+    #[test]
+    fn a_few_seconds_of_someone_are_not_a_person_of_their_own() {
+        let turns = [
+            said(0, 300, 1),
+            said(300, 303, 2),
+            said(303, 600, 3),
+            said(600, 602, 4),
+            said(602, 604, 5),
+            said(604, 900, 1),
+        ];
+        let voices = [
+            sounding(1, [1.0, 0.0]),
+            sounding(3, [0.0, 1.0]),
+            // Sounds like the first person though it comes while the other one speaks.
+            sounding(4, [0.9, 0.1]),
+        ];
+        let speakers: Vec<u32> = without_fragments(&turns, &voices)
+            .iter()
+            .map(|turn| turn.speaker)
+            .collect();
+        // 2 has no voice and goes to who spoke before it; 4 sounds like 1; 5 follows 3.
+        assert_eq!(speakers, vec![1, 1, 2, 1, 2, 1]);
+    }
+
+    #[test]
+    fn people_in_a_short_talk_are_kept_though_each_said_little() {
+        let turns = [said(0, 10, 1), said(10, 18, 2), said(18, 30, 1)];
+        assert_eq!(without_fragments(&turns, &[]), turns.to_vec());
+    }
 
     #[test]
     fn the_first_voice_heard_is_speaker_one() {

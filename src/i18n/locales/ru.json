@@ -166,9 +166,9 @@
     "translationTargets": "Языки перевода",
     "preparing": "Подготовка...",
     "transcribing": "Распознавание...",
-    "cancelProcessing": "Отменить обработку",
+    "cancelProcessing": "Отменить правку",
     "thinking": "Обработка...",
-    "cancelPolishing": "Отменить обработку ИИ",
+    "cancelPolishing": "Отменить правку ИИ",
     "done": "Готово",
     "errorOccurred": "Произошла ошибка",
     "accessibilityRequired": "Требуется доступность — откройте Настройки",
@@ -855,6 +855,14 @@
     "titlePlaceholder": "Назовите встречу",
     "more": "Ещё",
     "deleteThis": "Удалить встречу",
-    "people": "Участников: {{count}}"
+    "people": "Участников: {{count}}",
+    "language": "Языки встречи",
+    "languageAuto": "Определять язык",
+    "polish": "Привести текст в порядок (через модель правки)",
+    "polishAfter": "Привести текст в порядок после окончания (через модель правки)",
+    "unpolish": "Отменить правку",
+    "polishFailed": "Не удалось привести текст в порядок",
+    "addLanguage": "Добавить язык",
+    "removeLanguage": "Убрать {{name}}"
   }
 }

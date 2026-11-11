@@ -13,14 +13,27 @@ function joined(before: string, after: string): string {
   return latin(before[before.length - 1]) && latin(after[0]) ? `${before} ${after}` : before + after
 }
 
+/** A speaker who goes on longer than this gets a new paragraph with its own time, so that
+ * the text stays readable and each time in it is close to the words under it. */
+const LONGEST_PARAGRAPH_MS = 30_000
+
 /** The paragraphs with one more piece of the meeting: the same speaker going on, or a
- * voice too short to tell, continues the last paragraph. */
-export function addSegment(paragraphs: Paragraph[], segment: MeetingSegment): Paragraph[] {
+ * voice too short to tell, continues the last paragraph, unless that one is `closed`
+ * because the user is changing it. */
+export function addSegment(
+  paragraphs: Paragraph[],
+  segment: MeetingSegment,
+  closed = false,
+): Paragraph[] {
   const text = segment.text.trim()
   if (!text) return paragraphs
   const last = paragraphs[paragraphs.length - 1]
   const goesOn =
-    last && segment.speaker !== null && (segment.speaker === 0 || segment.speaker === last.speaker)
+    !closed &&
+    last &&
+    segment.speaker !== null &&
+    segment.start_ms - last.startMs < LONGEST_PARAGRAPH_MS &&
+    (segment.speaker === 0 || segment.speaker === last.speaker)
   if (goesOn) {
     return [...paragraphs.slice(0, -1), { ...last, text: joined(last.text, text) }]
   }
@@ -34,6 +47,36 @@ export function addTranslation(paragraphs: Paragraph[], index: number, text: str
   if (!paragraph || !translated) return paragraphs
   const translation = paragraph.translation ? `${paragraph.translation} ${translated}` : translated
   return paragraphs.map((each, at) => (at === index ? { ...each, translation } : each))
+}
+
+/** The paragraphs with the words of one of them as the user corrected them. */
+export function withParagraphText(
+  paragraphs: Paragraph[],
+  index: number,
+  text: string,
+): Paragraph[] {
+  const corrected = text.replace(/\s*\n\s*/g, ' ').trim()
+  const paragraph = paragraphs[index]
+  if (!paragraph || !corrected || corrected === paragraph.text) return paragraphs
+  return paragraphs.map((each, at) => (at === index ? { ...each, text: corrected } : each))
+}
+
+/** Which lines of a transcript are words someone said, not a heading or a blank line. */
+export function spokenLines(text: string, speakerLabel: string): number[] {
+  return transcriptLines(text, speakerLabel).flatMap((line, index) =>
+    'text' in line && line.text.trim() !== '' ? [index] : [],
+  )
+}
+
+/** The transcript with the lines numbered in `at` replaced, one for one. A replacement
+ * that is missing or empty leaves its line as it was. */
+export function withLines(text: string, at: number[], lines: (string | undefined)[]): string {
+  const all = text.split('\n')
+  at.forEach((index, order) => {
+    const line = lines[order]?.replace(/\s*\n\s*/g, ' ').trim()
+    if (line && index < all.length) all[index] = line
+  })
+  return all.join('\n')
 }
 
 export function clock(seconds: number): string {

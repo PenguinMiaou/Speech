@@ -252,17 +252,23 @@ async fn file_options(
     dictionary: &crate::storage::DictionaryStore,
     speaker_label: Option<String>,
     model_id: Option<String>,
+    languages: Vec<String>,
 ) -> crate::file_transcribe::Options {
     crate::file_transcribe::Options {
         speaker_label: speaker_label.filter(|label| !label.trim().is_empty()),
         model_id,
         vocabulary: crate::recent::engine_vocabulary(&dictionary.words().await),
+        languages: crate::file_transcribe::chosen_languages(languages),
     }
 }
 
 fn report_stage(app: &tauri::AppHandle, stage: crate::file_transcribe::Stage) {
     use crate::file_transcribe::Stage;
     let payload = match stage {
+        Stage::Written(text) => {
+            let _ = app.emit("file-transcribe:written", text);
+            return;
+        }
         Stage::Speakers => serde_json::json!({ "stage": "speakers", "done": 0, "total": 0 }),
         Stage::Text { done, total } => {
             serde_json::json!({ "stage": "text", "done": done, "total": total })
@@ -280,9 +286,11 @@ pub async fn transcribe_file(
     path: String,
     speaker_label: Option<String>,
     model_id: Option<String>,
+    languages: Option<Vec<String>>,
     dictionary: tauri::State<'_, crate::storage::DictionaryStore>,
 ) -> Result<String, String> {
-    let options = file_options(&dictionary, speaker_label, model_id).await;
+    let languages = languages.unwrap_or_default();
+    let options = file_options(&dictionary, speaker_label, model_id, languages).await;
     if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
         return Err("busy".to_string());
     }
@@ -312,6 +320,7 @@ pub async fn meeting_record_start(
     by_speaker: bool,
     system_sound: bool,
     model_id: Option<String>,
+    languages: Option<Vec<String>>,
     dictionary: tauri::State<'_, crate::storage::DictionaryStore>,
 ) -> Result<(), String> {
     let vocabulary = crate::recent::engine_vocabulary(&dictionary.words().await);
@@ -324,6 +333,7 @@ pub async fn meeting_record_start(
         system_sound,
         model_id,
         vocabulary,
+        languages.unwrap_or_default(),
         move |outcome| {
             let _ = match outcome {
                 Ok(crate::meeting_record::Heard::Said(segment)) => {
@@ -336,6 +346,13 @@ pub async fn meeting_record_start(
         },
     )
     .await
+}
+
+/// Changes the languages the running meeting is held in: three at most, none to let the
+/// model tell.
+#[tauri::command]
+pub fn meeting_languages(languages: Vec<String>) {
+    crate::meeting_record::set_languages(languages);
 }
 
 #[derive(Serialize)]

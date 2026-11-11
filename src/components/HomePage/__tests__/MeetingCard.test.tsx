@@ -15,6 +15,7 @@ vi.mock('react-i18next', () => ({
 let drop: (paths: string[]) => void = () => {}
 let report: (progress: tauri.FileTranscribeProgress) => void = () => {}
 let hear: (segment: tauri.MeetingSegment) => void = () => {}
+let write: (text: string) => void = () => {}
 let name: (names: Record<string, string>) => void = () => {}
 
 function installed(speakers: boolean) {
@@ -48,6 +49,10 @@ describe('MeetingCard', () => {
       hear = handler
       return () => {}
     })
+    vi.mocked(tauri.onFileTranscribeWritten).mockImplementation(async (handler) => {
+      write = handler
+      return () => {}
+    })
     vi.mocked(tauri.onMeetingError).mockResolvedValue(() => {})
     vi.mocked(tauri.onMeetingInterim).mockResolvedValue(() => {})
     vi.mocked(tauri.onMeetingNames).mockImplementation(async (handler) => {
@@ -56,6 +61,7 @@ describe('MeetingCard', () => {
     })
     vi.mocked(tauri.speakerVoices).mockResolvedValue([])
     vi.mocked(tauri.meetingsList).mockResolvedValue([])
+    vi.mocked(tauri.meetingTitle).mockResolvedValue('')
     vi.mocked(tauri.meetingSave).mockResolvedValue()
     vi.mocked(tauri.meetingAudioKeep).mockResolvedValue('/data/meetings/m.wav')
     vi.mocked(tauri.meetingAudio).mockResolvedValue(null)
@@ -76,6 +82,7 @@ describe('MeetingCard', () => {
     expect(tauri.transcribeFile).toHaveBeenCalledWith('/tmp/talk.m4a', {
       speakerLabel: null,
       modelId: null,
+      languages: [],
     })
     act(() => report({ stage: 'text', done: 3, total: 12 }))
     expect(screen.getByText('meeting.working 3 12')).toBeTruthy()
@@ -83,6 +90,34 @@ describe('MeetingCard', () => {
 
     await act(async () => finish('first line\nsecond line'))
     expect(screen.getByLabelText('meeting.result').textContent).toBe('first line\nsecond line')
+  })
+
+  it('names a meeting after what was said in it, unless the user named it', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('we went through the budget')
+    vi.mocked(tauri.meetingTitle).mockResolvedValue('Budget review')
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('we went through the budget')
+    await waitFor(() =>
+      expect((screen.getByLabelText('meeting.titlePlaceholder') as HTMLInputElement).value).toBe(
+        'Budget review',
+      ),
+    )
+    expect(tauri.meetingTitle).toHaveBeenCalledWith('we went through the budget')
+    expect(vi.mocked(tauri.meetingSave).mock.calls.slice(-1)[0]?.[0].title).toBe('Budget review')
+  })
+
+  it('shows the text of a file as far as it is written out', async () => {
+    let finish: (text: string) => void = () => {}
+    vi.mocked(tauri.transcribeFile).mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    await ready()
+    act(() => drop(['/tmp/talk.m4a']))
+    await waitFor(() => expect(tauri.onFileTranscribeWritten).toHaveBeenCalled())
+    act(() => write('the first minute'))
+    expect(screen.getByText('the first minute')).toBeTruthy()
+    await act(async () => finish('the first minute and the rest'))
+    await screen.findByText('the first minute and the rest')
+    expect(screen.queryByText('the first minute')).toBeNull()
   })
 
   it('transcribes a file picked with the button', async () => {
@@ -94,19 +129,144 @@ describe('MeetingCard', () => {
     expect(vi.mocked(tauri.transcribeFile).mock.calls[0][0]).toBe('/tmp/picked.mp4')
   })
 
-  it('names the speakers when that is switched on and the models are there', async () => {
+  it('names the speakers without being asked once the models are there', async () => {
     installed(true)
     vi.mocked(tauri.transcribeFile).mockResolvedValue('text')
     await ready()
     fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'meeting.speakers' }))
+    await waitFor(() =>
+      expect(
+        screen.getByRole('switch', { name: 'meeting.speakers' }).getAttribute('aria-checked'),
+      ).toBe('true'),
+    )
     act(() => drop(['/tmp/a.mp3']))
     expect(tauri.transcribeFile).toHaveBeenCalledWith('/tmp/a.mp3', {
       speakerLabel: 'meeting.speakerLabel',
       modelId: null,
+      languages: [],
     })
     act(() => report({ stage: 'speakers', done: 0, total: 0 }))
     expect(screen.getByText('meeting.findingSpeakers')).toBeTruthy()
+  })
+
+  it('leaves speakers alone once the user has switched that off', async () => {
+    installed(true)
+    window.localStorage.setItem('meeting.speakers', '0')
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', false, false, null, [])
+  })
+
+  it('records in the languages the user names, three at most, and remembers them', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
+    for (const code of ['en', 'zh', 'ja']) {
+      fireEvent.change(screen.getByLabelText('meeting.addLanguage'), { target: { value: code } })
+    }
+    expect(screen.queryByLabelText('meeting.addLanguage')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.removeLanguage 日本語' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', false, false, null, ['en', 'zh'])
+    expect(window.localStorage.getItem('meeting.languages')).toBe('en,zh')
+  })
+
+  it('takes another language while the meeting is being recorded', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingLanguages).mockResolvedValue()
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    fireEvent.change(screen.getByLabelText('meeting.addLanguage'), { target: { value: 'en' } })
+    expect(tauri.meetingLanguages).toHaveBeenCalledWith(['en'])
+  })
+
+  it('takes corrections while the meeting is still being recorded', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
+    vi.mocked(tauri.meetingLearn).mockResolvedValue(['Tauri'])
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    act(() => hear({ speaker: 1, start_ms: 0, text: 'we use Tori' }))
+    const words = screen.getByText('we use Tori')
+    fireEvent.focus(words)
+    // What the same speaker says meanwhile does not move the words being changed.
+    act(() => hear({ speaker: 1, start_ms: 5_000, text: 'for the app' }))
+    expect(words.textContent).toBe('we use Tori')
+    words.textContent = 'we use Tauri'
+    fireEvent.blur(words)
+    expect(tauri.meetingLearn).toHaveBeenCalledWith('we use Tori', 'we use Tauri')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
+    await waitFor(() => expect(tauri.meetingSave).toHaveBeenCalled())
+    expect(vi.mocked(tauri.meetingSave).mock.calls[0][0].transcript).toBe(
+      'meeting.speakerLabel 1  00:00\nwe use Tauri\n\nmeeting.speakerLabel 1  00:05\nfor the app',
+    )
+  })
+
+  it('takes corrections to the text of a meeting that has ended', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('meeting.speakerLabel 1  00:00\nwe use Tori')
+    vi.mocked(tauri.meetingLearn).mockResolvedValue([])
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    const words = await screen.findByText('we use Tori')
+    words.textContent = 'we use Tauri'
+    fireEvent.blur(words)
+    expect(tauri.meetingLearn).toHaveBeenCalledWith('we use Tori', 'we use Tauri')
+    await waitFor(() =>
+      expect(vi.mocked(tauri.meetingSave).mock.calls.slice(-1)[0]?.[0].transcript).toBe(
+        'meeting.speakerLabel 1  00:00\nwe use Tauri',
+      ),
+    )
+  })
+
+  it('tidies up the whole text when asked, and puts it back', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nwe use tori\n\nmeeting.speakerLabel 2  00:04\nok',
+    )
+    vi.mocked(tauri.meetingPolish).mockResolvedValue(['We use Tauri.', 'OK.'])
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('we use tori')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    expect(tauri.meetingPolish).toHaveBeenCalledWith(['we use tori', 'ok'])
+    await screen.findByText('We use Tauri.')
+    expect(screen.getByLabelText('meeting.result').textContent).toBe(
+      'meeting.speakerLabel 1  00:00\nWe use Tauri.\n\nmeeting.speakerLabel 2  00:04\nOK.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.unpolish' }))
+    await screen.findByText('we use tori')
+  })
+
+  it('says so when the text could not be tidied up', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('hello')
+    vi.mocked(tauri.meetingPolish).mockRejectedValue('llm_not_configured')
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('hello')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    await screen.findByText('meeting.error.llm_not_configured')
+    expect(screen.getByText('hello')).toBeTruthy()
+  })
+
+  it('tidies up a recording as it ends when that is switched on', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
+    vi.mocked(tauri.meetingPolish).mockResolvedValue(['What was said.'])
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'meeting.polishAfter' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
+    await screen.findByText('What was said.')
+    expect(tauri.meetingPolish).toHaveBeenCalledWith(['what was said'])
+    expect(window.localStorage.getItem('meeting.polishAfter')).toBe('1')
   })
 
   it('downloads the speaker models the first time speakers are switched on', async () => {
@@ -139,7 +299,7 @@ describe('MeetingCard', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
     await screen.findByText('01:15')
-    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', true, false, null)
+    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', true, false, null, [])
     expect(screen.getByRole('log').textContent).toBe('meeting.listening')
     act(() => hear({ speaker: 1, start_ms: 0, text: 'good morning' }))
     act(() => hear({ speaker: 2, start_ms: 31_000, text: 'morning' }))
@@ -258,7 +418,7 @@ describe('MeetingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
     fireEvent.click(screen.getByRole('switch', { name: 'meeting.systemSound' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
-    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', false, true, null)
+    expect(tauri.meetingRecordStart).toHaveBeenCalledWith('', false, true, null, [])
     await screen.findByText('meeting.error.system_audio_unsupported')
     expect(window.localStorage.getItem('meeting.systemSound')).toBe('1')
   })
@@ -418,7 +578,7 @@ describe('MeetingCard', () => {
     await ready()
     fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
     fireEvent.click(await screen.findByRole('combobox', { name: 'meeting.model' }))
-    expect(screen.getAllByRole('option')).toHaveLength(2)
+    expect(screen.getAllByRole('option', { name: /Qwen3/ })).toHaveLength(2)
     fireEvent.click(screen.getByRole('option', { name: 'Qwen3 1.7B F16' }))
     act(() => drop(['/tmp/a.mp3']))
     expect(vi.mocked(tauri.transcribeFile).mock.calls[0][1]?.modelId).toBe('qwen3-asr-1.7b-f16')
@@ -481,6 +641,44 @@ describe('a meeting that is open', () => {
     expect(container.querySelector('audio')?.currentTime).toBe(65)
     expect(play).toHaveBeenCalled()
     play.mockRestore()
+  })
+
+  it('moves to the moment of the words that are clicked, without starting to play', async () => {
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.wav')
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const { container } = render(<MeetingCard />)
+    fireEvent.click(await screen.findByText('budget talk'))
+    await screen.findByRole('button', { name: 'meeting.play' })
+    fireEvent.click(screen.getByText('the budget'))
+    expect(container.querySelector('audio')?.currentTime).toBe(65)
+    expect(play).not.toHaveBeenCalled()
+    play.mockRestore()
+  })
+
+  it('greys the words the sound has not reached yet', async () => {
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.wav')
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript:
+        'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  01:05\nthe budget',
+      notes: '',
+      minutes: '',
+      names: {},
+    })
+    const { container } = render(<MeetingCard />)
+    fireEvent.click(await screen.findByText('budget talk'))
+    await screen.findByRole('button', { name: 'meeting.play' })
+    const later = () => screen.getByText('the budget').className
+    expect(later()).not.toContain('text-text-tertiary')
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    audio.currentTime = 10
+    fireEvent.timeUpdate(audio)
+    expect(later()).toContain('text-text-tertiary')
+    expect(screen.getByText('hello').className).not.toContain('text-text-tertiary')
+    audio.currentTime = 70
+    fireEvent.timeUpdate(audio)
+    expect(later()).not.toContain('text-text-tertiary')
   })
 
   it('is deleted from the menu, which leads back to the list', async () => {

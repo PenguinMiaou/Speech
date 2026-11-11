@@ -855,6 +855,14 @@
     "titlePlaceholder": "회의 이름 지정",
     "more": "더 보기",
     "deleteThis": "회의 삭제",
-    "people": "{{count}}명"
+    "people": "{{count}}명",
+    "language": "회의 언어",
+    "languageAuto": "자동 감지",
+    "polish": "전체 글 다듬기(다듬기 모델 사용)",
+    "polishAfter": "끝난 뒤 전체 글 다듬기(다듬기 모델 사용)",
+    "unpolish": "다듬기 취소",
+    "polishFailed": "전체 글을 다듬지 못했습니다",
+    "addLanguage": "언어 추가",
+    "removeLanguage": "{{name}} 빼기"
   }
 }

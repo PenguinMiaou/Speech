@@ -855,6 +855,14 @@
     "titlePlaceholder": "给会议起个名字",
     "more": "更多",
     "deleteThis": "删除会议",
-    "people": "{{count}} 人"
+    "people": "{{count}} 人",
+    "language": "会议语言",
+    "languageAuto": "自动识别",
+    "polish": "整理全文（经润色模型）",
+    "polishAfter": "结束后整理全文（经润色模型）",
+    "unpolish": "撤销整理",
+    "polishFailed": "全文没有整理成功",
+    "addLanguage": "添加语言",
+    "removeLanguage": "去掉 {{name}}"
   }
 }

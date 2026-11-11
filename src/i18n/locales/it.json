@@ -855,6 +855,14 @@
     "titlePlaceholder": "Dai un nome alla riunione",
     "more": "Altro",
     "deleteThis": "Elimina riunione",
-    "people": "{{count}} partecipanti"
+    "people": "{{count}} partecipanti",
+    "language": "Lingue della riunione",
+    "languageAuto": "Rileva la lingua",
+    "polish": "Sistema il testo (con il modello di rifinitura)",
+    "polishAfter": "Sistema il testo alla fine (con il modello di rifinitura)",
+    "unpolish": "Annulla la sistemazione",
+    "polishFailed": "Non è stato possibile sistemare il testo",
+    "addLanguage": "Aggiungi una lingua",
+    "removeLanguage": "Rimuovi {{name}}"
   }
 }
