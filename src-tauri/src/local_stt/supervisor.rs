@@ -59,10 +59,30 @@ pub struct WorkerSupervisor {
     request_timeout: Duration,
     idle_timeout: Duration,
     state: Mutex<Option<Running>>,
+    /// Whether a failure with the graphics processor is answered by doing without it.
+    falls_back: bool,
+    /// Set while the worker does without the graphics processor.
+    plain: std::sync::atomic::AtomicBool,
+    /// When the graphics processor last failed, and how often in a row.
+    failed: Mutex<(Option<Instant>, u32)>,
+    /// How long the worker does without after the first failure.
+    again_after: Duration,
 }
 
-fn spawn_worker(command: &WorkerCommand) -> Result<Running, LocalSttError> {
+/// How long the worker does without the graphics processor after it failed once; each
+/// failure in a row doubles it, up to `TRY_AGAIN_AT_MOST`.
+const TRY_AGAIN_AFTER: Duration = Duration::from_secs(5 * 60);
+const TRY_AGAIN_AT_MOST: Duration = Duration::from_secs(60 * 60);
+
+/// Tells the worker's recognizer to leave the graphics processor alone.
+const WITHOUT_ACCELERATION: &str = "GGML_DISABLE_VULKAN";
+
+fn spawn_worker(command: &WorkerCommand, plain: bool) -> Result<Running, LocalSttError> {
     let mut process = Command::new(&command.program);
+    if plain {
+        process.env(WITHOUT_ACCELERATION, "1");
+        process.env("TRANSCRIBE_BACKENDS", "cpu");
+    }
     process
         .args(&command.args)
         .stdin(Stdio::piped())
@@ -246,7 +266,95 @@ impl WorkerSupervisor {
             request_timeout,
             idle_timeout,
             state: Mutex::new(None),
+            falls_back: false,
+            plain: std::sync::atomic::AtomicBool::new(false),
+            failed: Mutex::new((None, 0)),
+            again_after: TRY_AGAIN_AFTER,
         }
+    }
+
+    /// The same supervisor, waiting this long after a first failure before it tries the
+    /// graphics processor again.
+    pub fn trying_again_after(mut self, wait: Duration) -> Self {
+        self.again_after = wait;
+        self
+    }
+
+    fn failed(&self) -> MutexGuard<'_, (Option<Instant>, u32)> {
+        self.failed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    /// How long the worker does without the graphics processor since it last failed.
+    pub fn wait_before_trying_again(&self) -> Duration {
+        let doubled = self.failed().1.saturating_sub(1).min(16);
+        self.again_after
+            .saturating_mul(1 << doubled)
+            .min(TRY_AGAIN_AT_MOST.max(self.again_after))
+    }
+
+    /// The same supervisor, answering a failure with the graphics processor by doing
+    /// without it from then on.
+    pub fn falling_back(mut self) -> Self {
+        self.falls_back = true;
+        self
+    }
+
+    /// Whether the worker does without the graphics processor.
+    pub fn is_plain(&self) -> bool {
+        self.plain.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Has the worker do without the graphics processor, or use it again; one that was
+    /// told to do without stays so. A worker
+    /// that runs the other way is stopped, and the next request starts one anew.
+    pub fn set_plain(&self, plain: bool) {
+        if self.plain.swap(plain, std::sync::atomic::Ordering::SeqCst) != plain {
+            *self.lock() = None;
+        }
+    }
+
+    /// Does `work` again without the graphics processor where it failed with it and
+    /// that may be to blame. The worker stays without it only if that went well.
+    fn or_plainly<T>(
+        &self,
+        work: impl Fn() -> Result<T, LocalSttError>,
+    ) -> Result<T, LocalSttError> {
+        // A graphics processor that failed a while ago is given another try.
+        let since = self.failed().0;
+        if self.falls_back
+            && self.is_plain()
+            && since.is_some_and(|at| at.elapsed() >= self.wait_before_trying_again())
+        {
+            self.set_plain(false);
+        }
+        let first = work();
+        if first.is_ok() && !self.is_plain() {
+            *self.failed() = (None, 0);
+        }
+        let blamed = matches!(
+            first,
+            Err(LocalSttError::WorkerCrashed(_) | LocalSttError::Engine { .. })
+        );
+        if !blamed || !self.falls_back || self.is_plain() {
+            return first;
+        }
+        self.set_plain(true);
+        *self.lock() = None;
+        let again = work();
+        match again {
+            Ok(_) => {
+                let mut failed = self.failed();
+                *failed = (Some(Instant::now()), failed.1 + 1);
+                crate::applog::note("stt", "the recognizer goes on without acceleration");
+            }
+            Err(_) => {
+                self.set_plain(false);
+                return first;
+            }
+        }
+        again
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<Running>> {
@@ -265,14 +373,15 @@ impl WorkerSupervisor {
             return Ok(());
         }
         if state.is_none() {
-            *state = Some(spawn_worker(&self.command)?);
+            *state = Some(spawn_worker(&self.command, self.is_plain())?);
         }
         let running = state.as_mut().expect("worker was just started");
         let payload = encode(&Request::Load {
             model_path: model_path.to_string_lossy().into_owned(),
         })?;
         let outcome = match exchange(running, payload, self.request_timeout) {
-            Ok(Response::Ready { .. }) => {
+            Ok(Response::Ready { backend, .. }) => {
+                crate::applog::note("stt", &format!("the recognizer runs on {backend}"));
                 running.model = Some(model_path.to_path_buf());
                 Ok(())
             }
@@ -296,7 +405,7 @@ impl WorkerSupervisor {
         payload: Vec<u8>,
     ) -> Result<Response, LocalSttError> {
         if state.is_none() {
-            *state = Some(spawn_worker(&self.command)?);
+            *state = Some(spawn_worker(&self.command, self.is_plain())?);
         }
         let running = state.as_mut().expect("worker was just started");
         match exchange(running, payload, self.request_timeout) {
@@ -427,7 +536,7 @@ impl WorkerSupervisor {
         let answer = payload.and_then(|payload| {
             let mut state = self.lock();
             if state.is_none() {
-                *state = Some(spawn_worker(&self.command)?);
+                *state = Some(spawn_worker(&self.command, self.is_plain())?);
             }
             let running = state.as_mut().expect("worker was just started");
             match exchange(running, payload, self.request_timeout + audio_time) {
@@ -482,7 +591,7 @@ impl WorkerSupervisor {
         let answer = payload.and_then(|payload| {
             let mut state = self.lock();
             if state.is_none() {
-                *state = Some(spawn_worker(&self.command)?);
+                *state = Some(spawn_worker(&self.command, self.is_plain())?);
             }
             let running = state.as_mut().expect("worker was just started");
             match exchange(running, payload, self.request_timeout + audio_time) {
@@ -539,7 +648,7 @@ impl WorkerSupervisor {
     pub fn ensure_loaded(&self, model_path: &Path) -> Result<(), LocalSttError> {
         noted(
             "loading the model",
-            self.load_locked(&mut self.lock(), model_path),
+            self.or_plainly(|| self.load_locked(&mut self.lock(), model_path)),
         )
     }
 
@@ -583,6 +692,25 @@ impl WorkerSupervisor {
     }
 
     fn recognized(
+        &self,
+        model_path: &Path,
+        pcm: &[f32],
+        vocabulary: Vec<String>,
+        prompt: Option<String>,
+        language: Option<String>,
+    ) -> Result<(String, Option<String>), LocalSttError> {
+        self.or_plainly(|| {
+            self.recognized_once(
+                model_path,
+                pcm,
+                vocabulary.clone(),
+                prompt.clone(),
+                language.clone(),
+            )
+        })
+    }
+
+    fn recognized_once(
         &self,
         model_path: &Path,
         pcm: &[f32],
@@ -688,6 +816,7 @@ def reply(value):
     body = json.dumps(value).encode()
     stdout.write(struct.pack('<I', len(body)) + body)
     stdout.flush()
+plain = os.environ.get('GGML_DISABLE_VULKAN') is not None
 while True:
     header = stdin.read(4)
     if len(header) < 4:
@@ -696,10 +825,12 @@ while True:
     if request == 'Shutdown':
         sys.exit(0)
     if 'Load' in request:
-        if mode == 'bad-load':
+        if mode == 'gpu-bad-load' and not plain:
+            reply({'Error': {'code': 'load_failed', 'message': 'no device'}})
+        elif mode == 'bad-load':
             reply({'Error': {'code': 'load_failed', 'message': 'bad file'}})
         else:
-            reply({'Ready': {'backend': 'fake', 'load_ms': 0}})
+            reply({'Ready': {'backend': 'plain' if plain else 'fake', 'load_ms': 0}})
         continue
     if 'Diarize' in request:
         samples = os.path.getsize(request['Diarize']['pcm_path']) // 4
@@ -724,6 +855,11 @@ while True:
     if mode == 'never-read':
         time.sleep(600)
     audio = stdin.read(request['Transcribe']['pcm_bytes'])
+    if mode == 'gpu-crash' and not plain:
+        sys.exit(3)
+    if mode == 'gpu-crash-once' and not plain and not os.path.exists(marker):
+        open(marker, 'w').close()
+        sys.exit(3)
     if mode == 'crash-once' and not os.path.exists(marker):
         open(marker, 'w').close()
         sys.exit(3)
@@ -873,6 +1009,87 @@ while True:
             "n=8"
         );
         assert!(worker.is_running());
+    }
+
+    #[test]
+    fn a_model_that_does_not_load_with_acceleration_is_loaded_without() {
+        let worker = supervisor("gpu-bad-load", "", 5_000, 60_000).falling_back();
+        let model = model_file();
+        assert_eq!(
+            worker.transcribe(&model, &[0.0; 8], vec![], None).unwrap(),
+            "n=8"
+        );
+        assert!(worker.is_plain());
+    }
+
+    #[test]
+    fn a_worker_that_dies_with_acceleration_is_asked_again_without() {
+        let worker = supervisor("gpu-crash", "", 5_000, 60_000).falling_back();
+        let model = model_file();
+        assert_eq!(
+            worker.transcribe(&model, &[0.0; 8], vec![], None).unwrap(),
+            "n=8"
+        );
+        assert!(worker.is_plain());
+        // It stays without for what comes after.
+        assert_eq!(
+            worker.transcribe(&model, &[0.0; 4], vec![], None).unwrap(),
+            "n=4"
+        );
+    }
+
+    #[test]
+    fn acceleration_is_tried_again_after_a_while_and_kept_when_it_holds() {
+        let marker = unique_path("gpu-crashed");
+        let worker = supervisor("gpu-crash-once", marker.to_str().unwrap(), 5_000, 60_000)
+            .falling_back()
+            .trying_again_after(Duration::ZERO);
+        let model = model_file();
+        assert_eq!(
+            worker.transcribe(&model, &[0.0; 8], vec![], None).unwrap(),
+            "n=8"
+        );
+        assert!(worker.is_plain());
+        assert_eq!(
+            worker.transcribe(&model, &[0.0; 4], vec![], None).unwrap(),
+            "n=4"
+        );
+        assert!(!worker.is_plain());
+    }
+
+    #[test]
+    fn acceleration_that_keeps_failing_is_tried_ever_more_seldom() {
+        let worker = supervisor("gpu-crash", "", 5_000, 60_000)
+            .falling_back()
+            .trying_again_after(Duration::from_millis(40));
+        let model = model_file();
+        let hear = || worker.transcribe(&model, &[0.0; 8], vec![], None).unwrap();
+        hear();
+        assert_eq!(worker.wait_before_trying_again(), Duration::from_millis(40));
+        std::thread::sleep(Duration::from_millis(60));
+        // It is tried, fails once more, and the next wait is twice as long.
+        assert_eq!(hear(), "n=8");
+        assert!(worker.is_plain());
+        assert_eq!(worker.wait_before_trying_again(), Duration::from_millis(80));
+    }
+
+    #[test]
+    fn a_worker_asked_to_do_without_acceleration_starts_that_way() {
+        let worker = supervisor("gpu-crash", "", 5_000, 60_000);
+        worker.set_plain(true);
+        assert_eq!(
+            worker
+                .transcribe(&model_file(), &[0.0; 8], vec![], None)
+                .unwrap(),
+            "n=8"
+        );
+    }
+
+    #[test]
+    fn a_failure_that_acceleration_is_not_to_blame_for_stays_one() {
+        let worker = supervisor("bad-load", "", 5_000, 60_000).falling_back();
+        let error = worker.ensure_loaded(&model_file()).unwrap_err();
+        assert!(matches!(error, LocalSttError::Engine { code, .. } if code == "load_failed"));
     }
 
     #[test]

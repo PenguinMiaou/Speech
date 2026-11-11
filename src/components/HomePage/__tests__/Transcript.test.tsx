@@ -126,3 +126,68 @@ describe('who speaks', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 })
+
+describe('words that were set out', () => {
+  const set = 'Speaker 1  00:10\n三步：①备份，②**灰度**，③切换\n\nSpeaker 2  00:20\n好的'
+
+  it('show strong words strongly and each counted point on its own line, without the marks', () => {
+    const { container } = shown({ text: set, onEdit: vi.fn() })
+    expect(screen.getByText('灰度').tagName).toBe('STRONG')
+    expect(container.querySelectorAll('br').length).toBe(3)
+    expect(container.textContent).not.toContain('**')
+  })
+
+  it('are changed as they are written, marks and all, after a double click', () => {
+    const onEdit = vi.fn()
+    const { container } = shown({ text: set, onEdit })
+    fireEvent.doubleClick(screen.getByText('灰度'))
+    const raw = container.querySelector('[contenteditable][data-line="1"]') as HTMLElement
+    expect(raw.textContent).toBe('三步：①备份，②**灰度**，③切换')
+    raw.textContent = '三步：①备份，②**灰度发布**，③切换'
+    fireEvent.blur(raw)
+    expect(onEdit).toHaveBeenCalledWith(
+      1,
+      '三步：①备份，②**灰度**，③切换',
+      '三步：①备份，②**灰度发布**，③切换',
+    )
+  })
+
+  it('move the sound to their paragraph when clicked', () => {
+    const onSeek = vi.fn()
+    shown({ text: set, onSeek })
+    fireEvent.click(screen.getByText('灰度'))
+    expect(onSeek).toHaveBeenCalledWith(10, false)
+  })
+
+  it('show how far the sound has got, across strong words and counted points', () => {
+    const highlights = new Map<string, { ranges: Range[] }>()
+    vi.stubGlobal('CSS', { highlights })
+    vi.stubGlobal(
+      'Highlight',
+      class {
+        ranges: Range[]
+        constructor(...ranges: Range[]) {
+          this.ranges = ranges
+        }
+      },
+    )
+    // Fourteen characters without the marks, said evenly from 0:10 to 0:24.
+    const even = [
+      { end_ms: 24000, chars: 14, marks: [[0, 10000] as [number, number]] },
+      { end_ms: 26000, chars: 2, marks: [[0, 25000] as [number, number]] },
+    ]
+    shown({ text: set, times: even, onSeek: vi.fn(), position: 19 })
+    const [ahead] = highlights.get('ahead')?.ranges ?? []
+    // Nine characters are said: "三步：①备份，②灰", inside the strong words.
+    expect(ahead?.startContainer.textContent).toBe('灰度')
+    expect(ahead?.startOffset).toBe(1)
+    expect(ahead?.endContainer.textContent).toBe('③切换')
+    expect(ahead?.endOffset).toBe(3)
+  })
+
+  it('are compared with what was heard by their words alone', () => {
+    const before = 'Speaker 1  00:10\n三步：备份，灰度，切换\n\nSpeaker 2  00:20\n好的'
+    const { container } = shown({ text: set, before })
+    expect(container.textContent).not.toContain('**')
+  })
+})

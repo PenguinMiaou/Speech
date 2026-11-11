@@ -363,6 +363,41 @@ export function withSpeakersJoined(
     .join('\n')
 }
 
+/** The transcript with a speaker named once while they go on: a heading that names the
+ * same person as the one before, by the name shown, is left out, and its words follow
+ * on a line of their own. For reading and passing on; the times of those headings go. */
+export function withRunsJoined(
+  text: string,
+  speakerLabel: string,
+  names: Record<number, string>,
+): string {
+  const parsed = transcriptLines(text, speakerLabel)
+  const lines = text.split('\n')
+  const out: string[] = []
+  let last: string | null = null
+  parsed.forEach((line, index) => {
+    if ('text' in line || line.speaker === null) {
+      out.push(lines[index])
+      return
+    }
+    if (line.speaker === 0) {
+      // A voice too short to tell may be anyone, so it never goes on from the last.
+      last = null
+      out.push(lines[index])
+      return
+    }
+    const name = names[line.speaker]?.trim() || `${speakerLabel} ${line.speaker}`
+    if (name === last) {
+      // The empty line that set this paragraph apart goes with its heading.
+      while (out.length > 0 && out[out.length - 1].trim() === '') out.pop()
+      return
+    }
+    last = name
+    out.push(lines[index])
+  })
+  return out.join('\n')
+}
+
 /** A term and the other ways a meeting writes it. */
 export interface Spelling {
   spelling: string

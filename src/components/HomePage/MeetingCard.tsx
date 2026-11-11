@@ -24,10 +24,14 @@ import {
   Search,
   MessageCircleQuestion,
   X,
+  LayoutTemplate,
+  ScrollText,
 } from 'lucide-react'
 import {
   addDictionaryEntry,
   copyText,
+  minutesTemplates,
+  type MinutesTemplate,
   forgetSpeaker,
   installSpeakerModels,
   installWordTimes,
@@ -57,11 +61,14 @@ import {
   wordTimesStatus,
   speakerVoices,
   transcribeFile,
+  transcribeFileStop,
   type MeetingSummary,
   type TranscribeOptions,
 } from '../../lib/tauri'
 import { useAppStore } from '../../stores/appStore'
 import { localModelName } from '../../lib/local-model-names'
+import { plainOf } from '../../lib/meeting-format'
+import { BUILT_IN, TemplateGallery, templateText } from './TemplateGallery'
 import { Toggle } from '../Settings/shared/Toggle'
 import { Transcript } from './Transcript'
 import { MeetingAudio, type AudioHandle } from './MeetingAudio'
@@ -80,6 +87,7 @@ import {
   stampNote,
   stampedNotes,
   withLines,
+  withRunsJoined,
   withSpeakerAt,
   withSpeakersJoined,
   withSpellings,
@@ -87,6 +95,7 @@ import {
 import {
   editParagraph,
   learnFrom,
+  makeMinutes,
   listenToMeeting,
   nameFromMinutes,
   nameMeeting,
@@ -254,6 +263,7 @@ export function MeetingCard() {
     tidying,
     unpolished,
     terms,
+    making,
     progress,
     soFar,
     workingSince,
@@ -314,6 +324,15 @@ export function MeetingCard() {
   const [showOptions, setShowOptions] = useState(false)
   const [showMore, setShowMore] = useState(false)
   const [counting, setCounting] = useState(false)
+  // The templates laid out to pick from: for the kept meeting minutes are to be made of,
+  // or with no meeting, only to look at, add to or take from.
+  const [picking, setPicking] = useState<{ meeting: MeetingSummary | null } | null>(null)
+  const [templates, setTemplates] = useState<MinutesTemplate[]>([])
+  const [template, setTemplate] = useState(BUILT_IN)
+  /** The kept sound of the meeting minutes are to be made of, and whether it is written
+   * out anew first. */
+  const [sound, setSound] = useState<string | null>(null)
+  const [againFirst, setAgainFirst] = useState(true)
   const voicesAtHand = useMeetingStore((state) => state.voicesAtHand)
   const player = useRef<AudioHandle>(null)
   const label = t('meeting.speakerLabel')
@@ -395,10 +414,21 @@ export function MeetingCard() {
       .then((pairs) => (pairs?.length ? withSpeakersJoined(text, label, pairs) : text))
       .catch(() => text)
   }
+  /** Set once the file in hand was asked to be let be, until it has ended. */
+  const [stopping, setStopping] = useState(false)
+  const stopFile = () => {
+    setStopping(true)
+    void Promise.resolve(transcribeFileStop()).catch(() => {})
+  }
   const enter = (next: Phase) => set({ phase: next })
   const now = () => useMeetingStore.getState().phase
 
-  const finish = (work: Promise<string>) => {
+  /** Shows the work of writing a file out and keeps what comes of it. With `same`, the
+   * meeting in hand is written out anew from its own sound: it stays the same meeting,
+   * with its sound, name, notes and minutes, and only its words and speakers are new. */
+  const finish = (work: Promise<string>, same = false) => {
+    const was = useMeetingStore.getState()
+    setStopping(false)
     enter('working')
     set({
       progress: null,
@@ -408,27 +438,45 @@ export function MeetingCard() {
       recorded: false,
       error: null,
       names: {},
-      minutes: null,
-      id: null,
-      notes: '',
       voicesAtHand: true,
-      title: '',
-      duration: 0,
-      kept: null,
       times: [],
+      unpolished: null,
+      terms: null,
+      ...(same ? {} : { minutes: null, id: null, notes: '', title: '', duration: 0, kept: null }),
     })
     work
       .then((result) => settle(result ?? ''))
       .then((result) => {
         setText(result)
+        if (same) {
+          persist()
+          return
+        }
         keep()
         // The next file begins a meeting of its own, so this one is named first.
         return waitingRef.current.length > 0 ? named.current : undefined
       })
       .catch((reason) => {
+        if (String(reason).includes('stopped')) {
+          // What the user let be is no failure: the files that waited are let be as
+          // well, and what was written of this one stands as a meeting.
+          queue([])
+          if (same) {
+            set({ text: was.text, names: was.names, times: was.times, voicesAtHand: false })
+            return
+          }
+          const soFar = useMeetingStore.getState().soFar
+          if (!soFar.trim()) return
+          return settle(soFar).then((text) => {
+            setText(text)
+            keep()
+          })
+        }
         const code = KNOWN_ERRORS.find((known) => String(reason).includes(known))
         setError(`meeting.error.${code ?? 'failed'}`)
         several.current.failed = several.current.running
+        // A meeting that could not be written out anew stays as it was.
+        if (same) set({ text: was.text, names: was.names, times: was.times, voicesAtHand: false })
       })
       .finally(() => {
         enter('idle')
@@ -444,7 +492,7 @@ export function MeetingCard() {
   }
 
   const transcribe = (path: string) => {
-    if (now() !== 'idle') return
+    if (now() !== 'idle' || useMeetingStore.getState().making) return
     finish(Promise.resolve(transcribeFile(path, optionsRef.current)))
   }
   const transcribeRef = useRef(transcribe)
@@ -582,7 +630,7 @@ export function MeetingCard() {
   const bySpeaker = speakers && speakersInstalled
 
   const record = () => {
-    if (now() !== 'idle') return
+    if (now() !== 'idle' || useMeetingStore.getState().making) return
     set({
       error: null,
       text: null,
@@ -644,7 +692,8 @@ export function MeetingCard() {
   }
 
   const again = () => {
-    if (kept) transcribe(kept)
+    if (!kept || now() !== 'idle' || useMeetingStore.getState().making) return
+    finish(Promise.resolve(transcribeFile(kept, optionsRef.current)), true)
   }
 
   const forget = () =>
@@ -696,6 +745,53 @@ export function MeetingCard() {
       left={left}
     />
   )
+  const pickTemplate = (meeting: MeetingSummary | null) => {
+    setSound(null)
+    // A meeting that has minutes was gone through before; its text stays unless asked.
+    setAgainFirst(!meeting?.has_minutes)
+    setPicking({ meeting })
+    void Promise.resolve(minutesTemplates())
+      .then((all) => setTemplates(all ?? []))
+      .catch(() => {})
+    if (meeting)
+      void Promise.resolve(meetingAudio(meeting.id))
+        .then((kept) => setSound(kept ?? null))
+        .catch(() => {})
+  }
+  /** Makes minutes of the picked meeting in one go, after the picked template. */
+  const makeOf = () => {
+    const meeting = picking?.meeting
+    setPicking(null)
+    if (!meeting) return
+    const again = sound && againFirst ? { audio: sound, options: optionsRef.current } : null
+    void makeMinutes(label, meeting.id, templateText(t, templates, template), again).then(
+      refreshPast,
+    )
+  }
+  const makingBar = making && (
+    <Going
+      label={t('meeting.minutes')}
+      steps={making.steps.map((step) => ({
+        label: t(
+          `meeting.step${step === 'text' ? 'Text' : step === 'words' ? 'Words' : step === 'speakers' ? 'Speakers' : 'Minutes'}`,
+        ),
+        icon:
+          step === 'text' ? (
+            <Type size={11} />
+          ) : step === 'words' ? (
+            <SpellCheck size={11} />
+          ) : step === 'speakers' ? (
+            <Users size={11} />
+          ) : (
+            <ScrollText size={11} />
+          ),
+      }))}
+      at={making.at}
+      within={making.within}
+      value={Math.round(((making.at + making.within) / making.steps.length) * 100)}
+      left={remaining(making.since, (making.at + making.within) / making.steps.length)}
+    />
+  )
   const open = (summary: MeetingSummary) =>
     void Promise.resolve(meetingGet(summary.id))
       .then((meeting) => {
@@ -734,12 +830,15 @@ export function MeetingCard() {
   const written = text ?? (recorded ? meetingText(paragraphs, label) : null)
   const speakerNumbers = written ? speakersIn(written, label) : []
   const result = written === null ? null : renameSpeakers(written, label, names)
+  // Copied or saved, the text names a speaker once while they go on, as it reads here.
+  const shared =
+    written === null ? '' : renameSpeakers(withRunsJoined(written, label, names), label, names)
   // A text that carries times can also be saved as subtitles.
   const timedText = written !== null && subtitles(written, label, names, times, 'srt') !== ''
   const asSubtitles = timedText
     ? {
-        srt: () => subtitles(written, label, names, times, 'srt'),
-        vtt: () => subtitles(written, label, names, times, 'vtt'),
+        srt: () => subtitles(plainOf(written), label, names, times, 'srt'),
+        vtt: () => subtitles(plainOf(written), label, names, times, 'vtt'),
       }
     : undefined
   const notesBox = (
@@ -769,10 +868,11 @@ export function MeetingCard() {
   )
   const polish = (source: string | null = written) =>
     void tidyMeeting(label, source ?? undefined).then(refreshPast)
-  const before = unpolished?.id === id ? unpolished.text : undefined
+  const heard = unpolished?.id === id ? unpolished : undefined
+  const before = heard ? (heard.shaped ?? heard.text) : undefined
   const unpolish = () => {
-    if (before === undefined) return
-    set({ text: before, unpolished: null })
+    if (!heard) return
+    set({ text: heard.text, ...(heard.times ? { times: heard.times } : {}), unpolished: null })
     persist()
   }
   /** Keeps a speaker's name with the meeting, and with the voice where that is at hand. */
@@ -933,6 +1033,15 @@ export function MeetingCard() {
             </button>
             <button
               type="button"
+              onClick={() => pickTemplate(null)}
+              aria-label={t('meeting.template')}
+              title={t('meeting.template')}
+              className="btn-quiet px-2.5"
+            >
+              <LayoutTemplate size={16} />
+            </button>
+            <button
+              type="button"
               onClick={choose}
               aria-label={t('meeting.chooseFile')}
               title={t('meeting.chooseFile')}
@@ -1013,7 +1122,7 @@ export function MeetingCard() {
             </button>
             <button
               type="button"
-              onClick={() => void copyText(result ?? '')}
+              onClick={() => void copyText(plainOf(shared))}
               aria-label={t('meeting.copy')}
               title={t('meeting.copy')}
               className="btn-quiet px-2.5"
@@ -1022,7 +1131,9 @@ export function MeetingCard() {
             </button>
             <button
               type="button"
-              onClick={() => void saveTextFile(result ?? '', t('meeting.fileName'), asSubtitles)}
+              onClick={() =>
+                void saveTextFile(shared, t('meeting.fileName'), asSubtitles, plainOf(shared))
+              }
               aria-label={t('meeting.save')}
               title={t('meeting.save')}
               className="btn-quiet px-2.5"
@@ -1274,6 +1385,16 @@ export function MeetingCard() {
               <span role="timer" className="ml-3 tabular-nums text-text-tertiary">
                 {clock(Math.max(0, Math.floor((Date.now() - (workingSince ?? Date.now())) / 1000)))}
               </span>
+              <button
+                type="button"
+                onClick={stopFile}
+                disabled={stopping}
+                aria-label={t('meeting.stopFile')}
+                title={t('meeting.stopFile')}
+                className="ml-3 inline-flex h-6 w-6 items-center justify-center rounded-[6px] align-middle text-text-secondary hover:bg-bg-secondary hover:text-text-primary disabled:opacity-40"
+              >
+                <Square size={12} />
+              </button>
               {waiting.length > 0 && (
                 <span className="ml-3 inline-flex items-center gap-1 text-text-tertiary">
                   <Files size={13} />
@@ -1335,6 +1456,28 @@ export function MeetingCard() {
           {answer}
         </p>
       )}
+      {picking && (
+        <TemplateGallery
+          templates={templates}
+          onTemplates={setTemplates}
+          chosen={template}
+          onChoose={setTemplate}
+          onClose={() => setPicking(null)}
+          confirm={picking.meeting ? { label: t('meeting.minutes'), onConfirm: makeOf } : undefined}
+        >
+          {picking.meeting && sound && (
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-text-secondary">
+              <input
+                type="checkbox"
+                checked={againFirst}
+                onChange={(event) => setAgainFirst(event.target.checked)}
+                className="accent-[var(--color-accent)]"
+              />
+              {t('meeting.againFirst')}
+            </label>
+          )}
+        </TemplateGallery>
+      )}
       {list &&
         (past.length > 0 ? (
           <ul
@@ -1349,7 +1492,7 @@ export function MeetingCard() {
                   className="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 border-none bg-transparent p-0 text-left"
                 >
                   <span className="truncate text-[13px] font-medium text-text-primary">
-                    {summary.title?.trim() || summary.preview}
+                    {summary.title?.trim() || plainOf(summary.preview)}
                   </span>
                   {found && summary.title?.trim() && (
                     <span className="truncate text-[12px] text-text-secondary">
@@ -1363,10 +1506,24 @@ export function MeetingCard() {
                     )}
                   </span>
                   {tidying?.id === summary.id && tidyingBar}
+                  {making?.id === summary.id && makingBar}
                 </button>
                 {summary.has_minutes && (
                   <span className="text-[12px] text-text-tertiary">{t('meeting.tabMinutes')}</span>
                 )}
+                <button
+                  type="button"
+                  aria-label={t('meeting.minutes')}
+                  title={t('meeting.minutes')}
+                  disabled={making !== null || tidying !== null}
+                  onClick={() => pickTemplate(summary)}
+                  className="btn-quiet px-2.5 disabled:opacity-50"
+                >
+                  <ScrollText
+                    size={15}
+                    className={making?.id === summary.id ? 'animate-pulse' : undefined}
+                  />
+                </button>
                 <button
                   type="button"
                   aria-label={t('meeting.deleteMeeting')}

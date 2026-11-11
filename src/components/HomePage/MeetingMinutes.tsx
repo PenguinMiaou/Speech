@@ -1,30 +1,17 @@
 import { Fragment, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Pencil } from 'lucide-react'
+import { Check, LayoutTemplate, Pencil } from 'lucide-react'
 import {
   copyText,
-  importMinutesTemplate,
   meetingAsk,
   meetingMinutes,
   minutesTemplates,
-  removeMinutesTemplate,
   saveTextFile,
   type MinutesTemplate,
 } from '../../lib/tauri'
-import { LogoSelect } from '../Settings/shared/LogoSelect'
+import { BUILT_IN, OWN, own, ownKind, TemplateGallery, templateText } from './TemplateGallery'
 
-const BUILT_IN = ''
-// The templates that come with the app besides the general one. No file can carry these
-// names, so they cannot collide with an imported template.
-const OWN = ['chapters', 'oneOnOne', 'interview', 'talk', 'standup']
-const own = (kind: string) => `\u0000${kind}`
-const ownKind = (chosen: string) => OWN.find((kind) => own(kind) === chosen)
-const KNOWN_ERRORS = [
-  'llm_not_configured',
-  'template_too_large',
-  'template_empty',
-  'template_unreadable',
-]
+const KNOWN_ERRORS = ['llm_not_configured']
 
 /** Turns a meeting's text into minutes after a template, the built-in one or one the
  * user imported. */
@@ -55,6 +42,7 @@ export function MeetingMinutes({
   const [answer, setAnswer] = useState<string | null>(null)
   const [asking, setAsking] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [picking, setPicking] = useState(false)
 
   useEffect(() => {
     void Promise.resolve(minutesTemplates())
@@ -69,12 +57,10 @@ export function MeetingMinutes({
 
   const write = () => {
     if (working) return
-    const template =
-      templates.find((entry) => entry.name === chosen)?.text ??
-      t(`meeting.${ownKind(chosen) ?? 'default'}Template`)
+    setPicking(false)
     setWorking(true)
     setError(null)
-    Promise.resolve(meetingMinutes(transcript, template, notes))
+    Promise.resolve(meetingMinutes(transcript, templateText(t, templates, chosen), notes))
       .then((text) => onMinutes(text ?? ''))
       .catch((reason) => fail(reason, 'minutes'))
       .finally(() => setWorking(false))
@@ -90,55 +76,41 @@ export function MeetingMinutes({
       .finally(() => setAsking(false))
   }
 
-  const add = () => {
-    setError(null)
-    Promise.resolve(importMinutesTemplate())
-      .then((all) => {
-        if (!all) return
-        const known = new Set(templates.map((entry) => entry.name))
-        setTemplates(all)
-        setChosen(all.find((entry) => !known.has(entry.name))?.name ?? all[all.length - 1].name)
-      })
-      .catch((reason) => fail(reason, 'template_unreadable'))
-  }
-
-  const remove = () =>
-    void Promise.resolve(removeMinutesTemplate(chosen))
-      .then((all) => {
-        setTemplates(all ?? [])
-        setChosen(BUILT_IN)
-      })
-      .catch(() => {})
+  const chosenName =
+    chosen === BUILT_IN
+      ? t('meeting.defaultTemplateName')
+      : OWN.some((kind) => own(kind) === chosen)
+        ? t(`meeting.${ownKind(chosen)}TemplateName`)
+        : chosen
 
   return (
     <div className="mt-3">
       <div className="flex flex-wrap items-end gap-2">
-        <div className="w-[190px]">
-          <LogoSelect
-            compact
-            label={t('meeting.template')}
-            value={chosen}
-            options={[
-              { value: BUILT_IN, label: t('meeting.defaultTemplateName') },
-              ...OWN.map((kind) => ({ value: own(kind), label: t(`meeting.${kind}TemplateName`) })),
-              ...templates.map((entry) => ({ value: entry.name, label: entry.name })),
-            ]}
-            onChange={setChosen}
-          />
-        </div>
-        <button type="button" onClick={add} className="btn-quiet">
-          {t('meeting.importTemplate')}
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          aria-label={t('meeting.template')}
+          title={t('meeting.template')}
+          className="btn-quiet flex max-w-[240px] items-center gap-1.5"
+        >
+          <LayoutTemplate size={14} />
+          <span className="truncate">{chosenName}</span>
         </button>
-        {chosen !== BUILT_IN && !ownKind(chosen) && (
-          <button type="button" onClick={remove} className="btn-quiet">
-            {t('meeting.removeTemplate')}
-          </button>
-        )}
         <button type="button" onClick={write} disabled={working} className="btn-record ml-auto">
           {working ? t('meeting.minutesWorking') : t('meeting.minutes')}
         </button>
       </div>
       <p className="mt-2 text-[12px] text-text-tertiary">{t('meeting.minutesNote')}</p>
+      {picking && (
+        <TemplateGallery
+          templates={templates}
+          onTemplates={setTemplates}
+          chosen={chosen}
+          onChoose={setChosen}
+          onClose={() => setPicking(false)}
+          confirm={{ label: t('meeting.minutes'), onConfirm: write }}
+        />
+      )}
       <form
         className="mt-3 flex gap-2"
         onSubmit={(event) => {
@@ -233,6 +205,20 @@ function withTimes(text: string, onSeek?: (seconds: number) => void) {
   return pieces
 }
 
+/** Text with what stands between two pairs of asterisks made strong, and its times made
+ * ways to their moments. */
+function rich(text: string, onSeek?: (seconds: number) => void) {
+  return text.split(/\*\*(.+?)\*\*/).map((part, index) =>
+    index % 2 === 1 ? (
+      <strong key={index} className="font-semibold">
+        {withTimes(part, onSeek)}
+      </strong>
+    ) : (
+      <Fragment key={index}>{withTimes(part, onSeek)}</Fragment>
+    ),
+  )
+}
+
 /** Minutes laid out to be read: headings stand out, a task is a box to tick, and a time
  * leads to its moment of the sound. Ticking a box changes the text of the minutes. */
 function MinutesText({
@@ -268,7 +254,7 @@ function MinutesText({
                 className="mt-[5px] accent-[var(--color-accent)]"
               />
               <span className={done ? 'text-text-tertiary line-through' : undefined}>
-                {withTimes(task[2], onSeek)}
+                {rich(task[2], onSeek)}
               </span>
             </label>
           )
@@ -281,9 +267,14 @@ function MinutesText({
             </p>
           )
         }
+        // A counted or dotted line hangs under its mark.
+        const item = /^\s*(?:[-*]|\d+[.)]) /.test(line)
         return (
-          <p key={index} className="min-h-[1.2em] whitespace-pre-wrap">
-            {withTimes(line, onSeek)}
+          <p
+            key={index}
+            className={`min-h-[1.2em] whitespace-pre-wrap ${item ? 'pl-5 -indent-5' : ''}`}
+          >
+            {rich(line, onSeek)}
           </p>
         )
       })}

@@ -232,6 +232,22 @@ pub fn merged(said: &HashMap<u32, usize>, most: usize) -> Vec<(u32, u32)> {
         .unwrap_or_default()
 }
 
+/// How alike each two voices of the meeting in hand are, for trials.
+#[cfg(test)]
+pub fn likenesses() -> Vec<(u32, u32, f32)> {
+    let heard = heard().clone().unwrap_or_default();
+    let mut out = Vec::new();
+    for (a, voice) in &heard {
+        for (b, other) in &heard {
+            if a < b {
+                out.push((*a, *b, (alike(voice, other) * 100.0).round() / 100.0));
+            }
+        }
+    }
+    out.sort_by_key(|pair| (pair.0, pair.1));
+    out
+}
+
 /// The remembered names of the speakers in the meeting in hand.
 pub fn names() -> HashMap<u32, String> {
     let (Some(store), Some(heard)) = (store(), heard().clone()) else {

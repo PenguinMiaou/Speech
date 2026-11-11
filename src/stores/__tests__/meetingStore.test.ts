@@ -2,7 +2,6 @@ import '../../i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const meetingTranslate = vi.fn()
-const meetingSpeakersAgain = vi.fn()
 const meetingTitle = vi.fn()
 const meetingSave = vi.fn()
 const meetingRecover = vi.fn()
@@ -10,7 +9,6 @@ const meetingWordTimes = vi.fn()
 let translatingSoFar: (text: string) => void = () => {}
 vi.mock('../../lib/tauri', () => ({
   meetingTranslate: (...args: unknown[]) => meetingTranslate(...args),
-  meetingSpeakersAgain: (...args: unknown[]) => meetingSpeakersAgain(...args),
   meetingTitle: (...args: unknown[]) => meetingTitle(...args),
   meetingSave: (...args: unknown[]) => meetingSave(...args),
   meetingRecover: (...args: unknown[]) => meetingRecover(...args),
@@ -38,7 +36,6 @@ import {
   persistMeeting,
   recoverMeeting,
   takeSegment,
-  tellSpeakersAgain,
   timeWords,
   useMeetingStore,
 } from '../meetingStore'
@@ -123,35 +120,9 @@ describe('a meeting that has been recorded', () => {
   }
 
   beforeEach(() => {
-    meetingSpeakersAgain.mockReset()
     meetingTitle.mockReset()
     meetingSave.mockReset()
     useMeetingStore.setState({ ...recorded })
-  })
-
-  it('has its speakers told again from the whole sound, and is kept so', async () => {
-    meetingSpeakersAgain.mockResolvedValue([
-      { start_ms: 0, end_ms: 9_000, speaker: 5 },
-      { start_ms: 20_000, end_ms: 26_000, speaker: 5 },
-    ])
-    await tellSpeakersAgain('Speaker')
-    const state = useMeetingStore.getState()
-    expect(meetingSpeakersAgain).toHaveBeenCalledWith('m-1')
-    expect(state.text).toBe('Speaker 1  00:00\na\n\nSpeaker 1  00:20\nc')
-    expect(state.paragraphs.map((each) => each.speaker)).toEqual([1, 1])
-    expect(state.sorting).toBe(false)
-    expect(meetingSave).toHaveBeenCalledWith(expect.objectContaining({ transcript: state.text }))
-  })
-
-  it('keeps its speakers when the sound was not kept or cannot be heard again', async () => {
-    useMeetingStore.setState({ kept: null })
-    await tellSpeakersAgain('Speaker')
-    expect(meetingSpeakersAgain).not.toHaveBeenCalled()
-
-    useMeetingStore.setState({ kept: 'm-1.wav' })
-    meetingSpeakersAgain.mockRejectedValue('engine')
-    await tellSpeakersAgain('Speaker')
-    expect(useMeetingStore.getState()).toMatchObject({ text: recorded.text, sorting: false })
   })
 
   it('is named again after its minutes, unless the user named it', async () => {

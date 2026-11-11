@@ -458,6 +458,25 @@ pub(crate) fn model_path(wanted: Option<&str>) -> Option<std::path::PathBuf> {
         })
 }
 
+/// Set when the user asks for the file in hand to be let be.
+static STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What a transcription that was stopped ends with.
+pub const STOPPED: &str = "stopped";
+
+/// Asks for the transcription in hand to end before its next piece, or takes that back.
+pub fn stop(asked: bool) {
+    STOP.store(asked, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn stopped() -> Result<(), String> {
+    if STOP.load(std::sync::atomic::Ordering::SeqCst) {
+        Err(STOPPED.to_string())
+    } else {
+        Ok(())
+    }
+}
+
 /// Recognizes a whole file. See [`transcribe_pcm`].
 pub fn transcribe(
     path: &Path,
@@ -628,6 +647,7 @@ fn recognize(
     progress: impl FnMut(Stage),
 ) -> Result<String, String> {
     let hear = |sound: &[f32]| {
+        stopped()?;
         patiently(&TRY_AGAIN_AFTER, || {
             recognize_in(supervisor, model, sound, vocabulary, None, languages)
         })
@@ -641,6 +661,7 @@ fn recognize(
         std::time::Duration::from_secs(60),
     );
     let mut tell = |sound: &[f32], first: bool| {
+        stopped()?;
         let (found, voices) = worker
             .speakers_window(
                 &models.segmentation,
@@ -668,6 +689,15 @@ fn recognize(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_file_that_is_let_be_ends_before_its_next_piece() {
+        assert_eq!(stopped(), Ok(()));
+        stop(true);
+        assert_eq!(stopped(), Err(STOPPED.to_string()));
+        stop(false);
+        assert_eq!(stopped(), Ok(()));
+    }
 
     #[test]
     fn words_the_recognizer_got_stuck_on_are_said_once() {
@@ -870,6 +900,7 @@ mod tests {
         each.sort();
         println!("said by speaker {each:?}");
         println!("ghosts {:?}", crate::voiceprints::merged(&said, 0));
+        println!("alike {:?}", crate::voiceprints::likenesses());
         if let Ok(people) = std::env::var("OT_PEOPLE") {
             let most = people.parse().unwrap();
             println!(

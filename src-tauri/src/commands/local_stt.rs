@@ -294,6 +294,7 @@ pub async fn transcribe_file(
     if TRANSCRIBING_FILE.swap(true, Ordering::SeqCst) {
         return Err("busy".to_string());
     }
+    crate::file_transcribe::stop(false);
     let by_speaker = options.speaker_label.is_some();
     let names_to = app.clone();
     crate::applog::note(
@@ -309,10 +310,12 @@ pub async fn transcribe_file(
     .map_err(|error| error.to_string())
     .and_then(|result| result);
     TRANSCRIBING_FILE.store(false, Ordering::SeqCst);
+    crate::file_transcribe::stop(false);
     crate::applog::note(
         "file",
         match &result {
             Ok(_) => "the file is transcribed",
+            Err(error) if error == crate::file_transcribe::STOPPED => "the file was let be",
             Err(_) => "the file could not be transcribed",
         },
     );
@@ -320,6 +323,15 @@ pub async fn transcribe_file(
         let _ = names_to.emit("meeting:names", crate::voiceprints::names());
     }
     result
+}
+
+/// Lets the file that is being transcribed be: it ends before its next piece, with
+/// `stopped` for an answer. Nothing happens when no file is in hand.
+#[tauri::command]
+pub fn transcribe_file_stop() {
+    if TRANSCRIBING_FILE.load(Ordering::SeqCst) {
+        crate::file_transcribe::stop(true);
+    }
 }
 
 /// Starts recording a meeting from the microphone. Each paragraph arrives as a
@@ -378,24 +390,6 @@ pub fn meeting_record_pause(paused: bool) -> bool {
 #[tauri::command]
 pub fn meeting_recover() -> Option<crate::meeting_record::Recovered> {
     crate::meeting_record::recover()
-}
-
-/// Tells again who spoke when in a kept meeting, from the whole of its sound. Hearing a
-/// whole meeting at once tells voices apart better than hearing it window by window.
-#[tauri::command]
-pub async fn meeting_speakers_again(
-    id: String,
-) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, String> {
-    let recording = crate::meetings::audio(&id).ok_or_else(|| "no_recording".to_string())?;
-    crate::applog::note(
-        "meeting",
-        "telling the speakers apart again from the whole sound",
-    );
-    let turns = tokio::task::spawn_blocking(move || crate::speakers::again(&recording))
-        .await
-        .map_err(|error| error.to_string())??;
-    crate::applog::note("meeting", &format!("found {} turns", turns.len()));
-    Ok(turns)
 }
 
 /// Shows the log file in the file manager.

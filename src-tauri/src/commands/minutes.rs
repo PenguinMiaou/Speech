@@ -50,6 +50,12 @@ pub fn minutes_template_import(path: String) -> Result<Vec<Template>, String> {
     crate::minutes::import(std::path::Path::new(&path))
 }
 
+/// Keeps a template written in the app and returns all templates.
+#[tauri::command]
+pub fn minutes_template_save(name: String, text: String) -> Result<Vec<Template>, String> {
+    crate::minutes::save(&name, &text)
+}
+
 #[tauri::command]
 pub fn minutes_template_remove(name: String) -> Result<Vec<Template>, String> {
     crate::minutes::remove(&name)
@@ -123,11 +129,13 @@ pub async fn meeting_title(
 }
 
 /// Puts the words of a whole meeting right with the language model chosen in the settings,
-/// which is told the spellings in the user's dictionary. `pieces` is what each person said.
+/// which is told the spellings in the user's dictionary. `pieces` is what each person said,
+/// `calendar` the day of the meeting and the days around it.
 #[tauri::command]
 pub async fn meeting_polish(
     app: tauri::AppHandle,
     pieces: Vec<String>,
+    calendar: Option<String>,
     config_state: tauri::State<'_, storage::ConfigManager>,
     dictionary: tauri::State<'_, storage::DictionaryStore>,
     client: tauri::State<'_, reqwest::Client>,
@@ -144,14 +152,21 @@ pub async fn meeting_polish(
     let mut words = dictionary.words().await;
     words.reverse();
     use tauri::Emitter;
-    let (pieces, terms) =
-        crate::minutes::polish(&client, &config, &api_key, pieces, &words, |done, total| {
+    let (pieces, terms) = crate::minutes::polish(
+        &client,
+        &config,
+        &api_key,
+        pieces,
+        &words,
+        calendar.as_deref().unwrap_or(""),
+        |done, total| {
             let _ = app.emit(
                 "meeting:polishing",
                 serde_json::json!({ "step": "words", "done": done, "total": total }),
             );
-        })
-        .await?;
+        },
+    )
+    .await?;
     // The spellings the model could not be sure of, for the user to settle once.
     let _ = app.emit("meeting:terms", terms);
     Ok(pieces)

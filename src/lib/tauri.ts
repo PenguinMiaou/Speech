@@ -1,4 +1,3 @@
-import type { SpeakerTurn } from './meeting-text'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 import type {
@@ -842,6 +841,11 @@ export interface TranscribeOptions {
 }
 
 /** Turns an audio or video file into text with the speech model on this machine. */
+/** Lets the file that is being transcribed be; `transcribeFile` then fails with `stopped`. */
+export function transcribeFileStop(): Promise<void> {
+  return invoke('transcribe_file_stop')
+}
+
 export async function transcribeFile(path: string, options: TranscribeOptions): Promise<string> {
   return invoke('transcribe_file', { path, ...options })
 }
@@ -949,11 +953,6 @@ export function onMeetingTranslating(handler: (text: string) => void): Promise<U
  * and how long its sound is. Null when there is none. It is handed over only once. */
 export function meetingRecover(): Promise<{ segments: MeetingSegment[]; seconds: number } | null> {
   return invoke('meeting_recover')
-}
-
-/** Who spoke when in a kept meeting, told again from the whole of its sound. */
-export function meetingSpeakersAgain(id: string): Promise<SpeakerTurn[]> {
-  return invoke('meeting_speakers_again', { id })
 }
 
 /** Shows the app's log file in the file manager. */
@@ -1089,8 +1088,10 @@ export function meetingTranslate(text: string, target: string): Promise<string> 
 
 /** Puts the words of a whole meeting right with the polish model. `pieces` is what each
  * person said; as many come back, in the same order. */
-export function meetingPolish(pieces: string[]): Promise<string[]> {
-  return invoke('meeting_polish', { pieces })
+/** `calendar` is the day the meeting was held and the days around it, by which a day
+ * named from that day ("next Wednesday") can be given its date. */
+export function meetingPolish(pieces: string[], calendar?: string): Promise<string[]> {
+  return invoke('meeting_polish', { pieces, calendar: calendar ?? null })
 }
 
 /** How far putting a meeting right has got: the words first, then who said them. */
@@ -1150,6 +1151,11 @@ export async function importMinutesTemplate(): Promise<MinutesTemplate[] | null>
   })
   if (typeof picked !== 'string') return null
   return invoke('minutes_template_import', { path: picked })
+}
+
+/** Keeps a template written in the app under `name` and resolves with all templates. */
+export function saveMinutesTemplate(name: string, text: string): Promise<MinutesTemplate[]> {
+  return invoke('minutes_template_save', { name, text })
 }
 
 export function removeMinutesTemplate(name: string): Promise<MinutesTemplate[]> {
@@ -1235,6 +1241,7 @@ export async function saveTextFile(
   text: string,
   suggestedName: string,
   subtitles?: Record<string, () => string>,
+  plain?: string,
 ): Promise<boolean> {
   const { save } = await import('@tauri-apps/plugin-dialog')
   const endings = Object.keys(subtitles ?? {})
@@ -1249,7 +1256,9 @@ export async function saveTextFile(
   })
   if (!path) return false
   const ending = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-  await invoke('save_text_file', { path, text: subtitles?.[ending]?.() ?? text })
+  // Only Markdown keeps the marks around what is strong.
+  const words = ending === 'md' ? text : (plain ?? text)
+  await invoke('save_text_file', { path, text: subtitles?.[ending]?.() ?? words })
   return true
 }
 

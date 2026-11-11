@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MeetingMinutes } from '../MeetingMinutes'
 import * as tauri from '../../../lib/tauri'
@@ -52,16 +52,21 @@ describe('MeetingMinutes', () => {
     async (kind) => {
       vi.mocked(tauri.meetingMinutes).mockResolvedValue('the minutes')
       await ready()
-      fireEvent.click(screen.getByRole('combobox', { name: 'meeting.template' }))
-      fireEvent.click(screen.getByRole('option', { name: `meeting.${kind}TemplateName` }))
-      fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.template' }))
+      const gallery = within(screen.getByRole('dialog'))
+      fireEvent.click(gallery.getByRole('radio', { name: `meeting.${kind}TemplateName` }))
+      fireEvent.click(gallery.getByRole('button', { name: 'meeting.minutes' }))
       await screen.findByText('the minutes')
       expect(tauri.meetingMinutes).toHaveBeenCalledWith(
         'what was said',
         `meeting.${kind}Template`,
         '',
       )
-      expect(screen.queryByRole('button', { name: 'meeting.removeTemplate' })).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      // The template stays picked, and its name stands on the way to the others.
+      expect(screen.getByRole('button', { name: 'meeting.template' }).textContent).toContain(
+        `meeting.${kind}TemplateName`,
+      )
     },
   )
 
@@ -69,9 +74,12 @@ describe('MeetingMinutes', () => {
     vi.mocked(tauri.importMinutesTemplate).mockResolvedValue([{ name: 'weekly', text: '## Done' }])
     vi.mocked(tauri.meetingMinutes).mockResolvedValue('minutes')
     await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.template' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.importTemplate' }))
-    await screen.findByRole('button', { name: 'meeting.removeTemplate' })
-    fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+    await screen.findByRole('radio', { name: 'weekly' })
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'meeting.minutes' }),
+    )
     await screen.findByText('minutes')
     expect(tauri.meetingMinutes).toHaveBeenCalledWith('what was said', '## Done', '')
   })
@@ -79,13 +87,28 @@ describe('MeetingMinutes', () => {
   it('goes back to the built-in template when the chosen one is removed', async () => {
     vi.mocked(tauri.importMinutesTemplate).mockResolvedValue([{ name: 'weekly', text: '## Done' }])
     vi.mocked(tauri.removeMinutesTemplate).mockResolvedValue([])
+    vi.mocked(tauri.meetingMinutes).mockResolvedValue('minutes')
     await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.template' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.importTemplate' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'meeting.removeTemplate' }))
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'meeting.removeTemplate' })).toBeNull(),
-    )
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.removeTemplate weekly' }))
+    await waitFor(() => expect(screen.queryByRole('radio', { name: 'weekly' })).toBeNull())
     expect(tauri.removeMinutesTemplate).toHaveBeenCalledWith('weekly')
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'meeting.minutes' }),
+    )
+    await screen.findByText('minutes')
+    expect(tauri.meetingMinutes).toHaveBeenCalledWith(
+      'what was said',
+      'meeting.defaultTemplate',
+      '',
+    )
+  })
+
+  it('sets strong words and counted lines of the minutes out', async () => {
+    render(<Held written={'## Decided\n1. **Ship Friday** after tests\n- hold the rest'} />)
+    expect(screen.getByText('Ship Friday').tagName).toBe('STRONG')
+    expect(screen.queryByText(/\*\*/)).toBeNull()
   })
 
   it('answers a question about the meeting', async () => {

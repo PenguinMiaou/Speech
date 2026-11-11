@@ -30,11 +30,14 @@ pub fn init(data_dir: &Path) {
             return;
         }
     };
-    let supervisor = Arc::new(WorkerSupervisor::new(
-        command,
-        REQUEST_TIMEOUT,
-        IDLE_TIMEOUT,
-    ));
+    let supervisor = WorkerSupervisor::new(command, REQUEST_TIMEOUT, IDLE_TIMEOUT);
+    // Off the Mac the recognizer may run on a graphics processor that turns out not to
+    // be up to it; it then does without.
+    let supervisor = Arc::new(if cfg!(target_os = "macos") {
+        supervisor
+    } else {
+        supervisor.falling_back()
+    });
     set_global(supervisor.clone());
     std::thread::spawn(move || loop {
         std::thread::sleep(IDLE_CHECK_INTERVAL);

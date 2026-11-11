@@ -254,6 +254,10 @@ mod tests {
             entry.1 += segment.text.chars().count();
         }
         println!("segments and characters by speaker {said:?}");
+        // The words go to a file when one is named, so that they are not shown.
+        if let Ok(out) = std::env::var("OT_OUT") {
+            std::fs::write(out, &transcript.text).unwrap();
+        }
         for segment in &transcript.segments {
             println!(
                 "turn {:>7} - {:>7} speaker {} characters {}",

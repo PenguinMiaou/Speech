@@ -28,6 +28,7 @@ import {
   speakersOf,
   withSpeakerAt,
   withSpeakersChecked,
+  withRunsJoined,
   withSpeakersJoined,
   withSpellings,
 } from '../meeting-text'
@@ -498,5 +499,22 @@ describe('withSpellings', () => {
     expect(withSpellings(text, 'Art', [{ spelling: 'Bart', others: ['Art', 'art'] }])).toBe(
       'Art 1  00:10\nBart met Arthur, Bart',
     )
+  })
+})
+
+describe('withRunsJoined', () => {
+  it('names a speaker once while they go on, by the name shown', () => {
+    const text = 'S 1  00:10\na\n\nS 1  00:20\nb\n\nS 2  00:30\nc\n\nS 3  00:40\nd\n\nS 1  00:50\ne'
+    // 2 and 3 go by one name, so they are one person going on.
+    expect(withRunsJoined(text, 'S', { 2: 'Ann', 3: 'Ann' })).toBe(
+      'S 1  00:10\na\nb\n\nS 2  00:30\nc\nd\n\nS 1  00:50\ne',
+    )
+  })
+
+  it('leaves a text whose speakers are not told as it is', () => {
+    const text = '00:10\na\n\n00:20\nb'
+    expect(withRunsJoined(text, 'S', {})).toBe(text)
+    const unknown = 'S  00:10\na\n\nS  00:20\nb'
+    expect(withRunsJoined(unknown, 'S', {})).toBe(unknown)
   })
 })

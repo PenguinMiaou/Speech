@@ -25,6 +25,8 @@ execFileSync(
     join(root, 'stt-worker/Cargo.toml'),
     '--target',
     target,
+    // Named by the packaging job where the recognizer is to use the graphics processor.
+    ...(process.env.OT_STT_FEATURES ? ['--features', process.env.OT_STT_FEATURES] : []),
   ],
   // Run from the worker's directory so that its .cargo/config.toml applies.
   { stdio: 'inherit', cwd: join(root, 'stt-worker') },

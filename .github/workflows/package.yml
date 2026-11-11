@@ -16,6 +16,11 @@ jobs:
       # the build machine has. On a machine with AVX-512 the result crashes on the many
       # computers that lack it. OFF fixes the instruction set at AVX2.
       TRANSCRIBE_CMAKE_ARGS: -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF
+      # The recognizer uses the graphics processor through Vulkan where there is one;
+      # the app has it do without where that fails.
+      OT_STT_FEATURES: vulkan
+      VULKAN_SDK_VERSION: 1.4.309.0
+      VULKAN_SDK_SHA256: 48b132169b64fe65cdb0f20970195335a65354e73f1ea5373032c2a8bbad4297
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -34,9 +39,32 @@ jobs:
             src-tauri -> target
             stt-worker -> target
 
+      - name: Install the Vulkan SDK
+        shell: pwsh
+        run: |
+          $file = "VulkanSDK-$env:VULKAN_SDK_VERSION-Installer.exe"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/$file" -OutFile $file
+          $sum = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          if ($sum -ne $env:VULKAN_SDK_SHA256) { throw "the Vulkan SDK installer is not the expected file" }
+          $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
+          Start-Process -Wait -FilePath ".\$file" -ArgumentList "--root", $root, "--accept-licenses", "--default-answer", "--confirm-command", "install"
+          if (-not (Test-Path "$root\Bin\glslc.exe")) { throw "the Vulkan SDK was not installed" }
+          "VULKAN_SDK=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$root\Bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
       # The speech worker is built first by the app's own build command.
       - name: Build the installer
         run: npm run tauri build -- --bundles nsis
+
+      # The worker must start on a machine without Vulkan, so Vulkan may only be loaded late.
+      - name: Check that the worker starts without Vulkan
+        shell: pwsh
+        run: |
+          $dumpbin = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -find "VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+          $listed = (& $dumpbin /dependents src-tauri/target/release/ot-stt-worker.exe) -join "`n"
+          $at = $listed.IndexOf("delay load dependencies")
+          if ($listed -notmatch "vulkan-1.dll") { throw "the worker was built without Vulkan" }
+          if ($at -lt 0 -or $listed.Substring(0, $at) -match "vulkan-1.dll") { throw "Vulkan is not loaded late" }
 
       - name: Make the no-install archive
         shell: pwsh

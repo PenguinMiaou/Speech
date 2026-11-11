@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { changes } from '../../lib/word-diff'
+import { formatted, hasFormat, plainOf } from '../../lib/meeting-format'
 import {
   charsSaid,
   secondsAt,
@@ -34,6 +35,17 @@ interface Props {
   /** Given when a speaker can be named where they speak, with what that field is called. */
   onName?: (speaker: number, name: string) => void
   nameLabel?: string
+}
+
+/** The place in words set out in several pieces that was clicked, counted in their
+ * characters, where the browser can tell. */
+function clickedWithin(event: { clientX: number; clientY: number }, words: Node): number | null {
+  const at = document.caretRangeFromPoint?.(event.clientX, event.clientY)
+  if (!at || !words.contains(at.startContainer)) return null
+  const before = document.createRange()
+  before.selectNodeContents(words)
+  before.setEnd(at.startContainer, at.startOffset)
+  return before.toString().length
 }
 
 /** The place in the words that was clicked, where the browser can tell. */
@@ -72,6 +84,9 @@ export function Transcript({
   const called = (speaker: number) =>
     names[speaker]?.trim() || (speaker > 0 ? `${speakerLabel} ${speaker}` : speakerLabel)
   // The heading whose speaker is being put right, and whether all they said goes along.
+  // The line set out with strong words and counted points that is being changed, and
+  // so shows as it is written.
+  const [raw, setRaw] = useState<number | null>(null)
   const [choosing, setChoosing] = useState<number | null>(null)
   const [all, setAll] = useState(false)
   const numbers = [
@@ -101,7 +116,9 @@ export function Transcript({
   if (position !== undefined && position > 0) {
     lines.forEach((line, index) => {
       if (!('text' in line) || !timed[index]) return
-      const said = charsSaid(timed[index], line.text.length, position)
+      // Words set out are counted as they show, without their marks.
+      const shown = hasFormat(line.text) ? plainOf(line.text) : line.text
+      const said = charsSaid(timed[index], shown.length, position)
       const begun = (timed[index]?.marks[0]?.[1] ?? Infinity) <= position * 1000
       if (said !== null && begun) playing = { line: index, said }
     })
@@ -112,15 +129,29 @@ export function Transcript({
     // the middle of being changed.
     const marks = globalThis.CSS?.highlights
     if (!marks || typeof Highlight === 'undefined') return
-    const words = root.current?.querySelector(`[data-line="${playingLine}"]`)?.firstChild
-    const length = words?.textContent?.length ?? 0
-    if (!words || words.nodeType !== Node.TEXT_NODE || playingSaid >= length) {
+    // A line is one piece of text, or several where it is set out with strong words
+    // and counted points.
+    const line = root.current?.querySelector(
+      `[data-line="${playingLine}"], [data-set-out="${playingLine}"]`,
+    )
+    const pieces: Node[] = []
+    const walk = line ? document.createTreeWalker(line, NodeFilter.SHOW_TEXT) : null
+    for (let piece = walk?.nextNode(); piece; piece = walk?.nextNode()) pieces.push(piece)
+    let before = 0
+    const from = pieces.find((piece) => {
+      const length = piece.textContent?.length ?? 0
+      if (before + length > playingSaid) return true
+      before += length
+      return false
+    })
+    const last = pieces[pieces.length - 1]
+    if (!from || !last) {
       marks.delete('ahead')
       return
     }
     const ahead = document.createRange()
-    ahead.setStart(words, playingSaid)
-    ahead.setEnd(words, length)
+    ahead.setStart(from, playingSaid - before)
+    ahead.setEnd(last, last.textContent?.length ?? 0)
     marks.set('ahead', new Highlight(ahead))
     return () => void marks.delete('ahead')
   }, [playingLine, playingSaid, text])
@@ -137,7 +168,7 @@ export function Transcript({
     if (old !== undefined && old !== line.text) {
       return (
         <span data-line={index}>
-          {changes(old, line.text).map((part, at) =>
+          {changes(plainOf(old), plainOf(line.text)).map((part, at) =>
             part.kind === 'gone' ? (
               <del key={at} className="select-none text-text-tertiary">
                 {part.text}
@@ -154,8 +185,32 @@ export function Transcript({
       )
     }
     const ahead = start !== null && position !== undefined && position > 0 && start > position
+    if (raw !== index && hasFormat(line.text)) {
+      const plain = plainOf(line.text)
+      return (
+        <span
+          data-set-out={index}
+          onClick={(event) => {
+            if (start === null || window.getSelection()?.isCollapsed === false) return
+            const at = clickedWithin(event, event.currentTarget)
+            const exact = at === null ? null : secondsAt(timed[index], plain.length, at)
+            onSeek?.(exact ?? start, false)
+          }}
+          onDoubleClick={onEdit ? () => setRaw(index) : undefined}
+          className={ahead ? 'text-text-tertiary' : undefined}
+        >
+          {formatted(line.text).map((run, at) => (
+            <Fragment key={at}>
+              {run.fresh && at > 0 && <br />}
+              {run.strong ? <strong className="font-semibold">{run.text}</strong> : run.text}
+            </Fragment>
+          ))}
+        </span>
+      )
+    }
     return (
       <span
+        ref={raw === index ? (words) => words?.focus() : undefined}
         contentEditable={onEdit ? 'plaintext-only' : undefined}
         suppressContentEditableWarning
         spellCheck={false}
@@ -174,6 +229,7 @@ export function Transcript({
           }
         }}
         onBlur={(event) => {
+          if (raw === index) setRaw(null)
           if (!onEdit) return
           const after = (event.currentTarget.textContent ?? '').trim()
           if (after && after !== line.text) onEdit(index, line.text, after)
