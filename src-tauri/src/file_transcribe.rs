@@ -715,9 +715,27 @@ fn recognize(
         stopped()?;
         if follows {
             if first {
-                let (found, voices) = worker
-                    .diarize(&models.segmentation, &models.voice, pcm, &models.scratch)
-                    .map_err(|error| error.to_string())?;
+                let started = std::time::Instant::now();
+                let followed = worker.diarize_unless(
+                    &models.segmentation,
+                    &models.voice,
+                    pcm,
+                    &models.scratch,
+                    &|| stopped().is_err(),
+                );
+                // Asked to stop while the speakers were followed, the file is let be.
+                stopped()?;
+                let (found, voices) = followed.map_err(|error| {
+                    crate::applog::note(
+                        "file",
+                        &format!("the speakers could not be followed: {error}"),
+                    );
+                    error.to_string()
+                })?;
+                crate::applog::note(
+                    "file",
+                    &crate::speakers::followed(&models.segmentation, &found, started.elapsed()),
+                );
                 crate::voiceprints::hear(voices, true);
                 whole = found;
                 at = 0;

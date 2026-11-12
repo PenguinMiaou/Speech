@@ -580,6 +580,7 @@ fn recognize_window(
         .collect();
     let turns = match speakers {
         Some(models) => {
+            let began = std::time::Instant::now();
             let (found, voices) = supervisor
                 .speakers_window(
                     &models.segmentation,
@@ -589,6 +590,10 @@ fn recognize_window(
                     first,
                 )
                 .map_err(|error| error.to_string())?;
+            let window_ms = (pcm.len() / 16) as u64;
+            if let Some(line) = crate::speakers::slow_window(window_ms, began.elapsed()) {
+                crate::applog::note("meeting", &line);
+            }
             crate::voiceprints::hear(voices, first);
             Some(crate::speakers::merge_turns(&found))
         }

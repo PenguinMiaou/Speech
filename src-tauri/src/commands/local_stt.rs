@@ -359,10 +359,12 @@ pub async fn transcribe_file(
     );
     crate::applog::note(
         "file",
-        match &result {
-            Ok(_) => "the file is transcribed",
-            Err(error) if error == crate::file_transcribe::STOPPED => "the file was let be",
-            Err(_) => "the file could not be transcribed",
+        &match &result {
+            Ok(_) => "the file is transcribed".to_string(),
+            Err(error) if error == crate::file_transcribe::STOPPED => {
+                "the file was let be".to_string()
+            }
+            Err(error) => format!("the file could not be transcribed: {error}"),
         },
     );
     if by_speaker && result.is_ok() {

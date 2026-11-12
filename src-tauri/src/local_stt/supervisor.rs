@@ -226,6 +226,19 @@ fn exchange(
     payload: Vec<u8>,
     timeout: Duration,
 ) -> Result<Response, LocalSttError> {
+    exchange_unless(running, payload, timeout, &|| false)
+}
+
+/// How often a wait for the worker looks whether it is still wanted.
+const LOOKS_EVERY: Duration = Duration::from_millis(100);
+
+/// The same, given up as soon as `let_be` says the answer is no longer wanted.
+fn exchange_unless(
+    running: &mut Running,
+    payload: Vec<u8>,
+    timeout: Duration,
+    let_be: &dyn Fn() -> bool,
+) -> Result<Response, LocalSttError> {
     let deadline = Instant::now() + timeout;
     let mut stdin = running
         .stdin
@@ -244,12 +257,18 @@ fn exchange(
             return Err(LocalSttError::WorkerCrashed("writer stopped".into()))
         }
     }
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    let response = match running.responses.recv_timeout(remaining) {
-        Ok(Ok(response)) => response,
-        Ok(Err(error)) => return Err(stopped(running, &error.to_string())),
-        Err(RecvTimeoutError::Timeout) => return Err(LocalSttError::Timeout),
-        Err(RecvTimeoutError::Disconnected) => return Err(stopped(running, "worker exited")),
+    let response = loop {
+        if let_be() {
+            return Err(LocalSttError::Io("no longer wanted".into()));
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match running.responses.recv_timeout(remaining.min(LOOKS_EVERY)) {
+            Ok(Ok(response)) => break response,
+            Ok(Err(error)) => return Err(stopped(running, &error.to_string())),
+            Err(RecvTimeoutError::Timeout) if !remaining.is_zero() => continue,
+            Err(RecvTimeoutError::Timeout) => return Err(LocalSttError::Timeout),
+            Err(RecvTimeoutError::Disconnected) => return Err(stopped(running, "worker exited")),
+        }
     };
     running.last_used = Instant::now();
     Ok(response)
@@ -480,9 +499,41 @@ impl WorkerSupervisor {
         ),
         LocalSttError,
     > {
+        self.diarize_unless(
+            segmentation_model,
+            embedding_model,
+            pcm,
+            scratch_dir,
+            &|| false,
+        )
+    }
+
+    /// The same, given up as soon as `let_be` says the answer is no longer wanted; the
+    /// worker is then stopped, since it cannot be interrupted.
+    pub fn diarize_unless(
+        &self,
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+        let_be: &dyn Fn() -> bool,
+    ) -> Result<
+        (
+            Vec<ot_stt_protocol::SpeakerTurn>,
+            Vec<ot_stt_protocol::SpeakerVoice>,
+        ),
+        LocalSttError,
+    > {
         noted(
             "telling the speakers of a recording apart",
-            self.speakers(segmentation_model, embedding_model, pcm, scratch_dir, None),
+            self.speakers(
+                segmentation_model,
+                embedding_model,
+                pcm,
+                scratch_dir,
+                None,
+                let_be,
+            ),
         )
     }
 
@@ -510,6 +561,7 @@ impl WorkerSupervisor {
                 pcm,
                 scratch_dir,
                 Some(first),
+                &|| false,
             ),
         )
     }
@@ -521,6 +573,7 @@ impl WorkerSupervisor {
         pcm: &[f32],
         scratch_dir: &Path,
         window: Option<bool>,
+        let_be: &dyn Fn() -> bool,
     ) -> Result<
         (
             Vec<ot_stt_protocol::SpeakerTurn>,
@@ -568,7 +621,7 @@ impl WorkerSupervisor {
                 *state = Some(spawn_worker(&self.command, self.is_plain())?);
             }
             let running = state.as_mut().expect("worker was just started");
-            match exchange(running, payload, self.allowance(pcm.len())) {
+            match exchange_unless(running, payload, self.allowance(pcm.len()), let_be) {
                 Ok(Response::Speakers { turns, voices }) => Ok((turns, voices)),
                 Ok(Response::Error { code, message }) => {
                     Err(LocalSttError::Engine { code, message })
@@ -858,6 +911,8 @@ while True:
             reply({'Ready': {'backend': 'plain' if plain else 'fake', 'load_ms': 0}})
         continue
     if 'Diarize' in request:
+        if mode == 'slow-speakers':
+            time.sleep(600)
         samples = os.path.getsize(request['Diarize']['pcm_path']) // 4
         reply({'Speakers': {'turns': [{'start_ms': 0, 'end_ms': samples, 'speaker': 1}]}})
         continue
@@ -947,6 +1002,33 @@ while True:
             Duration::from_millis(timeout_ms),
             Duration::from_millis(idle_ms),
         )
+    }
+
+    #[test]
+    fn telling_speakers_apart_is_given_up_as_soon_as_it_is_asked_to_be() {
+        let dir = unique_path("diarize-stop");
+        std::fs::create_dir_all(&dir).unwrap();
+        let supervisor = supervisor("slow-speakers", "", 60_000, 60_000);
+        let asked = std::sync::atomic::AtomicBool::new(false);
+        let started = Instant::now();
+        let answer = std::thread::scope(|scope| {
+            let waiting = scope.spawn(|| {
+                supervisor.diarize_unless(
+                    Path::new("seg.onnx"),
+                    Path::new("emb.onnx"),
+                    &[0.0; 7],
+                    &dir,
+                    &|| asked.load(std::sync::atomic::Ordering::SeqCst),
+                )
+            });
+            std::thread::sleep(Duration::from_millis(300));
+            asked.store(true, std::sync::atomic::Ordering::SeqCst);
+            waiting.join().unwrap()
+        });
+        assert!(answer.is_err());
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(!supervisor.is_running());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -97,6 +97,15 @@ describe('UpdateSection', () => {
     expect(tauri.updateDownload).not.toHaveBeenCalled()
   })
 
+  it('offers the release page when the update could not be put in place', async () => {
+    useAppStore.setState({ updateStatus: RELEASE })
+    vi.mocked(tauri.updateDownload).mockRejectedValue('unwritable')
+    render(<UpdateSection />)
+    fireEvent.click(screen.getByText('settings.update.install 1.2.1 15 MB'))
+    fireEvent.click(await screen.findByText('settings.update.openPage 1.2.1'))
+    expect(openUrl).toHaveBeenCalledWith(RELEASE.releaseUrl)
+  })
+
   it('reports a check or an update that failed', async () => {
     vi.mocked(tauri.updateCheck).mockRejectedValue('network')
     render(<UpdateSection />)

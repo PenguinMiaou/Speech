@@ -83,7 +83,8 @@ export function UpdateSection() {
             {t('settings.update.restart')}
           </button>
         )}
-        {status?.available && status.patchBytes === null && (
+        {/* Also the way out when the update could not be put in place from here. */}
+        {status?.available && (status.patchBytes === null || failed) && (
           <button type="button" className={BUTTON} onClick={() => openUrl(status.releaseUrl)}>
             {t('settings.update.openPage', { version: status.latest })}
           </button>

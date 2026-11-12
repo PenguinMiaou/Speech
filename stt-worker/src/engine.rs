@@ -14,7 +14,7 @@ pub struct RealEngine {
     voice_model: Option<(String, VoxLock)>,
     isolating: Option<(String, Isolator<VoxLock>)>,
     /// The voices heard so far in a recording still running, with the model files.
-    live_speakers: Option<(String, crate::diarize::LiveSpeakers)>,
+    live_speakers: Option<(String, crate::diarize::Live)>,
     voices: Vec<ot_stt_protocol::SpeakerVoice>,
     /// The timing recognizer kept between requests, with the file it was opened from.
     timer: Option<(String, crate::timing::Timer)>,
@@ -92,9 +92,8 @@ impl Engine for RealEngine {
         let keep = !first && matches!(&self.live_speakers, Some((opened, _)) if *opened == wanted);
         if !keep {
             let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
-            let live =
-                crate::diarize::LiveSpeakers::open(segmentation_model, embedding_model, threads)
-                    .map_err(failed)?;
+            let live = crate::diarize::Live::open(segmentation_model, embedding_model, threads)
+                .map_err(failed)?;
             self.live_speakers = Some((wanted, live));
         }
         let (_, live) = self.live_speakers.as_mut().expect("opened above");

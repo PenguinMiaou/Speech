@@ -54,13 +54,23 @@ async fn latest_manifest(client: &reqwest::Client) -> Result<Manifest, String> {
 pub async fn update_check() -> Result<Status, String> {
     let manifest = latest_manifest(&client()?).await?;
     let dir = program_dir()?;
-    update::status(
+    let mut status = update::status(
         &manifest,
         env!("CARGO_PKG_VERSION"),
         &dir,
         update::platform_key(),
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+    // Where the whole app is replaced, nothing is left to download once the new one
+    // stands in its place.
+    let swapped = std::env::current_exe()
+        .ok()
+        .and_then(|exe| update::bundle_of(&exe))
+        .is_some_and(|bundle| update::bundle_swapped(&bundle));
+    if swapped && status.patch_bytes.is_some() {
+        status.patch_bytes = Some(0);
+    }
+    Ok(status)
 }
 
 /// Downloads the program files that changed, checks each against the release and puts them in
@@ -76,6 +86,10 @@ pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
         .ok_or("unsupported")?;
     if !update::is_newer(&manifest.version, env!("CARGO_PKG_VERSION")) {
         return Err("current".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    if update::platform_key() == Some(update::MACOS_KEY) {
+        return download_app(&app, &client, entries).await;
     }
     let changed = update::changed_files(entries, &dir).map_err(|error| error.to_string())?;
     let total: u64 = changed.iter().map(|entry| entry.size).sum();
@@ -110,6 +124,67 @@ pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
     }
     let names: Vec<String> = changed.into_iter().map(|entry| entry.name).collect();
     update::swap_in(&dir, &names).map_err(|error| error.to_string())
+}
+
+/// Downloads the whole signed app, checks it against the release and against the
+/// signature of the app in use, and puts it in that app's place.
+#[cfg(target_os = "macos")]
+async fn download_app(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    entries: &[update::FileEntry],
+) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+    let bundle = update::bundle_of(&exe).ok_or("unsupported")?;
+    let entry = entries.first().ok_or("unsupported")?;
+    if !update::is_plain_file_name(&entry.asset) {
+        return Err("manifest".to_string());
+    }
+    let staging = update::staging_dir(&bundle);
+    // An app run from the disk image, or from a folder this user may not write to,
+    // cannot be replaced.
+    std::fs::create_dir_all(&staging).map_err(|_| "unwritable".to_string())?;
+    let job = InstallJob {
+        model_id: entry.name.clone(),
+        url: update::asset_url(&entry.asset),
+        file_name: entry.asset.clone(),
+        size_bytes: entry.size,
+        sha256: entry.sha256.to_lowercase(),
+        dir: staging.clone(),
+        client: client.clone(),
+        cancel: Arc::new(AtomicBool::new(false)),
+        free_space,
+    };
+    let total = entry.size;
+    let progress_app = app.clone();
+    let archive = download_and_verify(&job, move |progress| {
+        if progress.phase == Phase::Downloading {
+            let _ = progress_app.emit(
+                PROGRESS_EVENT,
+                DownloadProgress {
+                    downloaded: progress.downloaded,
+                    total,
+                },
+            );
+        }
+    })
+    .await
+    .map_err(|error| error.code().to_string())?;
+    let placed = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        let unpacked = update::unpack_app(&archive, &staging)?;
+        update::signed_like(&unpacked, &bundle)?;
+        update::swap_bundle(&unpacked, &bundle, &staging)
+    })
+    .await
+    .map_err(|error| error.to_string())?;
+    crate::applog::note(
+        "update",
+        &match &placed {
+            Ok(()) => "the new app is in place".to_string(),
+            Err(error) => format!("the new app could not be put in place: {error}"),
+        },
+    );
+    placed.map_err(|error| error.to_string())
 }
 
 /// Restarts into the downloaded version. Called only when the user asks for it.

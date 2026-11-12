@@ -211,12 +211,31 @@ jobs:
           fi
           ls -l Speech-macos-arm64.dmg
 
+      # The in-app update replaces the whole signed app, so the app is packed by itself
+      # too. Apple's ticket is attached to it where there is one, so that it opens
+      # without asking Apple.
+      - name: Pack the app for the in-app update
+        run: |
+          APP=src-tauri/target/release/bundle/macos/Speech.app
+          if [ -n "$APPLE_API_KEY_PATH" ]; then
+            xcrun stapler staple "$APP"
+          fi
+          codesign --verify --deep --strict "$APP"
+          tar -czf Speech-macos-arm64.app.tar.gz -C "$(dirname "$APP")" Speech.app
+          # Unpacked again, it must still be intact.
+          mkdir "$RUNNER_TEMP/unpacked"
+          tar -xzf Speech-macos-arm64.app.tar.gz -C "$RUNNER_TEMP/unpacked"
+          codesign --verify --deep --strict "$RUNNER_TEMP/unpacked/Speech.app"
+          ls -l Speech-macos-arm64.app.tar.gz
+
       - uses: actions/upload-artifact@v4
         with:
           name: opentypeless-macos-arm64
           retention-days: 14
           if-no-files-found: error
-          path: Speech-macos-arm64.dmg
+          path: |
+            Speech-macos-arm64.dmg
+            Speech-macos-arm64.app.tar.gz
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -252,5 +271,6 @@ jobs:
             --title "Files for the in-app update" --prerelease --latest=false --target "$GITHUB_SHA" \
             --notes "The app downloads these when it updates itself. To install, use the latest release."
           gh release upload update-files --clobber \
-            dist/opentypeless-windows-x64.exe dist/ot-stt-worker-windows-x64.exe
+            dist/opentypeless-windows-x64.exe dist/ot-stt-worker-windows-x64.exe \
+            dist/Speech-macos-arm64.app.tar.gz
           gh release upload update-files --clobber dist/update-manifest.json

@@ -25,6 +25,12 @@ pub fn meeting_save(meeting: Meeting) -> Result<(), String> {
     crate::meetings::save(&meeting)
 }
 
+/// Puts a meeting in a folder, or in none where `folder` is empty.
+#[tauri::command]
+pub fn meeting_folder(id: String, folder: String) -> Result<(), String> {
+    crate::meetings::set_folder(&id, &folder)
+}
+
 #[tauri::command]
 pub fn meeting_delete(id: String) -> Result<(), String> {
     crate::meetings::delete(&id)

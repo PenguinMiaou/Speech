@@ -60,7 +60,7 @@ Rules:
 2. CLEANUP: The result must read as typed text, not as a transcript of speech. Remove filler words and spoken padding (um, uh, 嗯, 啊, 那个, 就是, 就是说, 这样子, 的话, like, you know, and 然后 when it only links clauses and marks no real sequence), false starts, and repetitions. Never remove a fact, a name, a number, a request, or a real sequence of steps.
 3. LISTS: When the speaker enumerates two or more items (signaled by words like 第一/第二, 首先/其次/最后, 首先/然后/最后, 一是/二是, 一方面/另一方面, first/second/third, etc.), format them as a numbered list, in short speech too. CRITICAL: each list item MUST be on its own line, and a lead-in sentence goes on its own line above the list.
 4. PARAGRAPHS: One or two sentences stay in one paragraph. When the speech makes several separate points or requests, start each one on its own line, with a single line break, never a blank line. Keep one continuous thought in one paragraph however long it is, using commas inside it.
-5. Preserve the user's language (including mixed languages), all substantive content, technical terms, and proper nouns exactly. Do NOT add any words, phrases, or content that were not present in the original speech.
+5. Preserve the user's language (including mixed languages), all substantive content, technical terms, and proper nouns exactly. Do NOT add any words, phrases, or content that were not present in the original speech, apart from the small linking words rule 15 allows.
 6. Output ONLY the processed text. No explanations, no quotes around output. Do not end the output with a terminal period (. or 。). Be consistent: do not mix formatting styles or punctuation conventions.
 7. SPANISH: For Spanish questions, use matching question punctuation (¿...?). Never open a Spanish question with ¿ and close it with ! unless the user clearly dictated an exclamation.
 8. NUMBERING: If the transcription already contains explicit numbering such as "1. item" or "one, item", normalize it to a single numbered list. Never duplicate numbering like "1. 1. Item".
@@ -70,6 +70,7 @@ Rules:
 12. SELF-CORRECTION: The speaker is dictating live and corrects themselves out loud. When a correction phrase (不对, 不是, 哦不, 啊不, 错了, 说错了, 我是说, 应该是, 算了, 我再说一遍, no wait, no, sorry, I mean, make it, actually make it) stands between two versions of the same thing (two times, days, numbers, people, places, items or choices), the speaker means only the last version. Write the sentence as if only that version had been said: delete the earlier version and the correction phrase. Punctuation around the phrase does not matter, and this applies inside lists too. Keep the words when nothing is being replaced: a judgment ("这个数据不对"), a report of what someone said ("他说不是老周，是老吴负责") and a contrast ("不是他不来，是来不了") are content.
 13. DIGITS: Write numbers, dates, times, amounts of money, percentages and measures in digits (三点五万 becomes 3.5万, twenty percent becomes 20%, 十二月五号 becomes 12月5号). Keep words inside set phrases and names (一下, 一起, 统一, 三心二意, 十一假期) and for a plain small count of people or things (三个人, 两件事, three options).
 14. MISHEARD WORDS: Speech recognition writes a wrong word that sounds like the right one. Where a word makes no sense in its sentence and a word of the same or nearly the same sound plainly fits, write the fitting word (功能已经上限了 becomes 功能已经上线了). When the sentence makes sense as written, or you are not sure, leave the word alone; never swap a word for a synonym.
+15. FLOW: This holds in every language. People speak in the order they think: the point comes last, a reason is tacked on after, a subject is dropped, a sentence starts one way and ends another. Where a sentence reads like that, rewrite it as the speaker would have typed it: put its clauses in the order that makes the logic plain (cause before effect, or the point first and then its reasons), join them with the fitting linking word of the speaker's language (因为, 所以, 但是, because, so, but, porque, parce que, weil, だから, 그래서), finish a sentence that was left hanging when what it lacks is plain from the words themselves, and drop openers that carry nothing (我想说的是, 怎么说呢, the thing is, so basically). Use the speaker's own words for everything else. Keep every fact, name, number, reason and request, and the speaker's meaning and tone; never summarize, never add a reason, a conclusion or a detail the speaker did not give. A sentence that already reads well stays as it is.
 
 Examples:
 
@@ -108,6 +109,15 @@ Output: 预算3.5万，占比20%，12月5号前定
 
 Input: "我们三个人一起吃了顿饭"
 Output: 我们三个人一起吃了顿饭
+
+Input: "那个报告我周五前交不了因为数据还没到然后小李又请假了所以可能要拖到下周"
+Output: 数据还没到，小李又请假了，所以那个报告我周五前交不了，可能要拖到下周
+
+Input: "我想说的是那个新功能吧用户其实不太会用主要是入口太深了然后文案也看不懂所以点击率才那么低"
+Output: 新功能的点击率那么低，主要是因为入口太深，文案也看不懂，用户其实不太会用
+
+Input: "we should move the launch the reason being QA found two blockers and also marketing isnt ready"
+Output: We should move the launch, because QA found two blockers and marketing isn't ready
 
 Input: "这个数据不对你再核实一下"
 Output: 这个数据不对，你再核实一下
@@ -735,6 +745,16 @@ mod tests {
         assert!(BASE_PROMPT.contains("Output: 下周一上午11点碰头"));
         assert!(BASE_PROMPT.contains("Output: 预算3.5万，占比20%，12月5号前定"));
         assert!(BASE_PROMPT.contains("Output: 我们三个人一起吃了顿饭"));
+    }
+
+    #[test]
+    fn dictation_makes_a_rambling_sentence_read_as_written() {
+        assert!(BASE_PROMPT.contains("15. FLOW"));
+        assert!(BASE_PROMPT.contains(
+            "Output: 数据还没到，小李又请假了，所以那个报告我周五前交不了，可能要拖到下周"
+        ));
+        // Joining the speaker's clauses is not adding content.
+        assert!(BASE_PROMPT.contains("apart from the small linking words rule 15 allows"));
     }
 
     #[test]

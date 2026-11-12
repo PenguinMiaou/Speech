@@ -21,8 +21,8 @@ transcribe-cpp = { version = "=0.4.1", default-features = false }
 
 # The library with Nemotron-3-Diarization added, which follows up to eight speakers.
 [patch.crates-io]
-transcribe-cpp = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "31c72970065d43efedb1e4ad11008b889b53271c" }
-transcribe-cpp-sys = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "31c72970065d43efedb1e4ad11008b889b53271c" }
+transcribe-cpp = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "5ddc8db7c37c70d4598fd540f1478ce2aa9de77c" }
+transcribe-cpp-sys = { git = "https://github.com/PenguinMiaou/transcribe.cpp", rev = "5ddc8db7c37c70d4598fd540f1478ce2aa9de77c" }
 
 [features]
 # Runs the recognizer on the graphics processor through Vulkan, where the machine has

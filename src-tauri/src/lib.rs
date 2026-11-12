@@ -889,6 +889,9 @@ pub fn run() {
                 if update::platform_key().is_some() {
                     update::remove_leftovers(&dir);
                 }
+                if let Some(bundle) = update::bundle_of(&dir.join("program")) {
+                    update::remove_bundle_leftovers(&bundle);
+                }
             }
             std::fs::create_dir_all(&data_dir)?;
             audio::system_mute::recover(&audio::system_mute::marker_path(&data_dir));
@@ -1228,6 +1231,7 @@ pub fn run() {
             commands::meetings::meeting_get,
             commands::meetings::meeting_save,
             commands::meetings::meeting_delete,
+            commands::meetings::meeting_folder,
             commands::meetings::meeting_audio,
             commands::meetings::meeting_audio_keep,
             commands::meetings::meeting_audio_save,

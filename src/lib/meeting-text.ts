@@ -433,6 +433,111 @@ export function withSpellings(text: string, speakerLabel: string, terms: Spellin
     .join('\n')
 }
 
+/** The first place a meeting says a term: the words around it and, where that can be
+ * told, when it was said in seconds. */
+export interface Said {
+  before: string
+  word: string
+  after: string
+  seconds: number | null
+}
+
+/** How many characters are shown on either side of a term. */
+const AROUND = 36
+
+/** Where the meeting first says one of `words`; null when it says none of them. */
+export function whereSaid(
+  text: string,
+  speakerLabel: string,
+  words: string[],
+  times: Times[],
+): Said | null {
+  const sought = [...new Set(words.filter((word) => word.trim()))].sort(
+    (a, b) => b.length - a.length,
+  )
+  if (sought.length === 0) return null
+  const escaped = (word: string) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const found = new RegExp(
+    sought
+      .map(
+        (word) =>
+          `${/^[A-Za-z0-9]/.test(word) ? '(?<![A-Za-z0-9])' : ''}${escaped(word)}${
+            /[A-Za-z0-9]$/.test(word) ? '(?![A-Za-z0-9])' : ''
+          }`,
+      )
+      .join('|'),
+  )
+  // The words under each heading, with the time the heading gives.
+  const said: { began: number | null; order: number; lines: string[] }[] = []
+  let headings = 0
+  for (const line of transcriptLines(text, speakerLabel)) {
+    if ('text' in line) {
+      if (said.length === 0) said.push({ began: null, order: -1, lines: [] })
+      said[said.length - 1].lines.push(line.text)
+    } else {
+      const began = line.time.split(':').reduce((whole, part) => whole * 60 + Number(part), 0)
+      said.push({ began, order: headings++, lines: [] })
+    }
+  }
+  for (const { began, order, lines } of said) {
+    const body = lines.join('\n').trimEnd()
+    const at = found.exec(body)
+    if (!at) continue
+    const line = body.lastIndexOf('\n', at.index) + 1
+    const ends = body.indexOf('\n', at.index)
+    const before = body.slice(line, at.index)
+    const after = body.slice(at.index + at[0].length, ends < 0 ? body.length : ends)
+    return {
+      before: before.length > AROUND ? `…${before.slice(-AROUND)}` : before,
+      word: at[0],
+      after: after.length > AROUND ? `${after.slice(0, AROUND)}…` : after,
+      seconds: secondsAt(times[order], body.length, at.index) ?? began,
+    }
+  }
+  return null
+}
+
+/** A word as it is compared: without case, spaces or marks. */
+function bare(word: string): string {
+  return word.toLowerCase().replace(/[\s\-_.·'’]/g, '')
+}
+
+/** How many letters must be put in, taken out or changed to make one word of another. */
+function apart(a: string, b: string): number {
+  let row = Array.from({ length: b.length + 1 }, (_, at) => at)
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i]
+    for (let j = 1; j <= b.length; j++) {
+      next.push(Math.min(next[j - 1] + 1, row[j] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)))
+    }
+    row = next
+  }
+  return row[b.length]
+}
+
+/** The words of the dictionary written nearly as one of `heard` is, nearest first, and
+ * none that was heard exactly so. Short words are near only when the same. */
+export function wordsLike(heard: string[], dictionary: string[]): string[] {
+  const sought = heard.map(bare).filter((word) => word !== '')
+  return dictionary
+    .filter((word) => !heard.includes(word))
+    .map((word) => {
+      const written = bare(word)
+      const off = Math.min(
+        ...sought.map((one) => {
+          const longer = Math.max(one.length, written.length)
+          const allowed = longer < 4 ? 0 : longer < 5 ? 1 : longer < 9 ? 2 : 3
+          const far = apart(one, written)
+          return far <= allowed ? far : Infinity
+        }),
+      )
+      return { word, off }
+    })
+    .filter(({ off }) => off !== Infinity)
+    .sort((a, b) => a.off - b.off)
+    .map(({ word }) => word)
+}
+
 /** How much each speaker said into the microphone and how much otherwise, in characters. */
 export type Sides = Record<number, { mine: number; theirs: number }>
 

@@ -32,6 +32,28 @@ pub struct Meeting {
     /// where that was not written down.
     #[serde(default)]
     pub times: Vec<Times>,
+    /// The terms a model was unsure how to spell, each the way it is now written, so
+    /// that the user can be asked about them again. Empty where there were none.
+    #[serde(default)]
+    pub terms: Vec<crate::minutes::Term>,
+    /// What the meeting said before it was tidied, so that it can still be compared
+    /// with and gone back to. Absent where it was never tidied.
+    #[serde(default)]
+    pub unpolished: Option<Unpolished>,
+    /// The folder the user keeps it in. Empty when it is in none.
+    #[serde(default)]
+    pub folder: String,
+}
+
+/// A meeting's text as it stood before it was tidied.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Unpolished {
+    pub text: String,
+    /// The same text cut into the paragraphs the tidied text has, where they differ.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shaped: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub times: Option<Vec<Times>>,
 }
 
 /// When the words under one heading were said.
@@ -55,6 +77,7 @@ pub struct Summary {
     pub title: String,
     pub duration_s: u64,
     pub has_audio: bool,
+    pub folder: String,
 }
 
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -99,6 +122,13 @@ fn get_in(dir: &Path, id: &str) -> Result<Meeting, String> {
     serde_json::from_slice(&raw).map_err(|_| "meeting_not_found".to_string())
 }
 
+/// Puts a meeting in a folder, or in none where `folder` is empty.
+fn set_folder_in(dir: &Path, id: &str, folder: &str) -> Result<(), String> {
+    let mut meeting = get_in(dir, id)?;
+    meeting.folder = folder.trim().to_string();
+    save_in(dir, &meeting)
+}
+
 /// Every meeting, the newest first.
 fn list_in(dir: &Path) -> Vec<Summary> {
     let mut all: Vec<Summary> = std::fs::read_dir(dir)
@@ -115,6 +145,7 @@ fn list_in(dir: &Path) -> Vec<Summary> {
             has_minutes: !meeting.minutes.trim().is_empty(),
             has_audio: audio_in(dir, &meeting.id).is_some(),
             title: meeting.title.trim().to_string(),
+            folder: meeting.folder.trim().to_string(),
             duration_s: meeting.duration_s,
             id: meeting.id,
             started_at: meeting.started_at,
@@ -316,6 +347,10 @@ pub fn get(id: &str) -> Result<Meeting, String> {
     get_in(&dir()?, id)
 }
 
+pub fn set_folder(id: &str, folder: &str) -> Result<(), String> {
+    set_folder_in(&dir()?, id, folder)
+}
+
 pub fn list() -> Vec<Summary> {
     dir().map(|dir| list_in(&dir)).unwrap_or_default()
 }
@@ -340,6 +375,27 @@ pub fn delete_audio(id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_meeting_keeps_the_terms_it_was_unsure_of_and_reads_older_ones_without_them() {
+        let older: Meeting =
+            serde_json::from_str(r#"{"id":"m-1","started_at":1,"transcript":"a"}"#).unwrap();
+        assert!(older.terms.is_empty());
+        let meeting = Meeting {
+            terms: vec![crate::minutes::Term {
+                spelling: "Tauri".into(),
+                others: vec!["Tori".into()],
+            }],
+            unpolished: Some(Unpolished {
+                text: "we use tori".into(),
+                ..Default::default()
+            }),
+            ..older
+        };
+        let again: Meeting =
+            serde_json::from_str(&serde_json::to_string(&meeting).unwrap()).unwrap();
+        assert_eq!(again, meeting);
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("ot-meetings-{}-{name}", std::process::id()));
@@ -471,6 +527,27 @@ mod tests {
         assert_eq!(audio_in(&dir, "m1"), None);
         assert_eq!(get_in(&dir, "m1").unwrap().transcript, "hello");
         assert!(keep_audio_in(&dir, "../x", &recording).is_err());
+    }
+
+    #[test]
+    fn a_meeting_is_put_in_a_folder_and_the_list_says_which() {
+        let dir = std::env::temp_dir().join(format!("ot-meetings-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let meeting = Meeting {
+            id: "m-1".into(),
+            started_at: 1,
+            transcript: "hello".into(),
+            ..Default::default()
+        };
+        save_in(&dir, &meeting).unwrap();
+        assert_eq!(list_in(&dir)[0].folder, "");
+        set_folder_in(&dir, "m-1", "  Clients ").unwrap();
+        assert_eq!(list_in(&dir)[0].folder, "Clients");
+        assert_eq!(get_in(&dir, "m-1").unwrap().transcript, "hello");
+        set_folder_in(&dir, "m-1", "").unwrap();
+        assert_eq!(list_in(&dir)[0].folder, "");
+        assert!(set_folder_in(&dir, "m-none", "x").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

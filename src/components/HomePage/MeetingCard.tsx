@@ -8,6 +8,8 @@ import {
   Download,
   Files,
   Ellipsis,
+  Folder,
+  FolderInput,
   FolderOpen,
   Mic,
   Pause,
@@ -17,6 +19,7 @@ import {
   FileAudio,
   Hourglass,
   SpellCheck,
+  Diff,
   Type,
   Sparkles,
   Square,
@@ -24,7 +27,6 @@ import {
   Users,
   Search,
   MessageCircleQuestion,
-  X,
   LayoutTemplate,
   ScrollText,
 } from 'lucide-react'
@@ -41,6 +43,7 @@ import {
   meetingAudio,
   meetingAudioDelete,
   meetingDelete,
+  meetingFolder,
   meetingGet,
   meetingLanguages,
   meetingsAsk,
@@ -70,6 +73,7 @@ import { useAppStore } from '../../stores/appStore'
 import { localModelName } from '../../lib/local-model-names'
 import { plainOf } from '../../lib/meeting-format'
 import { BUILT_IN, TemplateGallery, templateText } from './TemplateGallery'
+import { MeetingTerms } from './MeetingTerms'
 import { Toggle } from '../Settings/shared/Toggle'
 import { Transcript } from './Transcript'
 import { MeetingAudio, type AudioHandle } from './MeetingAudio'
@@ -281,6 +285,28 @@ export function MeetingCard() {
   } = useMeetingStore()
   const [past, setPast] = useState<MeetingSummary[]>([])
   const [query, setQuery] = useState('')
+  /** The folder whose meetings the list shows; empty for all of them. */
+  const [picked, setPicked] = useState(() => {
+    try {
+      return window.localStorage.getItem('meeting.folder') ?? ''
+    } catch {
+      return ''
+    }
+  })
+  /** The meeting whose folder is being chosen. */
+  const [moving, setMoving] = useState<string | null>(null)
+  const folders = [...new Set(past.map((each) => each.folder?.trim() ?? ''))]
+    .filter((name) => name !== '')
+    .sort((a, b) => a.localeCompare(b))
+  const inFolder = folders.includes(picked) ? picked : ''
+  const pickFolder = (name: string) => {
+    setPicked(name)
+    try {
+      window.localStorage.setItem('meeting.folder', name)
+    } catch {
+      // The choice then lasts only for this run.
+    }
+  }
   const [asking, setAsking] = useState(false)
   const [answer, setAnswer] = useState<string | null>(null)
   const askAll = () => {
@@ -452,7 +478,17 @@ export function MeetingCard() {
       times: [],
       unpolished: null,
       terms: null,
-      ...(same ? {} : { minutes: null, id: null, notes: '', title: '', duration: 0, kept: null }),
+      ...(same
+        ? {}
+        : {
+            minutes: null,
+            id: null,
+            notes: '',
+            title: '',
+            folder: inFolder,
+            duration: 0,
+            kept: null,
+          }),
     })
     work
       .then((result) => settle(result ?? ''))
@@ -663,6 +699,7 @@ export function MeetingCard() {
       id: null,
       voicesAtHand: true,
       title: '',
+      folder: inFolder,
       duration: 0,
       interim: '',
       editing: null,
@@ -830,14 +867,31 @@ export function MeetingCard() {
           minutes: meeting.minutes || null,
           voicesAtHand: false,
           title: meeting.title ?? '',
+          folder: meeting.folder ?? '',
           duration: meeting.duration_s ?? 0,
           times: meeting.times ?? [],
+          terms: meeting.terms?.length
+            ? { id: meeting.id, list: meeting.terms, open: false }
+            : null,
+          unpolished: meeting.unpolished ? { id: meeting.id, ...meeting.unpolished } : null,
         })
         void Promise.resolve(meetingAudio(meeting.id))
           .then((kept) => useMeetingStore.getState().id === meeting.id && setKept(kept ?? null))
           .catch(() => {})
       })
       .catch(() => {})
+
+  /** Puts a meeting in a folder, or in none where `name` is empty. */
+  const moveTo = (summary: MeetingSummary, name: string) => {
+    setMoving(null)
+    const folder = name.trim()
+    void Promise.resolve(meetingFolder(summary.id, folder))
+      .then(() => {
+        if (useMeetingStore.getState().id === summary.id) set({ folder })
+        refreshPast()
+      })
+      .catch(() => {})
+  }
 
   const removePast = (summary: MeetingSummary) =>
     void Promise.resolve(meetingDelete(summary.id))
@@ -890,6 +944,9 @@ export function MeetingCard() {
     void tidyMeeting(label, source ?? undefined).then(refreshPast)
   const heard = unpolished?.id === id ? unpolished : undefined
   const before = heard ? (heard.shaped ?? heard.text) : undefined
+  /** Whether what the tidy-up changed is shown in the text, instead of the text as it
+   * now reads. */
+  const [comparing, setComparing] = useState(false)
   const unpolish = () => {
     if (!heard) return
     set({ text: heard.text, ...(heard.times ? { times: heard.times } : {}), unpolished: null })
@@ -912,7 +969,18 @@ export function MeetingCard() {
         others: [...term.others, term.spelling],
       }))
       .filter((term) => term.spelling !== '')
-    set({ text: withSpellings(written, label, settled), terms: null })
+    // Each term is kept the way it is now written, so that it can be asked about again.
+    const list = terms.list.map((term, index) => {
+      const spelling = spellings[index]?.trim() || term.spelling
+      const others = [...new Set([...term.others, term.spelling])].filter(
+        (other) => other !== spelling,
+      )
+      return { spelling, others }
+    })
+    set({
+      text: withSpellings(written, label, settled),
+      terms: { ...terms, list, open: false },
+    })
     for (const term of settled)
       void Promise.resolve(addDictionaryEntry(term.spelling, null)).catch(() => {})
     persist()
@@ -953,6 +1021,7 @@ export function MeetingCard() {
       notes: '',
       names: {},
       title: '',
+      folder: inFolder,
       duration: 0,
       kept: null,
       times: [],
@@ -1138,6 +1207,29 @@ export function MeetingCard() {
               >
                 <Users size={14} className="animate-pulse" />
               </span>
+            )}
+            {terms?.id === id && !terms.open && !going && written !== null && (
+              <button
+                type="button"
+                onClick={() => set({ terms: { ...terms, open: true } })}
+                aria-label={t('meeting.terms')}
+                title={t('meeting.terms')}
+                className="btn-quiet px-2.5"
+              >
+                <SpellCheck size={16} />
+              </button>
+            )}
+            {before !== undefined && !going && (
+              <button
+                type="button"
+                onClick={() => setComparing(!comparing)}
+                aria-pressed={comparing}
+                aria-label={t('meeting.compare')}
+                title={t('meeting.compare')}
+                className={`btn-quiet px-2.5 ${comparing ? 'text-accent' : ''}`}
+              >
+                <Diff size={16} />
+              </button>
             )}
             <button
               type="button"
@@ -1481,6 +1573,22 @@ export function MeetingCard() {
           </button>
         </label>
       )}
+      {list && folders.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {['', ...folders].map((name) => (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={inFolder === name}
+              onClick={() => pickFolder(name)}
+              className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-transparent px-3 text-[12px] text-text-secondary hover:text-text-primary aria-pressed:border-accent aria-pressed:text-accent"
+            >
+              {name !== '' && <Folder size={12} aria-hidden />}
+              {name === '' ? t('meeting.allFolders') : name}
+            </button>
+          ))}
+        </div>
+      )}
       {list && answer !== null && (
         <p role="status" className="m-0 whitespace-pre-wrap text-[13px] leading-relaxed">
           {answer}
@@ -1514,7 +1622,9 @@ export function MeetingCard() {
             className="m-0 list-none divide-y divide-border border-y border-border p-0"
             aria-label={t('meeting.pastList')}
           >
-            {(found ?? past).map((summary) => (
+            {(
+              found ?? past.filter((each) => inFolder === '' || (each.folder ?? '') === inFolder)
+            ).map((summary) => (
               <li key={summary.id} className="group flex items-center gap-3 py-3">
                 <button
                   type="button"
@@ -1533,6 +1643,12 @@ export function MeetingCard() {
                     {when(summary.started_at)}
                     {(summary.duration_s ?? 0) > 0 && (
                       <span className="ml-4">{clock(summary.duration_s ?? 0)}</span>
+                    )}
+                    {inFolder === '' && summary.folder && (
+                      <span className="ml-4 inline-flex items-center gap-1">
+                        <Folder size={11} aria-hidden />
+                        {summary.folder}
+                      </span>
                     )}
                   </span>
                   {tidying?.id === summary.id && tidyingBar}
@@ -1554,6 +1670,59 @@ export function MeetingCard() {
                     className={making?.id === summary.id ? 'animate-pulse' : undefined}
                   />
                 </button>
+                <div className="relative flex">
+                  <button
+                    type="button"
+                    aria-label={t('meeting.folder')}
+                    title={t('meeting.folder')}
+                    aria-expanded={moving === summary.id}
+                    onClick={() => setMoving(moving === summary.id ? null : summary.id)}
+                    className="cursor-pointer border-none bg-transparent p-1 text-text-tertiary opacity-0 transition-opacity hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+                  >
+                    <FolderInput size={14} />
+                  </button>
+                  {moving === summary.id && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-20 mt-1 flex min-w-[180px] flex-col rounded-[8px] border border-border bg-bg-elevated py-1 shadow-lg"
+                    >
+                      {folders
+                        .filter((name) => name !== (summary.folder ?? ''))
+                        .map((name) => (
+                          <button
+                            key={name}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => moveTo(summary, name)}
+                            className={item}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      {summary.folder && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => moveTo(summary, '')}
+                          className={item}
+                        >
+                          {t('meeting.noFolder')}
+                        </button>
+                      )}
+                      <input
+                        aria-label={t('meeting.newFolder')}
+                        placeholder={t('meeting.newFolder')}
+                        maxLength={40}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && event.currentTarget.value.trim())
+                            moveTo(summary, event.currentTarget.value)
+                          if (event.key === 'Escape') setMoving(null)
+                        }}
+                        className="mx-2 my-1 h-7 rounded-[6px] border border-border bg-bg-primary px-2 text-[12px] outline-none focus:border-accent"
+                      />
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   aria-label={t('meeting.deleteMeeting')}
@@ -1623,55 +1792,17 @@ export function MeetingCard() {
               </ul>
             )}
             {tidying?.id === id && tidyingBar}
-            {terms?.id === id && !tidying && written !== null && (
-              <form
-                aria-label={t('meeting.terms')}
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  const asked = new FormData(event.currentTarget)
-                  settleTerms(
-                    terms.list.map((_, index) => String(asked.get(`term-${index}`) ?? '')),
-                  )
-                }}
-                className="flex flex-col gap-2 rounded-[10px] border border-border bg-bg-secondary px-3 py-2.5"
-              >
-                <div className="flex items-center gap-2 text-[12px] text-text-secondary">
-                  <SpellCheck size={13} />
-                  <span className="flex-1">{t('meeting.terms')}</span>
-                  <button
-                    type="submit"
-                    aria-label={t('meeting.termsApply')}
-                    title={t('meeting.termsApply')}
-                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] border-none bg-accent text-white"
-                  >
-                    <Check size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t('meeting.termsSkip')}
-                    title={t('meeting.termsSkip')}
-                    onClick={() => set({ terms: null })}
-                    className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:text-text-primary"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-                <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-                  {terms.list.map((term, index) => (
-                    <li key={term.spelling} className="flex min-w-0 items-center gap-2.5">
-                      <input
-                        name={`term-${index}`}
-                        defaultValue={term.spelling}
-                        aria-label={term.others.join(', ')}
-                        className="h-7 w-[160px] shrink-0 rounded-[7px] border border-border bg-bg-primary px-2 text-[12px] font-medium outline-none"
-                      />
-                      <span className="min-w-0 truncate text-[12px] text-text-tertiary">
-                        {term.others.join(', ')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </form>
+            {terms?.id === id && terms.open && !tidying && written !== null && (
+              <MeetingTerms
+                key={terms.list.map((term) => term.spelling).join('\n')}
+                terms={terms.list}
+                text={written}
+                speakerLabel={label}
+                times={times}
+                onHear={kept ? (seconds) => player.current?.seek(seconds, true) : undefined}
+                onSettle={settleTerms}
+                onSkip={() => set({ terms: { ...terms, open: false } })}
+              />
             )}
             {speakerNumbers.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -1698,7 +1829,7 @@ export function MeetingCard() {
               position={kept ? position : undefined}
               times={times}
               onEdit={correct}
-              before={before}
+              before={comparing ? before : undefined}
               onSpeaker={giveTo}
               allLabel={t('meeting.allOfSpeaker')}
               onName={(number, name) => {

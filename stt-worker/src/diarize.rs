@@ -390,6 +390,150 @@ impl LiveSpeakers {
     }
 }
 
+/// The speakers of a recording still running, told by the model that follows each of
+/// them through all of it: every window is handed on as it comes, and a speaker keeps
+/// one number from the first window to the last without voices being compared.
+pub struct LiveFollowing {
+    session: transcribe_cpp::DiarizeSession,
+    extractor: Option<sherpa_onnx::SpeakerEmbeddingExtractor>,
+    /// Samples handed to the model so far.
+    fed: usize,
+    /// The model's own speaker numbers, in the order they were first heard.
+    seen: Vec<i32>,
+}
+
+impl LiveFollowing {
+    pub fn open(model: &str, embedding_model: &str, threads: i32) -> Result<Self, String> {
+        let failed = |error: transcribe_cpp::Error| error.to_string();
+        let model = transcribe_cpp::Model::load(model).map_err(failed)?;
+        let mut session = model.diarize_session().map_err(failed)?;
+        session.stream_begin(&Default::default()).map_err(failed)?;
+        let embedding = SpeakerEmbeddingExtractorConfig {
+            model: Some(embedding_model.to_string()),
+            num_threads: threads,
+            ..Default::default()
+        };
+        Ok(Self {
+            session,
+            extractor: sherpa_onnx::SpeakerEmbeddingExtractor::create(&embedding),
+            fed: 0,
+            seen: Vec::new(),
+        })
+    }
+
+    /// The turns of one window, with times counted from the window's start, and the
+    /// voice of each speaker heard in it.
+    pub fn window(&mut self, pcm: &[f32]) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
+        let from_ms = (self.fed / 16) as u64;
+        let failed = |error: transcribe_cpp::Error| error.to_string();
+        self.session.stream_feed(pcm).map_err(failed)?;
+        // The model decides in long steps, up to half a minute behind the sound. What it
+        // would say of the rest were the recording to end here is asked for as well, so
+        // a window has its speakers by the time its words are written.
+        let mut segments = self.session.stream_peek().map_err(failed)?;
+        self.fed += pcm.len();
+        segments.sort_by_key(|segment| segment.t0_ms);
+        let heard: Vec<(i64, i64, i32)> = segments
+            .iter()
+            .map(|segment| (segment.t0_ms, segment.t1_ms, segment.speaker_id))
+            .collect();
+        let to_ms = (self.fed / 16) as u64;
+        let turns = window_turns(&heard, from_ms, to_ms, to_ms, &mut self.seen);
+        let voices = match &self.extractor {
+            Some(extractor) => voices_of(extractor, pcm, &turns),
+            None => Vec::new(),
+        };
+        Ok((turns, voices))
+    }
+}
+
+/// A turn that ends this close to where the model has got to is still being spoken.
+const STILL_SPEAKING_MS: u64 = 200;
+
+/// The turns of the window from `from_ms` to `to_ms`, out of everything the model has
+/// decided of the recording so far (start, end and the model's speaker number, in the
+/// order they start). Times are counted from the window's start. `seen` keeps the
+/// speakers' numbers from one window to the next.
+fn window_turns(
+    heard: &[(i64, i64, i32)],
+    from_ms: u64,
+    to_ms: u64,
+    decided_ms: u64,
+    seen: &mut Vec<i32>,
+) -> Vec<SpeakerTurn> {
+    let mut turns = Vec::new();
+    let mut last: Option<(u64, u32)> = None;
+    for (start, end, speaker) in heard {
+        let (start, end) = ((*start).max(0) as u64, (*end).max(0) as u64);
+        let position = seen.iter().position(|known| known == speaker);
+        let number = position.unwrap_or_else(|| {
+            seen.push(*speaker);
+            seen.len() - 1
+        }) as u32
+            + 1;
+        if last.is_none_or(|(latest, _)| end >= latest) {
+            last = Some((end, number));
+        }
+        let (start, end) = (start.max(from_ms), end.min(to_ms));
+        if start < end {
+            turns.push(SpeakerTurn {
+                start_ms: start - from_ms,
+                end_ms: end - from_ms,
+                speaker: number,
+            });
+        }
+    }
+    // The model has not got to the end of the window yet. Whoever is speaking where it
+    // has got to is taken to speak on to the end.
+    let undecided_from = decided_ms.max(from_ms);
+    if let Some((end, speaker)) = last.filter(|_| undecided_from < to_ms) {
+        if end + STILL_SPEAKING_MS >= decided_ms {
+            let rest_from = end.clamp(from_ms, undecided_from) - from_ms;
+            match turns
+                .iter_mut()
+                .rev()
+                .find(|turn| turn.speaker == speaker && turn.end_ms == rest_from)
+            {
+                Some(turn) => turn.end_ms = to_ms - from_ms,
+                None => turns.push(SpeakerTurn {
+                    start_ms: undecided_from - from_ms,
+                    end_ms: to_ms - from_ms,
+                    speaker,
+                }),
+            }
+        }
+    }
+    turns
+}
+
+/// The speakers of a recording still running, by whichever model is installed.
+pub enum Live {
+    ByWindow(Box<LiveSpeakers>),
+    Following(Box<LiveFollowing>),
+}
+
+impl Live {
+    pub fn open(
+        segmentation_model: &str,
+        embedding_model: &str,
+        threads: i32,
+    ) -> Result<Self, String> {
+        if follows_speakers(segmentation_model) {
+            let live = LiveFollowing::open(segmentation_model, embedding_model, threads)?;
+            return Ok(Self::Following(Box::new(live)));
+        }
+        let live = LiveSpeakers::open(segmentation_model, embedding_model, threads)?;
+        Ok(Self::ByWindow(Box::new(live)))
+    }
+
+    pub fn window(&mut self, pcm: &[f32]) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
+        match self {
+            Self::ByWindow(live) => live.window(pcm),
+            Self::Following(live) => live.window(pcm),
+        }
+    }
+}
+
 /// The library numbers speakers arbitrarily. A reader expects the first voice to be 1.
 fn number_by_first_appearance(segments: impl Iterator<Item = (f32, f32, i32)>) -> Vec<SpeakerTurn> {
     let mut seen: Vec<i32> = Vec::new();
@@ -555,6 +699,96 @@ mod tests {
                 .collect();
             println!("voice with {seconds}s: {}", row.join("  "));
         }
+    }
+
+    #[test]
+    fn a_window_of_a_running_recording_keeps_each_speakers_number() {
+        let mut seen = Vec::new();
+        let first = window_turns(
+            &[(0, 4000, 7), (4000, 9000, 3)],
+            0,
+            10_000,
+            10_000,
+            &mut seen,
+        );
+        assert_eq!(first, vec![said(0, 4, 1), said(4, 9, 2)]);
+        let heard = [(0, 4000, 7), (4000, 9000, 3), (10_000, 15_000, 7)];
+        let second = window_turns(&heard, 10_000, 20_000, 20_000, &mut seen);
+        assert_eq!(second, vec![said(0, 5, 1)]);
+    }
+
+    #[test]
+    fn a_turn_begun_before_the_window_is_cut_at_its_start() {
+        let mut seen = Vec::new();
+        let turns = window_turns(&[(8000, 12_000, 3)], 10_000, 20_000, 20_000, &mut seen);
+        assert_eq!(turns, vec![said(0, 2, 1)]);
+    }
+
+    #[test]
+    fn whoever_speaks_where_the_model_has_got_to_has_the_rest_of_the_window() {
+        let mut seen = Vec::new();
+        let turns = window_turns(&[(10_000, 19_200, 3)], 10_000, 20_000, 19_200, &mut seen);
+        assert_eq!(turns, vec![said(0, 10, 1)]);
+        let stopped = window_turns(&[(10_000, 15_000, 3)], 10_000, 20_000, 19_200, &mut seen);
+        assert_eq!(stopped, vec![said(0, 5, 1)]);
+    }
+
+    #[test]
+    fn a_window_the_model_has_not_reached_goes_to_whoever_was_speaking() {
+        let mut seen = Vec::new();
+        let turns = window_turns(&[(0, 9500, 5)], 10_000, 10_800, 9500, &mut seen);
+        assert_eq!(
+            turns,
+            vec![SpeakerTurn {
+                start_ms: 0,
+                end_ms: 800,
+                speaker: 1
+            }]
+        );
+        assert!(window_turns(&[(0, 5000, 5)], 10_000, 10_800, 9500, &mut seen).is_empty());
+    }
+
+    /// Needs the following model, the voice model and a recording. Run with
+    /// `OT_SEG=<gguf> OT_EMB=<onnx> OT_WAV=<wav> OT_WINDOW=<seconds> cargo test follows_a_running -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn follows_a_running_recording_as_it_follows_the_whole() {
+        let wav = std::fs::read(std::env::var("OT_WAV").unwrap()).unwrap();
+        let pcm = crate::eval::decode_wav(&wav).unwrap();
+        let window: usize = std::env::var("OT_WINDOW").unwrap().parse().unwrap();
+        let (seg, emb) = (
+            std::env::var("OT_SEG").unwrap(),
+            std::env::var("OT_EMB").unwrap(),
+        );
+        let mut live = Live::open(&seg, &emb, 4).unwrap();
+        let started = std::time::Instant::now();
+        let (mut slowest, mut turns, mut speakers) = (0.0f32, 0, std::collections::BTreeMap::new());
+        for piece in pcm.chunks(window * 16_000) {
+            let began = std::time::Instant::now();
+            let (found, _) = live.window(piece).unwrap();
+            slowest = slowest.max(began.elapsed().as_secs_f32());
+            turns += found.len();
+            for turn in found {
+                *speakers.entry(turn.speaker).or_insert(0u64) += turn.end_ms - turn.start_ms;
+            }
+        }
+        println!(
+            "live: {turns} turns, seconds by speaker {:?}, took {:.1}s, slowest window {slowest:.2}s",
+            speakers.iter().map(|(who, ms)| (*who, ms / 1000)).collect::<Vec<_>>(),
+            started.elapsed().as_secs_f32()
+        );
+        let (whole, _) = diarize(&seg, &emb, &pcm, 4).unwrap();
+        let mut all = std::collections::BTreeMap::new();
+        for turn in &whole {
+            *all.entry(turn.speaker).or_insert(0u64) += turn.end_ms - turn.start_ms;
+        }
+        println!(
+            "whole: {} turns, seconds by speaker {:?}",
+            whole.len(),
+            all.iter()
+                .map(|(who, ms)| (*who, ms / 1000))
+                .collect::<Vec<_>>()
+        );
     }
 
     /// Same needs as the test below, plus `OT_WINDOW` seconds per window.

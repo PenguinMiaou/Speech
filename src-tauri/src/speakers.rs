@@ -58,11 +58,23 @@ fn downloaded(index: usize) -> Option<PathBuf> {
     crate::voice_isolation::is_downloaded(&dir, file).then(|| dir.join(file.file_name))
 }
 
-/// The models for a recording still running, which is split window by window: the one
-/// that cuts the sound up and the voice model. Only when every file is downloaded.
+/// The models for a recording still running, and the voice model: the model that
+/// follows the speakers hears the recording as it comes in, so a speaker keeps one
+/// number throughout. Only when every file is downloaded.
 pub fn installed_models() -> Option<(PathBuf, PathBuf)> {
-    downloaded(2)?;
-    Some((downloaded(0)?, downloaded(1)?))
+    models_for_a_file()
+}
+
+/// What the log says when telling the speakers of one window of a running recording
+/// took more than half as long as the window lasts, which holds the words back.
+pub fn slow_window(window_ms: u64, took: std::time::Duration) -> Option<String> {
+    (took.as_millis() as u64 * 2 > window_ms).then(|| {
+        format!(
+            "speakers of a {:.1} second window took {:.1} seconds",
+            window_ms as f32 / 1000.0,
+            took.as_secs_f32()
+        )
+    })
 }
 
 /// The models for a finished recording: the one that follows the speakers through all
@@ -77,6 +89,21 @@ pub fn follows(model: &Path) -> bool {
     model
         .extension()
         .is_some_and(|extension| extension == "gguf")
+}
+
+/// What the log says once a model has followed the speakers through a whole recording.
+pub fn followed(model: &Path, turns: &[SpeakerTurn], took: std::time::Duration) -> String {
+    let speakers: std::collections::BTreeSet<u32> = turns.iter().map(|turn| turn.speaker).collect();
+    format!(
+        "speakers followed by {}: {} speakers, {} turns, in {:.1} seconds",
+        model
+            .file_name()
+            .map(|name| name.to_string_lossy())
+            .unwrap_or_default(),
+        speakers.len(),
+        turns.len(),
+        took.as_secs_f32()
+    )
 }
 
 /// The turns of a whole recording that fall between two moments, counted from the first.
@@ -153,6 +180,34 @@ pub fn transcript(turns: &[(SpeakerTurn, String)], speaker_label: &str) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_log_says_which_model_followed_the_speakers_and_what_it_found() {
+        let turn = |start_ms, end_ms, speaker| SpeakerTurn {
+            start_ms,
+            end_ms,
+            speaker,
+        };
+        let turns = [turn(0, 900, 1), turn(900, 2_000, 2), turn(2_000, 2_500, 1)];
+        assert_eq!(
+            followed(
+                Path::new("/models/speaker-turns.gguf"),
+                &turns,
+                std::time::Duration::from_millis(21_300)
+            ),
+            "speakers followed by speaker-turns.gguf: 2 speakers, 3 turns, in 21.3 seconds"
+        );
+    }
+
+    #[test]
+    fn the_log_says_when_the_speakers_of_a_window_took_too_long() {
+        let took = std::time::Duration::from_millis;
+        assert_eq!(
+            slow_window(10_000, took(6_200)).as_deref(),
+            Some("speakers of a 10.0 second window took 6.2 seconds")
+        );
+        assert_eq!(slow_window(10_000, took(4_900)), None);
+    }
 
     fn turn(start_ms: u64, end_ms: u64, speaker: u32) -> SpeakerTurn {
         SpeakerTurn {

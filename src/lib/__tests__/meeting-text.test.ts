@@ -15,6 +15,8 @@ import {
   subtitles,
   timesOf,
   transcriptLines,
+  whereSaid,
+  wordsLike,
   whoIsMe,
   withLines,
   withMarks,
@@ -516,5 +518,62 @@ describe('withRunsJoined', () => {
     expect(withRunsJoined(text, 'S', {})).toBe(text)
     const unknown = 'S  00:10\na\n\nS  00:20\nb'
     expect(withRunsJoined(unknown, 'S', {})).toBe(unknown)
+  })
+})
+
+describe('whereSaid', () => {
+  const text =
+    'Speaker 1  00:00\nhello there\n\nSpeaker 2  01:10\nwe moved it to the light house site last year'
+
+  it('gives the words around the first place a term is said, and when', () => {
+    expect(whereSaid(text, 'Speaker', ['Lighthouse', 'light house'], [])).toEqual({
+      before: 'we moved it to the ',
+      word: 'light house',
+      after: ' site last year',
+      seconds: 70,
+    })
+  })
+
+  it('tells the time within a paragraph where the times of its words are kept', () => {
+    const times = [
+      { end_ms: 4_000, chars: 11, marks: [[0, 0]] as [number, number][] },
+      { end_ms: 115_000, chars: 45, marks: [[0, 70_000]] as [number, number][] },
+    ]
+    expect(whereSaid(text, 'Speaker', ['light house'], times)?.seconds).toBe(89)
+  })
+
+  it('finds a word whole, and nothing where the meeting does not say it', () => {
+    expect(whereSaid(text, 'Speaker', ['post'], [])).toBeNull()
+    expect(whereSaid(text, 'Speaker', [], [])).toBeNull()
+  })
+
+  it('cuts long surroundings short', () => {
+    const long = `${'a '.repeat(40)}QA ${'b '.repeat(40)}`
+    const found = whereSaid(long, 'Speaker', ['QA'], [])
+    expect(found?.before.startsWith('…')).toBe(true)
+    expect(found?.after.endsWith('…')).toBe(true)
+    expect(found?.seconds).toBeNull()
+  })
+})
+
+describe('wordsLike', () => {
+  const dictionary = ['Tauri', 'Kubernetes', 'Lighthouse', '灰度发布', 'QA']
+
+  it('gives the dictionary words written nearly as a term was heard', () => {
+    expect(wordsLike(['Tori', 'tory'], dictionary)).toEqual(['Tauri'])
+    expect(wordsLike(['kubernetis'], dictionary)).toEqual(['Kubernetes'])
+    expect(wordsLike(['light house'], dictionary)).toEqual(['Lighthouse'])
+    expect(wordsLike(['灰度发部'], dictionary)).toEqual(['灰度发布'])
+  })
+
+  it('gives nothing for a word that is merely short or far off', () => {
+    expect(wordsLike(['QB'], dictionary)).toEqual([])
+    expect(wordsLike(['Postgres'], dictionary)).toEqual([])
+    expect(wordsLike([], dictionary)).toEqual([])
+  })
+
+  it('leaves out a word heard exactly so, and puts the nearest first', () => {
+    expect(wordsLike(['Tauri'], dictionary)).toEqual([])
+    expect(wordsLike(['Taury'], ['Taurus', 'Tauri'])).toEqual(['Tauri', 'Taurus'])
   })
 })

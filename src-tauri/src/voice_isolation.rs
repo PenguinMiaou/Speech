@@ -249,6 +249,21 @@ pub fn choose(recorded: &[f32], isolated: &[f32]) -> (Audio, f32) {
     (audio, kept)
 }
 
+/// What the log says about one dictation: which sound went to the recognizer and why.
+pub fn outcome(chosen: Option<(Audio, f32)>, waited_ms: u128) -> String {
+    match chosen {
+        Some((Audio::Isolated, kept)) => format!(
+            "the isolated sound was used: it kept {kept:.2} of the loudness, waited {waited_ms} ms"
+        ),
+        Some((Audio::Recorded, kept)) => format!(
+            "the recording was used: the isolated sound kept {kept:.2} of the loudness, waited {waited_ms} ms"
+        ),
+        None => format!(
+            "the recording was used: the isolated sound was not ready after {waited_ms} ms"
+        ),
+    }
+}
+
 /// One recording being isolated while it is made.
 pub struct Session {
     sender: Sender<Vec<f32>>,
@@ -330,6 +345,22 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_log_says_whether_the_isolated_sound_was_used() {
+        assert_eq!(
+            outcome(Some((Audio::Isolated, 0.82)), 140),
+            "the isolated sound was used: it kept 0.82 of the loudness, waited 140 ms"
+        );
+        assert_eq!(
+            outcome(Some((Audio::Recorded, 0.31)), 90),
+            "the recording was used: the isolated sound kept 0.31 of the loudness, waited 90 ms"
+        );
+        assert_eq!(
+            outcome(None, 3000),
+            "the recording was used: the isolated sound was not ready after 3000 ms"
+        );
+    }
 
     fn tone(seconds: f32, level: f32) -> Vec<f32> {
         (0..(seconds * 16_000.0) as usize)

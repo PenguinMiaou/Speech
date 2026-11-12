@@ -45,7 +45,10 @@ function clickedWithin(event: { clientX: number; clientY: number }, words: Node)
   const before = document.createRange()
   before.selectNodeContents(words)
   before.setEnd(at.startContainer, at.startOffset)
-  return before.toString().length
+  // Words struck through are no longer part of what is said.
+  const said = before.cloneContents()
+  said.querySelectorAll('del').forEach((gone) => gone.remove())
+  return (said.textContent ?? '').length
 }
 
 /** The place in the words that was clicked, where the browser can tell. */
@@ -165,16 +168,31 @@ export function Transcript({
     const start = starts[index]
     if (line.text.trim() === '' || (!onEdit && start === null)) return line.text
     const old = earlier(index)
-    if (old !== undefined && old !== line.text) {
+    const ahead = start !== null && position !== undefined && position > 0 && start > position
+    if (raw !== index && old !== undefined && old !== line.text) {
+      const plain = plainOf(line.text)
       return (
-        <span data-line={index}>
+        <span
+          data-line={index}
+          onClick={(event) => {
+            if (start === null || window.getSelection()?.isCollapsed === false) return
+            const at = clickedWithin(event, event.currentTarget)
+            const exact = at === null ? null : secondsAt(timed[index], plain.length, at)
+            onSeek?.(exact ?? start, false)
+          }}
+          onDoubleClick={onEdit ? () => setRaw(index) : undefined}
+          className={ahead ? 'text-text-tertiary' : undefined}
+        >
           {changes(plainOf(old), plainOf(line.text)).map((part, at) =>
             part.kind === 'gone' ? (
-              <del key={at} className="select-none text-text-tertiary">
+              <del key={at} className="select-none text-text-tertiary line-through">
                 {part.text}
               </del>
             ) : part.kind === 'new' ? (
-              <ins key={at} className="rounded-[3px] bg-accent/10 text-accent no-underline">
+              <ins
+                key={at}
+                className="rounded-[3px] bg-accent/20 font-medium text-accent no-underline"
+              >
                 {part.text}
               </ins>
             ) : (
@@ -184,7 +202,6 @@ export function Transcript({
         </span>
       )
     }
-    const ahead = start !== null && position !== undefined && position > 0 && start > position
     if (raw !== index && hasFormat(line.text)) {
       const plain = plainOf(line.text)
       return (

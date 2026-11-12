@@ -27,11 +27,128 @@ pub struct Manifest {
     pub files: HashMap<String, Vec<FileEntry>>,
 }
 
-/// The platform this build can patch in place, if any.
+/// The platform this build can update in place, if any.
 pub fn platform_key() -> Option<&'static str> {
-    // On macOS a changed program file loses the permissions the user granted, so a new release
-    // is installed as a whole there.
-    (cfg!(target_os = "windows") && cfg!(target_arch = "x86_64")).then_some("windows-x64")
+    if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
+        Some("windows-x64")
+    } else if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        Some(MACOS_KEY)
+    } else {
+        None
+    }
+}
+
+/// On macOS a changed program file breaks the app's signature, and with it the
+/// permissions the user granted. So the whole signed app is downloaded there and takes
+/// the place of the one in use.
+pub const MACOS_KEY: &str = "macos-arm64";
+
+/// The app a program runs from: the folder ending in `.app` two levels above it.
+pub fn bundle_of(exe: &Path) -> Option<std::path::PathBuf> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    let bundle = contents.parent()?;
+    (macos.file_name()? == "MacOS"
+        && contents.file_name()? == "Contents"
+        && bundle.extension()? == "app")
+        .then(|| bundle.to_path_buf())
+}
+
+/// Where a new app is downloaded and unpacked: next to the one in use, so that taking
+/// its place is a rename and cannot stop half way.
+pub fn staging_dir(bundle: &Path) -> std::path::PathBuf {
+    bundle.with_file_name(".speech-update")
+}
+
+/// Unpacks a downloaded app into `staging` and gives the one app it holds.
+pub fn unpack_app(archive: &Path, staging: &Path) -> io::Result<std::path::PathBuf> {
+    let refused = |why: &str| io::Error::new(io::ErrorKind::InvalidData, why.to_string());
+    let into = staging.join("unpacked");
+    let _ = std::fs::remove_dir_all(&into);
+    std::fs::create_dir_all(&into)?;
+    let done = std::process::Command::new("/usr/bin/tar")
+        .arg("-xzf")
+        .arg(archive)
+        .arg("-C")
+        .arg(&into)
+        .status()?;
+    if !done.success() {
+        return Err(refused("the download could not be unpacked"));
+    }
+    let mut held = std::fs::read_dir(&into)?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            !path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with("._"))
+        });
+    match (held.next(), held.next()) {
+        (Some(app), None)
+            if app.extension().is_some_and(|kind| kind == "app")
+                && app.symlink_metadata()?.is_dir() =>
+        {
+            Ok(app)
+        }
+        _ => Err(refused("the download does not hold one app")),
+    }
+}
+
+/// Whether Apple's tools take `app` for intact and signed by the same team as `like`.
+#[cfg(target_os = "macos")]
+pub fn signed_like(app: &Path, like: &Path) -> io::Result<()> {
+    let refused = |why: &str| io::Error::new(io::ErrorKind::InvalidData, why.to_string());
+    let intact = std::process::Command::new("/usr/bin/codesign")
+        .args(["--verify", "--deep", "--strict"])
+        .arg(app)
+        .output()?;
+    if !intact.status.success() {
+        return Err(refused("the downloaded app is not intact"));
+    }
+    let team = |bundle: &Path| -> io::Result<Option<String>> {
+        let told = std::process::Command::new("/usr/bin/codesign")
+            .args(["-dv", "--verbose=2"])
+            .arg(bundle)
+            .output()?;
+        Ok(String::from_utf8_lossy(&told.stderr)
+            .lines()
+            .find_map(|line| line.strip_prefix("TeamIdentifier="))
+            .map(str::to_string))
+    };
+    match (team(app)?, team(like)?) {
+        (Some(new), Some(now)) if new == now && new != "not set" => Ok(()),
+        _ => Err(refused("the downloaded app is not signed as this one is")),
+    }
+}
+
+/// Puts `new` where `bundle` is. The app in use steps aside into `staging`, where the
+/// next start clears it away, and comes back if the new one cannot take its place.
+pub fn swap_bundle(new: &Path, bundle: &Path, staging: &Path) -> io::Result<()> {
+    if !new.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "the new app was not unpacked",
+        ));
+    }
+    let aside = staging.join("replaced.app");
+    let _ = std::fs::remove_dir_all(&aside);
+    std::fs::rename(bundle, &aside)?;
+    if let Err(error) = std::fs::rename(new, bundle) {
+        let _ = std::fs::rename(&aside, bundle);
+        return Err(error);
+    }
+    Ok(())
+}
+
+/// Whether a new app already stands in the place of the one in use, waiting for a
+/// restart.
+pub fn bundle_swapped(bundle: &Path) -> bool {
+    staging_dir(bundle).join("replaced.app").is_dir()
+}
+
+/// Removes what an earlier update of the app left next to it.
+pub fn remove_bundle_leftovers(bundle: &Path) {
+    let _ = std::fs::remove_dir_all(staging_dir(bundle));
 }
 
 /// Whether `candidate` is a later release than `current`. Anything unreadable is not newer.
@@ -369,5 +486,120 @@ mod tests {
             manifest_url(),
             format!("{RELEASES_URL}/download/update-files/update-manifest.json")
         );
+    }
+
+    #[test]
+    fn the_app_a_program_runs_from_is_the_folder_that_ends_in_app() {
+        assert_eq!(
+            bundle_of(Path::new(
+                "/Applications/Speech.app/Contents/MacOS/opentypeless"
+            )),
+            Some(std::path::PathBuf::from("/Applications/Speech.app"))
+        );
+        assert_eq!(bundle_of(Path::new("/usr/local/bin/opentypeless")), None);
+        assert_eq!(bundle_of(Path::new("/x/Speech.app/opentypeless")), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_downloaded_app_is_unpacked_and_takes_the_place_of_the_one_in_use() {
+        let dir = scratch("app-swap");
+        let made = dir.join("made/Speech.app/Contents");
+        std::fs::create_dir_all(&made).unwrap();
+        std::fs::write(made.join("version"), "new").unwrap();
+        let archive = dir.join("Speech.app.tar.gz");
+        assert!(std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(dir.join("made"))
+            .arg("Speech.app")
+            .status()
+            .unwrap()
+            .success());
+        let bundle = dir.join("Speech.app");
+        std::fs::create_dir_all(bundle.join("Contents")).unwrap();
+        std::fs::write(bundle.join("Contents/version"), "old").unwrap();
+
+        let staging = staging_dir(&bundle);
+        let unpacked = unpack_app(&archive, &staging).unwrap();
+        swap_bundle(&unpacked, &bundle, &staging).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(bundle.join("Contents/version")).unwrap(),
+            "new"
+        );
+        // The app that was in use stands aside until the next start clears it away.
+        assert_eq!(
+            std::fs::read_to_string(staging.join("replaced.app/Contents/version")).unwrap(),
+            "old"
+        );
+        assert!(bundle_swapped(&bundle));
+        remove_bundle_leftovers(&bundle);
+        assert!(!staging.exists());
+        assert!(!bundle_swapped(&bundle));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_archive_that_holds_no_app_or_reaches_outside_is_refused() {
+        let dir = scratch("app-refuse");
+        std::fs::create_dir_all(dir.join("made")).unwrap();
+        std::fs::write(dir.join("made/notes.txt"), "x").unwrap();
+        let archive = dir.join("a.tar.gz");
+        assert!(std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(dir.join("made"))
+            .arg("notes.txt")
+            .status()
+            .unwrap()
+            .success());
+        assert!(unpack_app(&archive, &dir.join("staging")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_app_in_use_stays_where_it_is_when_the_new_one_cannot_take_its_place() {
+        let dir = scratch("app-keep");
+        let bundle = dir.join("Speech.app");
+        std::fs::create_dir_all(&bundle).unwrap();
+        std::fs::write(bundle.join("version"), "old").unwrap();
+        let staging = staging_dir(&bundle);
+        std::fs::create_dir_all(&staging).unwrap();
+        assert!(swap_bundle(&staging.join("missing.app"), &bundle, &staging).is_err());
+        assert_eq!(
+            std::fs::read_to_string(bundle.join("version")).unwrap(),
+            "old"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Packs the signed app at `SIGNED_APP` as a release does, unpacks it and checks it
+    /// the way an update does.
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs a signed app on this machine"]
+    fn a_signed_app_packed_and_unpacked_is_still_taken_for_intact() {
+        let app = std::path::PathBuf::from(std::env::var("SIGNED_APP").expect("SIGNED_APP"));
+        let dir = scratch("app-signed");
+        let archive = dir.join("app.tar.gz");
+        assert!(std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(app.parent().unwrap())
+            .arg(app.file_name().unwrap())
+            .status()
+            .unwrap()
+            .success());
+        let unpacked = unpack_app(&archive, &dir.join("staging")).unwrap();
+        signed_like(&unpacked, &app).unwrap();
+        // An app that was changed after it was signed is refused.
+        std::fs::write(unpacked.join("Contents/Info.plist"), "changed").unwrap();
+        assert!(signed_like(&unpacked, &app).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -79,6 +79,32 @@ describe('the words of a meeting that was put right', () => {
     ])
   })
 
+  it('still move the sound to their paragraph when clicked', () => {
+    const onSeek = vi.fn()
+    shown({
+      text: 'Speaker 1  00:10\nWe use Tauri here',
+      before: 'Speaker 1  00:10\nwe use tori here',
+      onSeek,
+    })
+    fireEvent.click(screen.getByText('Tauri'))
+    expect(onSeek).toHaveBeenCalledWith(10, false)
+  })
+
+  it('can still be changed, after a double click', () => {
+    const onEdit = vi.fn()
+    const { container } = shown({
+      text: 'Speaker 1  00:10\nWe use Tauri here',
+      before: 'Speaker 1  00:10\nwe use tori here',
+      onEdit,
+    })
+    fireEvent.doubleClick(screen.getByText('Tauri'))
+    const raw = container.querySelector('[contenteditable][data-line="1"]') as HTMLElement
+    expect(raw.textContent).toBe('We use Tauri here')
+    raw.textContent = 'We use Tauri 2 here'
+    fireEvent.blur(raw)
+    expect(onEdit).toHaveBeenCalledWith(1, 'We use Tauri here', 'We use Tauri 2 here')
+  })
+
   it('are shown plainly where nothing changed', () => {
     shown({ before: text })
     expect(document.querySelector('del')).toBeNull()

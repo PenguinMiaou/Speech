@@ -745,7 +745,7 @@ async fn words_for(
 
 /// A term a model could not be sure how to spell: the spelling it chose and the other
 /// ways the meeting writes it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Term {
     pub spelling: String,
     pub others: Vec<String>,

@@ -78,8 +78,9 @@ export interface MeetingState {
   /** The kept meeting minutes are being made of in one go, the steps that takes, the one
    * it is at and how far within it, and since when. */
   making: { id: string; steps: MakingStep[]; at: number; within: number; since: number } | null
-  /** The terms the polish model could not be sure how to spell, to be asked about once. */
-  terms: { id: string; list: MeetingTerm[] } | null
+  /** The terms the polish model could not be sure how to spell, asked about once
+   * when they are found and again whenever the user opens the question. */
+  terms: { id: string; list: MeetingTerm[]; open: boolean } | null
   paragraphs: Paragraph[]
   /** The text of a transcribed file. */
   text: string | null
@@ -105,6 +106,8 @@ export interface MeetingState {
   translateTo: string | null
   /** The name the user gave the meeting. */
   title: string
+  /** The folder the meeting is kept in; empty when in none. */
+  folder: string
   /** How long the recording ran, in seconds; 0 when not known. */
   duration: number
   /** A guess at the words being said now, shown until the settled words replace it. */
@@ -152,6 +155,7 @@ export const initialMeeting: MeetingState = {
   translateTo: null,
   interim: '',
   title: '',
+  folder: '',
   duration: 0,
   editing: null,
   translating: '',
@@ -192,8 +196,18 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
       minutes: state.minutes ?? '',
       names: state.names,
       title: state.title.trim(),
+      folder: state.folder,
       duration_s: state.duration,
       times: state.times,
+      terms: state.terms?.id === id ? state.terms.list : [],
+      unpolished:
+        state.unpolished?.id === id
+          ? {
+              text: state.unpolished.text,
+              shaped: state.unpolished.shaped,
+              times: state.unpolished.times,
+            }
+          : null,
     }),
   )
     .then(() => {
@@ -448,7 +462,7 @@ export function listenToMeeting() {
     onMeetingTerms((list) =>
       useMeetingStore.setState(({ tidying, making }) =>
         (tidying ?? making) && list.length > 0
-          ? { terms: { id: (tidying ?? making)!.id, list } }
+          ? { terms: { id: (tidying ?? making)!.id, list, open: true } }
           : {},
       ),
     ),

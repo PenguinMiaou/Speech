@@ -19,6 +19,10 @@ const PROGRAM_FILES = {
     'opentypeless.exe': 'opentypeless-windows-x64.exe',
     'ot-stt-worker.exe': 'ot-stt-worker-windows-x64.exe',
   },
+  // On macOS the whole signed app is replaced, so it is one file: the app, packed.
+  'macos-arm64': {
+    'Speech.app': 'Speech-macos-arm64.app.tar.gz',
+  },
 }
 
 const files = {}

@@ -120,6 +120,13 @@ impl SttProvider for LocalQwen3Provider {
                 Some(isolated) => {
                     let (audio, kept) = crate::voice_isolation::choose(&pcm, &isolated);
                     let used_isolated = audio == crate::voice_isolation::Audio::Isolated;
+                    crate::applog::note(
+                        "voice",
+                        &crate::voice_isolation::outcome(
+                            Some((audio, kept)),
+                            started.elapsed().as_millis(),
+                        ),
+                    );
                     tracing::info!(
                         "[Isolation] kept={kept:.2} used={} wait_ms={}",
                         if used_isolated {
@@ -133,10 +140,16 @@ impl SttProvider for LocalQwen3Provider {
                         pcm = isolated;
                     }
                 }
-                None => tracing::info!(
-                    "[Isolation] not ready, used=recording wait_ms={}",
-                    started.elapsed().as_millis()
-                ),
+                None => {
+                    crate::applog::note(
+                        "voice",
+                        &crate::voice_isolation::outcome(None, started.elapsed().as_millis()),
+                    );
+                    tracing::info!(
+                        "[Isolation] not ready, used=recording wait_ms={}",
+                        started.elapsed().as_millis()
+                    )
+                }
             }
         }
         let vocabulary = std::mem::take(&mut self.vocabulary);

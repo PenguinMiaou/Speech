@@ -953,7 +953,7 @@ dependencies = [
 [[package]]
 name = "transcribe-cpp"
 version = "0.4.1"
-source = "git+https://github.com/PenguinMiaou/transcribe.cpp?rev=31c72970065d43efedb1e4ad11008b889b53271c#31c72970065d43efedb1e4ad11008b889b53271c"
+source = "git+https://github.com/PenguinMiaou/transcribe.cpp?rev=5ddc8db7c37c70d4598fd540f1478ce2aa9de77c#5ddc8db7c37c70d4598fd540f1478ce2aa9de77c"
 dependencies = [
  "log",
  "thiserror",
@@ -963,7 +963,7 @@ dependencies = [
 [[package]]
 name = "transcribe-cpp-sys"
 version = "0.4.1"
-source = "git+https://github.com/PenguinMiaou/transcribe.cpp?rev=31c72970065d43efedb1e4ad11008b889b53271c#31c72970065d43efedb1e4ad11008b889b53271c"
+source = "git+https://github.com/PenguinMiaou/transcribe.cpp?rev=5ddc8db7c37c70d4598fd540f1478ce2aa9de77c#5ddc8db7c37c70d4598fd540f1478ce2aa9de77c"
 dependencies = [
  "cmake",
  "serde_json",

@@ -1013,6 +1013,16 @@ export interface MeetingRecord {
   duration_s?: number
   /** When the words under each heading were said, in order. */
   times?: { end_ms: number; chars: number; marks: [number, number][] }[]
+  /** The terms a model was unsure how to spell, each the way it is now written. */
+  terms?: MeetingTerm[]
+  /** What the meeting said before it was tidied, to compare with and to go back to. */
+  /** The folder it is kept in; empty or absent when in none. */
+  folder?: string
+  unpolished?: {
+    text: string
+    shaped?: string
+    times?: { end_ms: number; chars: number; marks: [number, number][] }[]
+  } | null
 }
 
 export interface MeetingSummary {
@@ -1023,6 +1033,8 @@ export interface MeetingSummary {
   title?: string
   duration_s?: number
   has_audio?: boolean
+  /** The folder it is kept in; empty or absent when in none. */
+  folder?: string
 }
 
 /** A meeting that holds what was looked for, with the words around the place found. */
@@ -1055,6 +1067,11 @@ export function meetingGet(id: string): Promise<MeetingRecord> {
 
 export function meetingSave(meeting: MeetingRecord): Promise<void> {
   return invoke('meeting_save', { meeting })
+}
+
+/** Puts a meeting in a folder, or in none where `folder` is empty. */
+export function meetingFolder(id: string, folder: string): Promise<void> {
+  return invoke('meeting_folder', { id, folder })
 }
 
 export function meetingDelete(id: string): Promise<void> {
