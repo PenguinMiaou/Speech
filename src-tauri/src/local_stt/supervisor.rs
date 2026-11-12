@@ -54,6 +54,17 @@ impl Drop for Running {
     }
 }
 
+/// What is asked about the speakers of some sound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Asked {
+    /// A finished recording, tidied: a speaker who said next to nothing is joined to another.
+    Whole,
+    /// A finished recording, as the model heard it.
+    AsHeard,
+    /// The next window of a recording still running.
+    Window { first: bool },
+}
+
 pub struct WorkerSupervisor {
     command: WorkerCommand,
     request_timeout: Duration,
@@ -531,9 +542,34 @@ impl WorkerSupervisor {
                 embedding_model,
                 pcm,
                 scratch_dir,
-                None,
+                Asked::Whole,
                 let_be,
             ),
+        )
+    }
+
+    /// Who spoke when in a short recording, with each speaker's voice, the speakers left
+    /// as the model heard them: nobody who said little is joined to someone else.
+    pub fn heard(
+        &self,
+        segmentation_model: &Path,
+        embedding_model: &Path,
+        pcm: &[f32],
+        scratch_dir: &Path,
+    ) -> Result<
+        (
+            Vec<ot_stt_protocol::SpeakerTurn>,
+            Vec<ot_stt_protocol::SpeakerVoice>,
+        ),
+        LocalSttError,
+    > {
+        self.speakers(
+            segmentation_model,
+            embedding_model,
+            pcm,
+            scratch_dir,
+            Asked::AsHeard,
+            &|| false,
         )
     }
 
@@ -560,7 +596,7 @@ impl WorkerSupervisor {
                 embedding_model,
                 pcm,
                 scratch_dir,
-                Some(first),
+                Asked::Window { first },
                 &|| false,
             ),
         )
@@ -572,7 +608,7 @@ impl WorkerSupervisor {
         embedding_model: &Path,
         pcm: &[f32],
         scratch_dir: &Path,
-        window: Option<bool>,
+        asked: Asked,
         let_be: &dyn Fn() -> bool,
     ) -> Result<
         (
@@ -601,17 +637,18 @@ impl WorkerSupervisor {
             return Err(LocalSttError::Io(error.to_string()));
         }
         let text = |path: &Path| path.to_string_lossy().into_owned();
-        let request = match window {
-            Some(first) => Request::SpeakersWindow {
+        let request = match asked {
+            Asked::Window { first } => Request::SpeakersWindow {
                 segmentation_model: text(segmentation_model),
                 embedding_model: text(embedding_model),
                 pcm_path: text(&pcm_path),
                 first,
             },
-            None => Request::Diarize {
+            Asked::Whole | Asked::AsHeard => Request::Diarize {
                 segmentation_model: text(segmentation_model),
                 embedding_model: text(embedding_model),
                 pcm_path: text(&pcm_path),
+                as_heard: asked == Asked::AsHeard,
             },
         };
         let payload = encode(&request);

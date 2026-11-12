@@ -122,6 +122,11 @@ pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::SeqCst);
 }
 
+/// Whether the user switched "only my voice" on.
+pub fn enabled() -> bool {
+    ENABLED.load(Ordering::SeqCst)
+}
+
 /// Everything a recording needs to be isolated, when the user switched it on and both the
 /// model and a voice sample are there.
 pub fn ready() -> Option<(PathBuf, PathBuf, PathBuf)> {

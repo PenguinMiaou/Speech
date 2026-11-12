@@ -17,6 +17,7 @@ pub mod meetings;
 pub mod minutes;
 pub mod native_hotkey;
 pub mod output;
+pub mod own_voice;
 pub mod pipeline;
 pub mod platform;
 pub mod readback;

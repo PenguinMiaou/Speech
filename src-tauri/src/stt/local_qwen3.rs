@@ -58,15 +58,24 @@ impl SttProvider for LocalQwen3Provider {
         let path = catalog::installed_path(&model_id)
             .ok_or_else(|| to_app_error(LocalSttError::ModelMissing))?;
         // Warm up in the background so recording starts immediately.
+        let own_voice = crate::own_voice::ready();
         if let Some(supervisor) = local_stt::global() {
+            let own_voice = own_voice.clone();
             tokio::task::spawn_blocking(move || {
                 if let Err(error) = supervisor.ensure_loaded(&path) {
                     tracing::warn!("local speech warm-up failed: {error}");
                 }
+                if let Some(models) = own_voice {
+                    crate::own_voice::warm(&supervisor, &models);
+                }
             });
         }
         self.model_id = Some(model_id);
+        // With the models that tell speakers apart, the user's stretches are picked out
+        // when the dictation ends; the filter that runs alongside is for when they are
+        // not installed.
         self.isolation = match (crate::voice_isolation::ready(), local_stt::global()) {
+            _ if own_voice.is_some() => None,
             (Some((enroll, chunk, sample)), Some(supervisor)) => Some(
                 crate::voice_isolation::Session::start(supervisor, enroll, chunk, sample),
             ),
@@ -109,6 +118,30 @@ impl SttProvider for LocalQwen3Provider {
         let mut pcm = i16_le_to_f32(&std::mem::take(&mut self.audio));
         if crate::voice_isolation::take_enrollment_request() {
             crate::voice_isolation::enroll(&pcm);
+        }
+        if let Some(models) = crate::own_voice::ready() {
+            let started = std::time::Instant::now();
+            let (worker, recorded) = (supervisor.clone(), pcm.clone());
+            let verdict = tokio::task::spawn_blocking(move || {
+                crate::own_voice::told(&worker, &models, &recorded)
+            })
+            .await
+            .unwrap_or(crate::own_voice::Verdict::Unknown);
+            crate::applog::note(
+                "voice",
+                &crate::own_voice::outcome(
+                    &verdict,
+                    (pcm.len() / 16) as u64,
+                    started.elapsed().as_millis(),
+                ),
+            );
+            if let crate::own_voice::Verdict::Told { mine, .. } = verdict {
+                // Nobody who spoke was the user: nothing is written.
+                if mine.is_empty() {
+                    return Ok(None);
+                }
+                pcm = crate::own_voice::cut(&pcm, &mine);
+            }
         }
         if let Some(isolation) = self.isolation.take() {
             let started = std::time::Instant::now();

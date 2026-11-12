@@ -40,6 +40,10 @@ pub enum Request {
         segmentation_model: String,
         embedding_model: String,
         pcm_path: String,
+        /// Leaves the speakers as the model heard them: nobody who said little is joined
+        /// to someone else.
+        #[serde(default)]
+        as_heard: bool,
     },
     /// The same for the next window of a recording still running. Speakers keep their
     /// numbers from window to window; `first` starts a new recording.

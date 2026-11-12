@@ -15,6 +15,8 @@ pub struct RealEngine {
     isolating: Option<(String, Isolator<VoxLock>)>,
     /// The voices heard so far in a recording still running, with the model files.
     live_speakers: Option<(String, crate::diarize::Live)>,
+    /// The model that follows the speakers of a whole recording, kept loaded.
+    follower: Option<(String, crate::diarize::Follower)>,
     voices: Vec<ot_stt_protocol::SpeakerVoice>,
     /// The timing recognizer kept between requests, with the file it was opened from.
     timer: Option<(String, crate::timing::Timer)>,
@@ -107,15 +109,27 @@ impl Engine for RealEngine {
         segmentation_model: &str,
         embedding_model: &str,
         pcm: &[f32],
+        as_heard: bool,
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
+        let failed = |message| EngineError {
+            code: "diarize_failed".into(),
+            message,
+        };
         let threads = std::thread::available_parallelism().map_or(2, |n| n.get().min(4)) as i32;
-        let (turns, voices) =
-            crate::diarize::diarize(segmentation_model, embedding_model, pcm, threads).map_err(
-                |message| EngineError {
-                    code: "diarize_failed".into(),
-                    message,
-                },
-            )?;
+        let (turns, voices) = if crate::diarize::follows_speakers(segmentation_model) {
+            let wanted = [segmentation_model, embedding_model].join("\n");
+            if !matches!(&self.follower, Some((opened, _)) if *opened == wanted) {
+                let follower =
+                    crate::diarize::Follower::open(segmentation_model, embedding_model, threads)
+                        .map_err(failed)?;
+                self.follower = Some((wanted, follower));
+            }
+            let (_, follower) = self.follower.as_ref().expect("opened above");
+            follower.follow(pcm, as_heard).map_err(failed)?
+        } else {
+            crate::diarize::diarize(segmentation_model, embedding_model, pcm, threads)
+                .map_err(failed)?
+        };
         self.voices = voices;
         Ok(turns)
     }

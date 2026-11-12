@@ -46,6 +46,7 @@ pub trait Engine {
         segmentation_model: &str,
         embedding_model: &str,
         pcm: &[f32],
+        as_heard: bool,
     ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError>;
     /// The voices of the speakers the last speaker request found.
     fn last_voices(&mut self) -> Vec<ot_stt_protocol::SpeakerVoice> {
@@ -138,14 +139,17 @@ pub fn serve<R: Read, W: Write, E: Engine>(
                 segmentation_model,
                 embedding_model,
                 pcm_path,
+                as_heard,
             } => match read_pcm_file(&pcm_path) {
-                Ok(pcm) => match engine.diarize(&segmentation_model, &embedding_model, &pcm) {
-                    Ok(turns) => Response::Speakers {
-                        turns,
-                        voices: engine.last_voices(),
-                    },
-                    Err(e) => error(&e.code, e.message),
-                },
+                Ok(pcm) => {
+                    match engine.diarize(&segmentation_model, &embedding_model, &pcm, as_heard) {
+                        Ok(turns) => Response::Speakers {
+                            turns,
+                            voices: engine.last_voices(),
+                        },
+                        Err(e) => error(&e.code, e.message),
+                    }
+                }
                 Err(e) => error("audio_unreadable", e.to_string()),
             },
             Request::WordTimes {
@@ -288,11 +292,12 @@ mod tests {
             _segmentation_model: &str,
             _embedding_model: &str,
             pcm: &[f32],
+            as_heard: bool,
         ) -> Result<Vec<ot_stt_protocol::SpeakerTurn>, EngineError> {
             Ok(vec![ot_stt_protocol::SpeakerTurn {
                 start_ms: 0,
                 end_ms: pcm.len() as u64,
-                speaker: 1,
+                speaker: if as_heard { 7 } else { 1 },
             }])
         }
 
@@ -391,6 +396,7 @@ mod tests {
             segmentation_model: "seg.onnx".into(),
             embedding_model: "emb.onnx".into(),
             pcm_path,
+            as_heard: false,
         };
         let frames = [
             (request(path.to_string_lossy().into_owned()), vec![]),
@@ -416,6 +422,28 @@ mod tests {
             read_frame::<_, Response>(&mut reader).unwrap(),
             Some(Response::Error { code, .. }) if code == "audio_unreadable"
         ));
+    }
+
+    #[test]
+    fn a_recording_can_be_asked_for_as_the_model_heard_it() {
+        let path = std::env::temp_dir().join(format!("ot-heard-{}.pcm", std::process::id()));
+        std::fs::write(&path, 0.5f32.to_le_bytes()).unwrap();
+        let request = Request::Diarize {
+            segmentation_model: "turns.gguf".into(),
+            embedding_model: "emb.onnx".into(),
+            pcm_path: path.to_string_lossy().into_owned(),
+            as_heard: true,
+        };
+        let mut output = Vec::new();
+        serve(
+            &mut input(&[(request, vec![])]),
+            &mut output,
+            &mut FakeEngine::default(),
+        )
+        .unwrap();
+        let _ = std::fs::remove_file(&path);
+        let answer = read_frame::<_, Response>(&mut Cursor::new(output)).unwrap();
+        assert!(matches!(answer, Some(Response::Speakers { turns, .. }) if turns[0].speaker == 7));
     }
 
     #[test]

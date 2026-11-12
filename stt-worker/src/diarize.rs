@@ -80,8 +80,64 @@ pub fn diarize(
 
 /// Whether the model follows each speaker through the whole recording by itself, rather
 /// than cutting the sound up for voices to be compared afterwards.
-fn follows_speakers(model: &str) -> bool {
+pub fn follows_speakers(model: &str) -> bool {
     model.ends_with(".gguf")
+}
+
+/// The model that follows each speaker through a recording, with the voice model that
+/// takes each speaker's voice. Kept loaded between recordings.
+pub struct Follower {
+    model: transcribe_cpp::Model,
+    extractor: Option<sherpa_onnx::SpeakerEmbeddingExtractor>,
+}
+
+impl Follower {
+    pub fn open(model: &str, embedding_model: &str, threads: i32) -> Result<Self, String> {
+        let model = transcribe_cpp::Model::load(model).map_err(|error| error.to_string())?;
+        let embedding = SpeakerEmbeddingExtractorConfig {
+            model: Some(embedding_model.to_string()),
+            num_threads: threads,
+            ..Default::default()
+        };
+        Ok(Self {
+            model,
+            extractor: sherpa_onnx::SpeakerEmbeddingExtractor::create(&embedding),
+        })
+    }
+
+    /// Who spoke when, and each speaker's voice. `as_heard` leaves the speakers as the
+    /// model heard them; otherwise a speaker who said next to nothing is joined to another.
+    pub fn follow(
+        &self,
+        pcm: &[f32],
+        as_heard: bool,
+    ) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
+        let failed = |error: transcribe_cpp::Error| error.to_string();
+        let mut session = self.model.diarize_session().map_err(failed)?;
+        let mut segments = session.run(pcm, &Default::default()).map_err(failed)?;
+        segments.sort_by_key(|segment| segment.t0_ms);
+        let turns = number_by_first_appearance(segments.iter().map(|segment| {
+            (
+                segment.t0_ms as f32 / 1000.0,
+                segment.t1_ms as f32 / 1000.0,
+                segment.speaker_id,
+            )
+        }));
+        let Some(extractor) = &self.extractor else {
+            return Ok((turns, Vec::new()));
+        };
+        if as_heard {
+            let voices = voices_from(extractor, pcm, &turns, QUICK_VOICE_SAMPLES);
+            return Ok((turns, voices));
+        }
+        let voices = voices_of(extractor, pcm, &turns);
+        let whole = without_fragments(&turns, &voices);
+        if whole == turns {
+            return Ok((turns, voices));
+        }
+        let voices = voices_of(extractor, pcm, &whole);
+        Ok((whole, voices))
+    }
 }
 
 /// Who spoke when, told by a model that keeps every speaker's number from the first
@@ -92,33 +148,7 @@ fn by_following(
     pcm: &[f32],
     threads: i32,
 ) -> Result<(Vec<SpeakerTurn>, Vec<SpeakerVoice>), String> {
-    let failed = |error: transcribe_cpp::Error| error.to_string();
-    let model = transcribe_cpp::Model::load(model).map_err(failed)?;
-    let mut session = model.diarize_session().map_err(failed)?;
-    let mut segments = session.run(pcm, &Default::default()).map_err(failed)?;
-    segments.sort_by_key(|segment| segment.t0_ms);
-    let turns = number_by_first_appearance(segments.iter().map(|segment| {
-        (
-            segment.t0_ms as f32 / 1000.0,
-            segment.t1_ms as f32 / 1000.0,
-            segment.speaker_id,
-        )
-    }));
-    let embedding = SpeakerEmbeddingExtractorConfig {
-        model: Some(embedding_model.to_string()),
-        num_threads: threads,
-        ..Default::default()
-    };
-    let Some(extractor) = sherpa_onnx::SpeakerEmbeddingExtractor::create(&embedding) else {
-        return Ok((turns, Vec::new()));
-    };
-    let voices = voices_of(&extractor, pcm, &turns);
-    let whole = without_fragments(&turns, &voices);
-    if whole == turns {
-        return Ok((turns, voices));
-    }
-    let voices = voices_of(&extractor, pcm, &whole);
-    Ok((whole, voices))
+    Follower::open(model, embedding_model, threads)?.follow(pcm, false)
 }
 
 /// A speaker who said less than this in all, and less than a twentieth of everything
@@ -251,6 +281,20 @@ fn voices_of(
     pcm: &[f32],
     turns: &[SpeakerTurn],
 ) -> Vec<SpeakerVoice> {
+    voices_from(extractor, pcm, turns, VOICE_SAMPLES)
+}
+
+/// A dictation waits for its voices, and taking a voice costs as much as the sound it is
+/// taken from is long. Six seconds tell the user from someone else.
+const QUICK_VOICE_SAMPLES: usize = 6 * 16_000;
+
+/// One voice per speaker, from at most `most` samples of what they said.
+fn voices_from(
+    extractor: &sherpa_onnx::SpeakerEmbeddingExtractor,
+    pcm: &[f32],
+    turns: &[SpeakerTurn],
+    most: usize,
+) -> Vec<SpeakerVoice> {
     let mut speakers: Vec<u32> = turns.iter().map(|turn| turn.speaker).collect();
     speakers.sort_unstable();
     speakers.dedup();
@@ -261,7 +305,7 @@ fn voices_of(
             let mut said = Vec::new();
             for turn in turns.iter().filter(|turn| turn.speaker == speaker) {
                 let at = |ms: u64| ((ms * 16) as usize).min(pcm.len());
-                let room = VOICE_SAMPLES.saturating_sub(said.len());
+                let room = most.saturating_sub(said.len());
                 let (from, to) = (at(turn.start_ms), at(turn.end_ms));
                 said.extend_from_slice(&pcm[from..to.min(from + room)]);
             }
@@ -789,6 +833,233 @@ mod tests {
                 .map(|(who, ms)| (*who, ms / 1000))
                 .collect::<Vec<_>>()
         );
+    }
+
+    /// How alike each speaker of a recording is to an enrolled voice, over all they said
+    /// and over single turns of three seconds or more. Run with `OT_SEG=<gguf>
+    /// OT_EMB=<onnx> OT_WAV=<wav> OT_SAMPLE=<wav> cargo test enrolled_voice -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn tells_the_enrolled_voice_from_the_others() {
+        let read = |name: &str| {
+            crate::eval::decode_wav(&std::fs::read(std::env::var(name).unwrap()).unwrap()).unwrap()
+        };
+        let (pcm, sample) = (read("OT_WAV"), read("OT_SAMPLE"));
+        let (seg, emb) = (
+            std::env::var("OT_SEG").unwrap(),
+            std::env::var("OT_EMB").unwrap(),
+        );
+        let (turns, voices) = diarize(&seg, &emb, &pcm, 4).unwrap();
+        let config = SpeakerEmbeddingExtractorConfig {
+            model: Some(emb),
+            num_threads: 4,
+            ..Default::default()
+        };
+        let extractor = sherpa_onnx::SpeakerEmbeddingExtractor::create(&config).unwrap();
+        let mine = embed(&extractor, &sample).unwrap();
+        println!("sample {:.1}s", sample.len() as f32 / 16_000.0);
+        for voice in &voices {
+            let mut single: Vec<f32> = turns
+                .iter()
+                .filter(|turn| turn.speaker == voice.speaker && turn.end_ms - turn.start_ms >= 3000)
+                .take(40)
+                .filter_map(|turn| {
+                    let at = |ms: u64| ((ms * 16) as usize).min(pcm.len());
+                    embed(&extractor, &pcm[at(turn.start_ms)..at(turn.end_ms)])
+                })
+                .map(|theirs| alike(&mine, &theirs))
+                .collect();
+            single.sort_by(|a, b| a.total_cmp(b));
+            let middle = single.get(single.len() / 2).copied().unwrap_or(0.0);
+            println!(
+                "speaker {}: all {:.2}; {} turns: lowest {:.2} middle {:.2} highest {:.2}",
+                voice.speaker,
+                alike(&mine, &voice.embedding),
+                single.len(),
+                single.first().copied().unwrap_or(0.0),
+                middle,
+                single.last().copied().unwrap_or(0.0)
+            );
+        }
+    }
+
+    /// How alike each recording in a folder is to an enrolled voice. Run with
+    /// `OT_EMB=<onnx> OT_DIR=<folder of wavs> OT_SAMPLE=<wav> cargo test own_recordings -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn knows_the_enrolled_voice_in_its_own_recordings() {
+        let read =
+            |path: &std::path::Path| crate::eval::decode_wav(&std::fs::read(path).ok()?).ok();
+        let config = SpeakerEmbeddingExtractorConfig {
+            model: Some(std::env::var("OT_EMB").unwrap()),
+            num_threads: 4,
+            ..Default::default()
+        };
+        let extractor = sherpa_onnx::SpeakerEmbeddingExtractor::create(&config).unwrap();
+        let sample = read(std::path::Path::new(&std::env::var("OT_SAMPLE").unwrap())).unwrap();
+        let mine = embed(&extractor, &sample).unwrap();
+        let mut scores: Vec<(f32, f32)> = std::fs::read_dir(std::env::var("OT_DIR").unwrap())
+            .unwrap()
+            .filter_map(|entry| read(&entry.ok()?.path()))
+            .filter_map(|pcm| {
+                Some((
+                    alike(&mine, &embed(&extractor, &pcm)?),
+                    pcm.len() as f32 / 16_000.0,
+                ))
+            })
+            .collect();
+        scores.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let at = |share: f32| scores[((scores.len() - 1) as f32 * share) as usize];
+        println!(
+            "{} recordings: lowest {:.2} ({:.0}s) 5% {:.2} 25% {:.2} middle {:.2} highest {:.2}; below 0.30: {}, below 0.45: {}",
+            scores.len(), at(0.0).0, at(0.0).1, at(0.05).0, at(0.25).0, at(0.5).0, at(1.0).0,
+            scores.iter().filter(|score| score.0 < 0.30).count(),
+            scores.iter().filter(|score| score.0 < 0.45).count()
+        );
+        let short: Vec<f32> = scores
+            .iter()
+            .filter(|score| score.1 < 4.0)
+            .map(|score| score.0)
+            .collect();
+        println!(
+            "under 4s: {} recordings, lowest {:.2}",
+            short.len(),
+            short.first().copied().unwrap_or(0.0)
+        );
+    }
+
+    /// Dictations with someone else speaking before or after: how much of the user's
+    /// speech and of the other's is kept when only speakers alike to the sample count.
+    /// `OT_SEG=<gguf> OT_EMB=<onnx> OT_SAMPLE=<wav> OT_DIR=<the user's wavs> OT_WAV=<others'
+    /// wav> cargo test only_the_enrolled -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn keeps_only_the_enrolled_voice_of_a_dictation() {
+        let read =
+            |path: &std::path::Path| crate::eval::decode_wav(&std::fs::read(path).ok()?).ok();
+        let env = |name: &str| std::env::var(name).unwrap();
+        let follower = Follower::open(&env("OT_SEG"), &env("OT_EMB"), 4).unwrap();
+        let sample = read(std::path::Path::new(&env("OT_SAMPLE"))).unwrap();
+        let mine = follower
+            .follow(&sample, true)
+            .unwrap()
+            .1
+            .remove(0)
+            .embedding;
+        let meeting = read(std::path::Path::new(&env("OT_WAV"))).unwrap();
+        let others: Vec<Vec<f32>> = follower
+            .follow(&meeting, true)
+            .unwrap()
+            .0
+            .iter()
+            .filter(|turn| turn.end_ms - turn.start_ms >= 5000)
+            .map(|turn| meeting[(turn.start_ms * 16) as usize..][..5 * 16_000].to_vec())
+            .collect();
+        let own: Vec<Vec<f32>> = std::fs::read_dir(env("OT_DIR"))
+            .unwrap()
+            .filter_map(|entry| read(&entry.ok()?.path()))
+            .filter(|pcm| pcm.len() >= 2 * 16_000)
+            .take(40)
+            .collect();
+        // Milliseconds kept of the stretch from..to of a recording.
+        let kept = |pcm: &[f32], from: usize, to: usize| -> (u64, u128) {
+            let began = std::time::Instant::now();
+            let (turns, voices) = follower.follow(pcm, true).unwrap();
+            let took = began.elapsed().as_millis();
+            let is_mine = |speaker: u32| {
+                voices
+                    .iter()
+                    .any(|voice| voice.speaker == speaker && alike(&mine, &voice.embedding) >= 0.30)
+            };
+            let (from, to) = ((from / 16) as u64, (to / 16) as u64);
+            let ms = turns
+                .iter()
+                .filter(|turn| is_mine(turn.speaker))
+                .map(|turn| turn.end_ms.min(to).saturating_sub(turn.start_ms.max(from)))
+                .sum();
+            (ms, took)
+        };
+        let gap = vec![0.0f32; 4800];
+        let (mut of_mine, mut of_theirs, mut said_mine, mut said_theirs) = (0u64, 0u64, 0u64, 0u64);
+        let (mut leaked, mut lost, mut times) = (0, 0, Vec::new());
+        for (index, clip) in own.iter().enumerate() {
+            let other = &others[index % others.len()];
+            let (first, second) = if index % 2 == 0 {
+                (clip, other)
+            } else {
+                (other, clip)
+            };
+            let both = [first.as_slice(), &gap, second.as_slice()].concat();
+            let cut = first.len() + gap.len();
+            let (a, took) = kept(&both, 0, first.len());
+            let (b, _) = kept(&both, cut, both.len());
+            times.push(took);
+            let (m, t) = if index % 2 == 0 { (a, b) } else { (b, a) };
+            of_mine += m;
+            of_theirs += t;
+            said_mine += (clip.len() / 16) as u64;
+            said_theirs += (other.len() / 16) as u64;
+            leaked += usize::from(t > 500);
+            lost += usize::from(m * 2 < (clip.len() / 16) as u64);
+        }
+        times.sort_unstable();
+        println!(
+            "{} dictations with another speaker: kept {:.0}% of the user's speech and {:.1}% of the other's; the other got through in {leaked}, the user was mostly lost in {lost}; took middle {} ms, slowest {} ms",
+            own.len(),
+            of_mine as f32 * 100.0 / said_mine as f32,
+            of_theirs as f32 * 100.0 / said_theirs as f32,
+            times[times.len() / 2],
+            times[times.len() - 1]
+        );
+        let alone = others
+            .iter()
+            .take(20)
+            .filter(|other| kept(other, 0, other.len()).0 > 500)
+            .count();
+        println!(
+            "the other speaker alone got through in {alone} of {}",
+            others.len().min(20)
+        );
+    }
+
+    /// Where the time of telling a short recording's speakers goes.
+    #[test]
+    #[ignore]
+    fn times_the_steps_of_a_short_recording() {
+        let read =
+            |path: &std::path::Path| crate::eval::decode_wav(&std::fs::read(path).ok()?).ok();
+        let env = |name: &str| std::env::var(name).unwrap();
+        let follower = Follower::open(&env("OT_SEG"), &env("OT_EMB"), 4).unwrap();
+        let clips: Vec<Vec<f32>> = std::fs::read_dir(env("OT_DIR"))
+            .unwrap()
+            .filter_map(|entry| read(&entry.ok()?.path()))
+            .take(12)
+            .collect();
+        let mut session = follower.model.diarize_session().unwrap();
+        for clip in &clips {
+            let a = std::time::Instant::now();
+            let fresh = follower.model.diarize_session().unwrap();
+            let opened = a.elapsed().as_millis();
+            drop(fresh);
+            let b = std::time::Instant::now();
+            let segments = session.run(clip, &Default::default()).unwrap();
+            let ran = b.elapsed().as_millis();
+            let turns = number_by_first_appearance(segments.iter().map(|segment| {
+                (
+                    segment.t0_ms as f32 / 1000.0,
+                    segment.t1_ms as f32 / 1000.0,
+                    segment.speaker_id,
+                )
+            }));
+            let c = std::time::Instant::now();
+            let voices = voices_of(follower.extractor.as_ref().unwrap(), clip, &turns);
+            println!(
+                "{:.1}s clip: session {opened} ms, run {ran} ms, {} voices {} ms",
+                clip.len() as f32 / 16_000.0,
+                voices.len(),
+                c.elapsed().as_millis()
+            );
+        }
     }
 
     /// Same needs as the test below, plus `OT_WINDOW` seconds per window.
