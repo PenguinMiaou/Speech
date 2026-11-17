@@ -104,13 +104,29 @@ fn required_space(size_bytes: u64, have: u64) -> u64 {
     missing + missing / 10
 }
 
+/// A source is given up for the next one when, this long into a download, it has sent
+/// less than [`SLOWEST_BYTES_PER_SEC`] on average.
+#[cfg(not(test))]
+const SLOW_AFTER: Duration = Duration::from_secs(20);
+#[cfg(test)]
+const SLOW_AFTER: Duration = Duration::from_millis(300);
+#[cfg(not(test))]
+const SLOWEST_BYTES_PER_SEC: u64 = 64 * 1024;
+#[cfg(test)]
+const SLOWEST_BYTES_PER_SEC: u64 = 40;
+
 async fn download<F: FnMut(Progress)>(
     job: &InstallJob,
+    url: &str,
+    give_up_when_slow: bool,
     part: &Path,
     have: u64,
     on_progress: &mut F,
 ) -> Result<(), InstallError> {
-    let mut request = job.client.get(&job.url);
+    let mut request = job
+        .client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, crate::mirrors::AGENT);
     if have > 0 {
         request = request.header(RANGE, format!("bytes={have}-"));
     }
@@ -133,6 +149,7 @@ async fn download<F: FnMut(Progress)>(
     file.seek(SeekFrom::Start(written))?;
 
     let mut stream = response.bytes_stream();
+    let (began, began_at) = (Instant::now(), written);
     let mut reported_at = Instant::now();
     let mut reported_bytes = written;
     while let Some(chunk) = stream.next().await {
@@ -143,6 +160,14 @@ async fn download<F: FnMut(Progress)>(
         let chunk = chunk.map_err(|e| InstallError::Network(e.to_string()))?;
         file.write_all(&chunk)?;
         written += chunk.len() as u64;
+        let spent = began.elapsed();
+        if give_up_when_slow
+            && spent >= SLOW_AFTER
+            && (written - began_at) * 1000 < SLOWEST_BYTES_PER_SEC * spent.as_millis() as u64
+        {
+            file.flush()?;
+            return Err(InstallError::Network("too slow".to_string()));
+        }
         let elapsed = reported_at.elapsed();
         if elapsed >= PROGRESS_INTERVAL {
             on_progress(Progress {
@@ -167,11 +192,75 @@ async fn download<F: FnMut(Progress)>(
     Ok(())
 }
 
+/// Files at least this large come from the source that is quickest when timed.
+const TIME_SOURCES_FROM: u64 = 8 * 1024 * 1024;
+
 /// Returns the path of the verified model. A partial download stays on disk for the next attempt,
 /// except after a checksum failure, when it cannot be trusted.
 pub async fn download_and_verify<F: FnMut(Progress)>(
     job: &InstallJob,
+    on_progress: F,
+) -> Result<PathBuf, InstallError> {
+    let mut sources = crate::mirrors::candidates(&job.url);
+    // For a large file the sources are timed first, so it comes from the quickest one
+    // where the user is; a small one is fetched before timing would finish.
+    if job.size_bytes >= TIME_SOURCES_FROM && sources.len() > 1 {
+        sources = crate::mirrors::fastest_first(&job.client, sources).await;
+    }
+    download_and_verify_from(job, &sources, on_progress).await
+}
+
+/// The same from the first of `sources` that delivers the file intact. A source that
+/// fails, sends another file or only trickles gives way to the next; what arrived of the
+/// file is kept for it unless it was found to be another file.
+pub async fn download_and_verify_from<F: FnMut(Progress)>(
+    job: &InstallJob,
+    sources: &[String],
     mut on_progress: F,
+) -> Result<PathBuf, InstallError> {
+    let mut failure = InstallError::Network("no source".to_string());
+    for (index, url) in sources.iter().enumerate() {
+        let last = index + 1 == sources.len();
+        match download_and_verify_once(job, url, !last, &mut on_progress).await {
+            Ok(path) => {
+                crate::mirrors::worked(url);
+                if index > 0 {
+                    crate::applog::note(
+                        "download",
+                        &format!(
+                            "{} came from {}",
+                            job.file_name,
+                            crate::mirrors::host_of(url)
+                        ),
+                    );
+                }
+                return Ok(path);
+            }
+            Err(
+                error @ (InstallError::DiskFull | InstallError::Cancelled | InstallError::Io(_)),
+            ) => return Err(error),
+            Err(error) => {
+                crate::applog::note(
+                    "download",
+                    &format!(
+                        "{} could not come from {}: {}",
+                        job.file_name,
+                        crate::mirrors::host_of(url),
+                        error.code()
+                    ),
+                );
+                failure = error;
+            }
+        }
+    }
+    Err(failure)
+}
+
+async fn download_and_verify_once<F: FnMut(Progress)>(
+    job: &InstallJob,
+    url: &str,
+    give_up_when_slow: bool,
+    on_progress: &mut F,
 ) -> Result<PathBuf, InstallError> {
     std::fs::create_dir_all(&job.dir)?;
     let part = part_path(&job.dir, &job.file_name);
@@ -197,7 +286,7 @@ pub async fn download_and_verify<F: FnMut(Progress)>(
         error_detail: None,
     });
     if have < job.size_bytes {
-        download(job, &part, have, &mut on_progress).await?;
+        download(job, url, give_up_when_slow, &part, have, on_progress).await?;
     }
 
     on_progress(Progress {
@@ -477,5 +566,181 @@ mod tests {
         assert_eq!(required_space(1000, 0), 1100);
         assert_eq!(required_space(1000, 900), 110);
         assert_eq!(required_space(1000, 1000), 0);
+    }
+    #[tokio::test]
+    async fn a_source_that_fails_gives_way_to_the_next() {
+        let broken = serve(500, b"").await;
+        let good = serve(200, BODY).await;
+        let dir = temp_dir();
+        let job = job(&broken, &dir);
+        let sources = [job.url.clone(), format!("{}/model.gguf", good.uri())];
+        let path = download_and_verify_from(&job, &sources, |_| {})
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), BODY);
+    }
+
+    #[tokio::test]
+    async fn a_source_that_sends_another_file_gives_way_to_the_next() {
+        let tampered = serve(200, b"pretend this is a model fil!").await;
+        let good = serve(200, BODY).await;
+        let dir = temp_dir();
+        let job = job(&tampered, &dir);
+        let sources = [job.url.clone(), format!("{}/model.gguf", good.uri())];
+        let path = download_and_verify_from(&job, &sources, |_| {})
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), BODY);
+    }
+
+    #[tokio::test]
+    async fn when_every_source_fails_the_last_failure_is_told() {
+        let broken = serve(500, b"").await;
+        let dir = temp_dir();
+        let job = job(&broken, &dir);
+        let sources = [job.url.clone(), job.url.clone()];
+        let error = download_and_verify_from(&job, &sources, |_| {})
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "network");
+    }
+
+    /// A server that sends the headers of `body` and then one byte every 50 ms.
+    async fn trickle(body: &'static [u8]) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut request = [0u8; 1024];
+                    let _ = socket.read(&mut request).await;
+                    let head = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", body.len());
+                    let _ = socket.write_all(head.as_bytes()).await;
+                    for byte in body {
+                        if socket.write_all(&[*byte]).await.is_err() {
+                            return;
+                        }
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                });
+            }
+        });
+        format!("http://{address}/model.gguf")
+    }
+
+    #[tokio::test]
+    async fn a_source_that_only_trickles_gives_way_to_the_next() {
+        let slow = trickle(BODY).await;
+        let good = serve(200, BODY).await;
+        let dir = temp_dir();
+        let job = job(&good, &dir);
+        let sources = [slow, job.url.clone()];
+        let started = Instant::now();
+        let path = download_and_verify_from(&job, &sources, |_| {})
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), BODY);
+        assert!(started.elapsed() < Duration::from_millis(BODY.len() as u64 * 50));
+    }
+
+    #[tokio::test]
+    async fn the_last_source_is_waited_for_however_slow() {
+        let slow = trickle(BODY).await;
+        let dir = temp_dir();
+        let mut job = job(&serve(500, b"").await, &dir);
+        job.url = slow.clone();
+        let path = download_and_verify_from(&job, &[slow], |_| {})
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), BODY);
+    }
+    /// With the file's own server out of reach, the speaker models arrive through the
+    /// Huggingface mirror and a GitHub proxy and pass their checksums.
+    #[tokio::test]
+    #[ignore]
+    async fn the_speaker_models_arrive_from_the_mirrors() {
+        let dir = temp_dir();
+        for file in &crate::speakers::MODEL_FILES[..2] {
+            let job = InstallJob {
+                model_id: file.file_name.into(),
+                url: file.url.into(),
+                file_name: file.file_name.into(),
+                size_bytes: file.size_bytes,
+                sha256: file.sha256.into(),
+                dir: dir.clone(),
+                client: reqwest::Client::new(),
+                cancel: Arc::new(AtomicBool::new(false)),
+                free_space: plenty,
+            };
+            // The file's own address stands in for an unreachable one; the rest are tried
+            // as the app tries them.
+            let sources: Vec<String> = crate::mirrors::candidates(file.url)
+                .into_iter()
+                .map(|url| {
+                    if url == file.url {
+                        "http://127.0.0.1:9/unreachable".to_string()
+                    } else {
+                        url
+                    }
+                })
+                .collect();
+            let path = download_and_verify_from(&job, &sources, |_| {})
+                .await
+                .unwrap();
+            assert!(path.exists());
+        }
+    }
+
+    /// Resumes a part-downloaded file from the project's ModelScope copy, as a download cut
+    /// off in mainland China carries on. Run with `--ignored`; needs the network.
+    #[tokio::test]
+    #[ignore]
+    async fn a_download_from_the_modelscope_copy_carries_on_where_it_stopped() {
+        let file = &crate::word_times::MODEL_FILES[1];
+        let copy = crate::mirrors::candidates(file.url)[0].clone();
+        assert!(copy.starts_with(crate::mirrors::MODELSCOPE.unwrap()));
+        let dir = temp_dir();
+        let job = InstallJob {
+            model_id: file.file_name.into(),
+            url: file.url.into(),
+            file_name: file.file_name.into(),
+            size_bytes: file.size_bytes,
+            sha256: file.sha256.into(),
+            dir: dir.clone(),
+            client: reqwest::Client::new(),
+            cancel: Arc::new(AtomicBool::new(false)),
+            free_space: plenty,
+        };
+        let part = part_path(&dir, file.file_name);
+        const HAVE: usize = 100_000;
+
+        // A part that is not the file's beginning stays as it is: the copy sends only the
+        // rest, so the whole fails its check.
+        std::fs::write(&part, vec![0u8; HAVE]).unwrap();
+        let wrong = download_and_verify_from(&job, std::slice::from_ref(&copy), |_| {}).await;
+        assert!(matches!(wrong, Err(InstallError::Checksum)), "{wrong:?}");
+
+        // The real beginning, and the copy sends the rest.
+        let start = reqwest::Client::new()
+            .get(&copy)
+            .header(reqwest::header::USER_AGENT, crate::mirrors::AGENT)
+            .header(RANGE, format!("bytes=0-{}", HAVE - 1))
+            .send()
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(start.len(), HAVE);
+        std::fs::write(&part, &start).unwrap();
+        let mut first_seen = None;
+        let path = download_and_verify_from(&job, std::slice::from_ref(&copy), |progress| {
+            first_seen.get_or_insert(progress.downloaded);
+        })
+        .await
+        .unwrap();
+        assert_eq!(first_seen, Some(HAVE as u64));
+        assert_eq!(sha256_of(&path).unwrap(), file.sha256);
     }
 }

@@ -293,6 +293,30 @@ pub fn manifest_url() -> String {
     asset_url(MANIFEST_NAME)
 }
 
+/// The signature of the manifest, made by the release workflow.
+pub fn signature_url() -> String {
+    asset_url(SIGNATURE_NAME)
+}
+
+pub const SIGNATURE_NAME: &str = "update-manifest.json.sig";
+
+/// The public half of the key the release workflow signs the manifest with (Ed25519). A
+/// manifest from any source is used only when its signature matches, so a mirror cannot
+/// hand out other program files.
+pub const PUBLIC_KEY: &str = "4q3FIJymgzEJjfJgHAskFt+1L3oklQgGQEJ9a1jHbzA=";
+
+/// The manifest in `body`, when `signature` (base64) is the release key's signature of it.
+pub fn read_signed(body: &[u8], signature: &str, public_key: &[u8]) -> Result<Manifest, String> {
+    use base64::Engine;
+    let signature = base64::engine::general_purpose::STANDARD
+        .decode(signature.trim())
+        .map_err(|_| "signature".to_string())?;
+    ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, public_key)
+        .verify(body, &signature)
+        .map_err(|_| "signature".to_string())?;
+    serde_json::from_slice(body).map_err(|_| "manifest".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -601,5 +625,71 @@ mod tests {
         std::fs::write(unpacked.join("Contents/Info.plist"), "changed").unwrap();
         assert!(signed_like(&unpacked, &app).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+    fn signer() -> ring::signature::Ed25519KeyPair {
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = ring::signature::Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap()
+    }
+
+    fn signed(key: &ring::signature::Ed25519KeyPair, body: &[u8]) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(key.sign(body).as_ref())
+    }
+
+    #[test]
+    fn a_manifest_signed_by_the_release_key_is_read() {
+        use ring::signature::KeyPair;
+        let key = signer();
+        let body = br#"{"version":"9.9.9","files":{}}"#;
+        let manifest = read_signed(body, &signed(&key, body), key.public_key().as_ref()).unwrap();
+        assert_eq!(manifest.version, "9.9.9");
+    }
+
+    #[test]
+    fn a_manifest_changed_after_signing_is_refused() {
+        use ring::signature::KeyPair;
+        let key = signer();
+        let body = br#"{"version":"9.9.9","files":{}}"#;
+        let changed = br#"{"version":"9.9.8","files":{}}"#;
+        let refused = read_signed(changed, &signed(&key, body), key.public_key().as_ref());
+        assert_eq!(refused.unwrap_err(), "signature");
+    }
+
+    #[test]
+    fn a_manifest_signed_by_another_key_is_refused() {
+        use ring::signature::KeyPair;
+        let (key, other) = (signer(), signer());
+        let body = br#"{"version":"9.9.9","files":{}}"#;
+        let refused = read_signed(body, &signed(&other, body), key.public_key().as_ref());
+        assert_eq!(refused.unwrap_err(), "signature");
+        assert_eq!(
+            read_signed(body, "not base64!", key.public_key().as_ref()).unwrap_err(),
+            "signature"
+        );
+    }
+
+    #[test]
+    fn the_app_carries_a_whole_public_key() {
+        use base64::Engine;
+        let key = base64::engine::general_purpose::STANDARD
+            .decode(PUBLIC_KEY)
+            .unwrap();
+        assert_eq!(key.len(), 32);
+    }
+    /// A manifest signed by the release script is read with the key the app carries. Run
+    /// with `OT_MANIFEST_DIR=<directory the script wrote to> cargo test signed_by_the_script -- --ignored`.
+    #[test]
+    #[ignore]
+    fn a_manifest_signed_by_the_release_script_is_read() {
+        use base64::Engine;
+        let dir = std::path::PathBuf::from(std::env::var("OT_MANIFEST_DIR").unwrap());
+        let body = std::fs::read(dir.join(MANIFEST_NAME)).unwrap();
+        let signature = std::fs::read_to_string(dir.join(SIGNATURE_NAME)).unwrap();
+        let key = base64::engine::general_purpose::STANDARD
+            .decode(PUBLIC_KEY)
+            .unwrap();
+        let manifest = read_signed(&body, &signature, &key).unwrap();
+        assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
     }
 }

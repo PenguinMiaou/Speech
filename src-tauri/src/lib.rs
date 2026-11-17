@@ -15,6 +15,7 @@ pub mod local_stt;
 mod meeting_record;
 pub mod meetings;
 pub mod minutes;
+pub mod mirrors;
 pub mod native_hotkey;
 pub mod output;
 pub mod own_voice;

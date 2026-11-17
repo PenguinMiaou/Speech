@@ -252,6 +252,8 @@ jobs:
           merge-multiple: true
 
       - name: List the program files for the in-app update
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: node scripts/update-manifest.mjs dist "${GITHUB_REF_NAME#v}"
 
       - name: Publish the release
@@ -273,4 +275,17 @@ jobs:
           gh release upload update-files --clobber \
             dist/opentypeless-windows-x64.exe dist/ot-stt-worker-windows-x64.exe \
             dist/Speech-macos-arm64.app.tar.gz
-          gh release upload update-files --clobber dist/update-manifest.json
+          gh release upload update-files --clobber dist/update-manifest.json.sig dist/update-manifest.json
+
+      # A copy of the update files on ModelScope, which is quick to reach from mainland
+      # China. The app asks every source for the manifest and takes the newest, so a copy
+      # left behind never hides a release; a failure here still marks the release failed.
+      - name: Copy the update files to ModelScope
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet modelscope
+          "$RUNNER_TEMP/venv/bin/python" scripts/modelscope-seed.py --update-files dist \
+            opentypeless-windows-x64.exe ot-stt-worker-windows-x64.exe \
+            Speech-macos-arm64.app.tar.gz update-manifest.json.sig update-manifest.json

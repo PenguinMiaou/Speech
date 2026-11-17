@@ -1,0 +1,31 @@
+name: ModelScope copy
+
+# Copies the model files the app downloads to the project's ModelScope repository, which
+# is quick to reach from mainland China. Files already there are skipped, so running it
+# again carries on where a stopped run left off.
+on:
+  push:
+    branches: [modelscope-seed]
+  workflow_dispatch:
+
+concurrency:
+  group: modelscope-seed
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install --quiet modelscope
+      - name: Copy the missing files
+        env:
+          MODELSCOPE_TOKEN: ${{ secrets.MODELSCOPE_TOKEN }}
+        run: $RUNNER_TEMP/venv/bin/python scripts/modelscope-seed.py
+      - name: Check every file
+        if: always()
+        run: $RUNNER_TEMP/venv/bin/python scripts/modelscope-seed.py --check

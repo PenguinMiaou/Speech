@@ -1,6 +1,6 @@
 [package]
 name = "opentypeless"
-version = "1.2.10"
+version = "1.2.11"
 description = "AI-powered speech-to-text and text polishing desktop app"
 authors = ["OpenTypeless Contributors"]
 license = "MIT"
@@ -29,6 +29,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ot-stt-protocol = { path = "../stt-protocol" }
 sha2 = "0.10"
+ring = "0.17"
 fs2 = "0.4"
 cpal = "=0.18.2"
 enigo = "0.2"

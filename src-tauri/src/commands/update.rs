@@ -37,16 +37,79 @@ fn client() -> Result<reqwest::Client, String> {
         .map_err(|error| error.to_string())
 }
 
-async fn latest_manifest(client: &reqwest::Client) -> Result<Manifest, String> {
-    client
-        .get(update::manifest_url())
+/// How long the list of the latest release may take from one source. The list is small;
+/// a server that cannot send it in this time is not reachable.
+const LIST_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn fetch(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    let response = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, crate::mirrors::AGENT)
+        .timeout(LIST_TIMEOUT)
         .send()
         .await
-        .and_then(|response| response.error_for_status())
-        .map_err(|_| "network".to_string())?
-        .json()
-        .await
-        .map_err(|_| "manifest".to_string())
+        .ok()?
+        .error_for_status()
+        .ok()?;
+    response.bytes().await.ok().map(|bytes| bytes.to_vec())
+}
+
+/// The newest release manifest carrying the release key's signature. Every source is
+/// asked at once: a copy may still hold the list of an earlier release, which passes its
+/// signature check, so the newest one any source gives is the latest.
+async fn latest_manifest(client: &reqwest::Client) -> Result<Manifest, String> {
+    let key = {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .decode(update::PUBLIC_KEY)
+            .map_err(|_| "signature".to_string())?
+    };
+    let manifests = crate::mirrors::candidates(&update::manifest_url());
+    let signatures = crate::mirrors::candidates(&update::signature_url());
+    let answers = futures_util::future::join_all(manifests.iter().zip(&signatures).map(
+        |(manifest_url, signature_url)| async move {
+            let (body, signature) =
+                tokio::join!(fetch(client, manifest_url), fetch(client, signature_url));
+            (manifest_url, body.zip(signature))
+        },
+    ))
+    .await;
+    newest(answers, &key)
+}
+
+/// A source's address, and the manifest and signature it gave, when it gave both.
+type Answer<'a> = (&'a String, Option<(Vec<u8>, Vec<u8>)>);
+
+/// The newest of the manifests that came with a valid signature, or why there is none.
+fn newest(answers: Vec<Answer>, key: &[u8]) -> Result<Manifest, String> {
+    let mut failure = "network".to_string();
+    let mut best: Option<Manifest> = None;
+    for (url, answer) in answers {
+        let Some((body, signature)) = answer else {
+            continue;
+        };
+        match update::read_signed(&body, &String::from_utf8_lossy(&signature), key) {
+            Ok(manifest) => {
+                if best
+                    .as_ref()
+                    .is_none_or(|best| update::is_newer(&manifest.version, &best.version))
+                {
+                    best = Some(manifest);
+                }
+            }
+            Err(error) => {
+                crate::applog::note(
+                    "update",
+                    &format!(
+                        "the manifest from {} was refused: {error}",
+                        crate::mirrors::host_of(url)
+                    ),
+                );
+                failure = error;
+            }
+        }
+    }
+    best.ok_or(failure)
 }
 
 /// Asks the project's releases whether a newer version exists.
@@ -197,4 +260,59 @@ pub fn update_restart(app: tauri::AppHandle) {
 #[tauri::command]
 pub fn token_usage_summary() -> crate::llm::usage::Summary {
     crate::llm::usage::summary()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ring::signature::{Ed25519KeyPair, KeyPair};
+
+    fn signer() -> Ed25519KeyPair {
+        let rng = ring::rand::SystemRandom::new();
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap()
+    }
+
+    fn answer(key: &Ed25519KeyPair, version: &str) -> Option<(Vec<u8>, Vec<u8>)> {
+        use base64::Engine;
+        let body = format!(r#"{{"version":"{version}","files":{{}}}}"#).into_bytes();
+        let signature = base64::engine::general_purpose::STANDARD.encode(key.sign(&body).as_ref());
+        Some((body, signature.into_bytes()))
+    }
+
+    #[test]
+    fn the_newest_signed_manifest_wins_over_an_older_copy() {
+        let key = signer();
+        let urls = ["a".to_string(), "b".to_string(), "c".to_string()];
+        let answers = vec![
+            (&urls[0], answer(&key, "1.2.10")),
+            (&urls[1], None),
+            (&urls[2], answer(&key, "1.2.11")),
+        ];
+        let manifest = newest(answers, key.public_key().as_ref()).unwrap();
+        assert_eq!(manifest.version, "1.2.11");
+    }
+
+    #[test]
+    fn a_newer_manifest_with_another_signature_is_ignored() {
+        let key = signer();
+        let other = signer();
+        let urls = ["a".to_string(), "b".to_string()];
+        let answers = vec![
+            (&urls[0], answer(&key, "1.2.10")),
+            (&urls[1], answer(&other, "9.9.9")),
+        ];
+        let manifest = newest(answers, key.public_key().as_ref()).unwrap();
+        assert_eq!(manifest.version, "1.2.10");
+    }
+
+    #[test]
+    fn no_answer_is_a_network_failure() {
+        let key = signer();
+        let url = "a".to_string();
+        assert_eq!(
+            newest(vec![(&url, None)], key.public_key().as_ref()).unwrap_err(),
+            "network"
+        );
+    }
 }

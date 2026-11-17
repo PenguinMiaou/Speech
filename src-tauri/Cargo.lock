@@ -3331,7 +3331,7 @@ dependencies = [
 
 [[package]]
 name = "opentypeless"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "anyhow",
  "arboard",
@@ -3355,6 +3355,7 @@ dependencies = [
  "pinyin",
  "plist",
  "reqwest 0.12.28",
+ "ring",
  "rusqlite",
  "serde",
  "serde_json",

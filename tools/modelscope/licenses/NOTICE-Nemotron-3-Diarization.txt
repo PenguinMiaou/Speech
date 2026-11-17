@@ -1,0 +1,13 @@
+Nemotron-3-Diarization-Q8_0.gguf
+
+Origin: Nemotron-3-Diarization by NVIDIA
+  https://huggingface.co/nvidia/Nemotron-3-Diarization
+License: OpenMDW License Agreement, version 1.1 (LICENSE-OpenMDW-1.1.txt)
+
+This file is a conversion of NVIDIA's published weights to GGUF with 8-bit
+quantization, made with the converter in
+  https://github.com/PenguinMiaou/transcribe.cpp (branch speech)
+The weights are otherwise unchanged.
+
+SHA-256: 8bb6dbb3de10c94f2b413e83e0219f6a7c4a86e3a9be3074e2b46e17b9770028
+Size: 108664384 bytes

@@ -1,12 +1,14 @@
 // Writes update-manifest.json: the program files of a release with their size and SHA-256.
 // The app reads it to download only the files that changed.
-// Usage: node scripts/update-manifest.mjs <directory with the release files> <version>
-import { createHash } from 'node:crypto'
+// It is signed with the release key from UPDATE_SIGNING_KEY (an Ed25519 key in PEM), and the
+// app uses a manifest only with that signature, wherever it was downloaded from.
+// Usage: node scripts/update-manifest.mjs <directory with the release files> <version> [--unsigned]
+import { createHash, createPrivateKey, sign } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const [directory, version] = process.argv.slice(2)
+const [directory, version, unsigned] = process.argv.slice(2)
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const built = JSON.parse(readFileSync(join(root, 'src-tauri/tauri.conf.json'), 'utf8')).version
 if (version !== built) {
@@ -38,7 +40,12 @@ for (const [platform, entries] of Object.entries(PROGRAM_FILES)) {
   })
 }
 
-writeFileSync(
-  join(directory, 'update-manifest.json'),
-  JSON.stringify({ version, files }, null, 2) + '\n',
-)
+const manifest = Buffer.from(JSON.stringify({ version, files }, null, 2) + '\n')
+writeFileSync(join(directory, 'update-manifest.json'), manifest)
+
+if (unsigned !== '--unsigned') {
+  const key = process.env.UPDATE_SIGNING_KEY
+  if (!key) throw new Error('UPDATE_SIGNING_KEY is not set: the app refuses an unsigned manifest')
+  const signature = sign(null, manifest, createPrivateKey(key)).toString('base64')
+  writeFileSync(join(directory, 'update-manifest.json.sig'), signature + '\n')
+}
