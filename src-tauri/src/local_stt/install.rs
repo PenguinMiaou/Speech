@@ -692,6 +692,43 @@ mod tests {
         }
     }
 
+    /// Times every real source of a file large enough to be timed and downloads it the way
+    /// the app does. Run with `--ignored --nocapture`; needs the network.
+    #[tokio::test]
+    #[ignore]
+    async fn a_large_file_comes_from_the_quickest_real_source() {
+        let file = &crate::speakers::MODEL_FILES[1];
+        assert!(file.size_bytes >= TIME_SOURCES_FROM);
+        let client = reqwest::Client::new();
+        let order =
+            crate::mirrors::fastest_first(&client, crate::mirrors::candidates(file.url)).await;
+        let hosts: Vec<&str> = order
+            .iter()
+            .map(|url| crate::mirrors::host_of(url))
+            .collect();
+        println!("quickest first: {hosts:?}");
+        let dir = temp_dir();
+        let job = InstallJob {
+            model_id: file.file_name.into(),
+            url: file.url.into(),
+            file_name: file.file_name.into(),
+            size_bytes: file.size_bytes,
+            sha256: file.sha256.into(),
+            dir: dir.clone(),
+            client,
+            cancel: Arc::new(AtomicBool::new(false)),
+            free_space: plenty,
+        };
+        let started = Instant::now();
+        let path = download_and_verify(&job, |_| {}).await.unwrap();
+        println!(
+            "{} MB in {:?}",
+            file.size_bytes / 1_000_000,
+            started.elapsed()
+        );
+        assert!(path.exists());
+    }
+
     /// Resumes a part-downloaded file from the project's ModelScope copy, as a download cut
     /// off in mainland China carries on. Run with `--ignored`; needs the network.
     #[tokio::test]

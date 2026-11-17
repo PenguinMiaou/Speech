@@ -75,7 +75,9 @@ jobs:
         shell: pwsh
         run: |
           $dumpbin = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -find "VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
-          $listed = (& $dumpbin /dependents src-tauri/target/release/ot-stt-worker.exe) -join "`n"
+          # The installer takes the worker from where the build put it for Tauri.
+          $listed = (& $dumpbin /dependents src-tauri/binaries/ot-stt-worker-x86_64-pc-windows-msvc.exe) -join "`n"
+          $listed
           $at = $listed.IndexOf("delay load dependencies")
           if ($listed -notmatch "vulkan-1.dll") { throw "the worker was built without Vulkan" }
           if ($at -lt 0 -or $listed.Substring(0, $at) -match "vulkan-1.dll") { throw "Vulkan is not loaded late" }
@@ -84,13 +86,41 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force portable, out | Out-Null
-          Copy-Item src-tauri/target/release/opentypeless.exe, src-tauri/target/release/ot-stt-worker.exe portable/
+          Copy-Item src-tauri/target/release/opentypeless.exe portable/
+          Copy-Item src-tauri/binaries/ot-stt-worker-x86_64-pc-windows-msvc.exe portable/ot-stt-worker.exe
           Compress-Archive -Path portable/* -DestinationPath out/Speech-windows-x64-portable.zip
           # The program files on their own, for updating in place.
           Copy-Item portable/opentypeless.exe out/opentypeless-windows-x64.exe
           Copy-Item portable/ot-stt-worker.exe out/ot-stt-worker-windows-x64.exe
           Copy-Item (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe)[0].FullName out/Speech-windows-x64-setup.exe
           Get-ChildItem out | Format-Table Name, Length
+
+      # Installs of 1.2.2 and earlier are registered as OpenTypeless. The installer finds
+      # them and puts this version in their place, keeping the app's data.
+      - name: Check that the installer replaces the app under its former name
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $uninstall = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+          gh release download v1.2.2 -R $env:GITHUB_REPOSITORY -p OpenTypeless-windows-x64-setup.exe -D former
+          Start-Process former\OpenTypeless-windows-x64-setup.exe -ArgumentList '/S' -Wait
+          if (-not (Test-Path "$uninstall\OpenTypeless")) { throw 'the former app did not install' }
+          $formerDir = (Get-ItemProperty "$uninstall\OpenTypeless").InstallLocation.Trim('"')
+          if (-not (Test-Path "$formerDir\opentypeless.exe")) { throw 'the former app is not on disk' }
+          $data = Join-Path $env:APPDATA 'com.opentypeless.app'
+          New-Item -ItemType Directory -Force $data | Out-Null
+          Set-Content (Join-Path $data 'kept.txt') 'kept'
+
+          Start-Process out\Speech-windows-x64-setup.exe -ArgumentList '/S' -Wait
+          if (Test-Path "$uninstall\OpenTypeless") { throw 'the former app is still registered' }
+          if (Test-Path "$formerDir\opentypeless.exe") { throw 'the former app is still on disk' }
+          if (-not (Test-Path "$uninstall\Speech")) { throw 'Speech is not registered' }
+          $dir = (Get-ItemProperty "$uninstall\Speech").InstallLocation.Trim('"')
+          if (-not (Test-Path "$dir\opentypeless.exe")) { throw 'Speech is not on disk' }
+          if (-not (Test-Path (Join-Path $data 'kept.txt'))) { throw 'the app data was removed' }
+          "replaced $formerDir with $dir, data kept"
+          Start-Process "$dir\uninstall.exe" -ArgumentList '/S' -Wait
 
       - uses: actions/upload-artifact@v4
         with:

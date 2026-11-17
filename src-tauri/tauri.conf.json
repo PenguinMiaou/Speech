@@ -95,6 +95,12 @@
     },
     "externalBin": [
       "binaries/ot-stt-worker"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "template": "windows/installer.nsi",
+        "languages": ["English", "SimpChinese"]
+      }
+    }
   }
 }

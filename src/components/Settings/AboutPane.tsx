@@ -4,9 +4,19 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { DiagnosticsSection } from './DiagnosticsSection'
 import { UpdateSection } from './UpdateSection'
 import { APP_NAME, APP_VERSION, APP_REPO_URL } from '../../lib/constants'
+import { useAppStore } from '../../stores/appStore'
 
 export function AboutPane() {
   const { t } = useTranslation()
+  const setOnboardingStep = useAppStore((s) => s.setOnboardingStep)
+  const setOnboardingCompleted = useAppStore((s) => s.setOnboardingCompleted)
+
+  // The guide shows the settings as they are, and finishing it saves them as the
+  // guide left them. Leaving it halfway changes nothing: the next launch opens the app.
+  const reopenSetup = () => {
+    setOnboardingStep(0)
+    setOnboardingCompleted(false)
+  }
 
   return (
     <div className="space-y-5 text-[13px]">
@@ -20,6 +30,16 @@ export function AboutPane() {
 
       <SectionCard title={t('settings.update.title')}>
         <UpdateSection />
+      </SectionCard>
+
+      <SectionCard title={t('settings.setupGuide')}>
+        <button
+          onClick={reopenSetup}
+          className="flex justify-between items-center w-full px-3 py-2.5 bg-transparent border-none cursor-pointer text-[13px]"
+        >
+          <span className="text-text-secondary">{t('settings.reopenSetup')}</span>
+          <span className="text-accent">{t('settings.openSetup')}</span>
+        </button>
       </SectionCard>
 
       <SectionCard title={t('settings.diagnostics')}>

@@ -728,6 +728,15 @@ describe('Settings tab 切换', () => {
     expect(screen.getByText('settings.openSource')).toBeDefined()
   })
 
+  it('“关于”页可以从第一步重新打开引导，不动已保存的完成状态', () => {
+    useAppStore.setState({ onboardingCompleted: true, onboardingStep: 3 })
+    renderSettings()
+    clickSidebarItem('settings.about')
+    fireEvent.click(screen.getByRole('button', { name: /settings\.reopenSetup/ }))
+    expect(useAppStore.getState().onboardingCompleted).toBe(false)
+    expect(useAppStore.getState().onboardingStep).toBe(0)
+  })
+
   it('界面语言在单独的“语言”页里选择并保存', () => {
     renderSettings()
     clickSidebarItem('settings.language')

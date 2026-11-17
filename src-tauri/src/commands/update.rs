@@ -54,9 +54,10 @@ async fn fetch(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
     response.bytes().await.ok().map(|bytes| bytes.to_vec())
 }
 
-/// The newest release manifest carrying the release key's signature. Every source is
-/// asked at once: a copy may still hold the list of an earlier release, which passes its
-/// signature check, so the newest one any source gives is the latest.
+/// The newest release manifest carrying the release key's signature. The project's own
+/// server and its ModelScope copy are asked at once: the copy may still hold the list of
+/// an earlier release, which passes its signature check, so the newer of the two is the
+/// latest. The public proxies are asked only when neither answers.
 async fn latest_manifest(client: &reqwest::Client) -> Result<Manifest, String> {
     let key = {
         use base64::Engine;
@@ -66,15 +67,26 @@ async fn latest_manifest(client: &reqwest::Client) -> Result<Manifest, String> {
     };
     let manifests = crate::mirrors::candidates(&update::manifest_url());
     let signatures = crate::mirrors::candidates(&update::signature_url());
-    let answers = futures_util::future::join_all(manifests.iter().zip(&signatures).map(
-        |(manifest_url, signature_url)| async move {
-            let (body, signature) =
-                tokio::join!(fetch(client, manifest_url), fetch(client, signature_url));
-            (manifest_url, body.zip(signature))
-        },
-    ))
-    .await;
-    newest(answers, &key)
+    let pairs: Vec<(&String, &String)> = manifests.iter().zip(&signatures).collect();
+    let (direct, relayed): (Vec<_>, Vec<_>) = pairs
+        .into_iter()
+        .partition(|(manifest_url, _)| !crate::mirrors::relayed(manifest_url));
+    let mut failure = "network".to_string();
+    for group in [direct, relayed] {
+        let answers = futures_util::future::join_all(group.into_iter().map(
+            |(manifest_url, signature_url)| async move {
+                let (body, signature) =
+                    tokio::join!(fetch(client, manifest_url), fetch(client, signature_url));
+                (manifest_url, body.zip(signature))
+            },
+        ))
+        .await;
+        match newest(answers, &key) {
+            Ok(manifest) => return Ok(manifest),
+            Err(error) => failure = error,
+        }
+    }
+    Err(failure)
 }
 
 /// A source's address, and the manifest and signature it gave, when it gave both.
