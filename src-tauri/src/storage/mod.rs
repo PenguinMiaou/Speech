@@ -390,6 +390,16 @@ pub struct AppConfig {
     pub learn_from_edits: bool,
     /// A second model on the same service, tried once when the main one fails. Empty is off.
     pub llm_fallback_model: String,
+    /// The language model meetings use, on a service of its own: putting their words right,
+    /// checking speakers, writing minutes and answering questions about them, so everyday
+    /// dictation can keep a small, fast model. An empty provider means the main service; its
+    /// key is kept in the credential vault under `meeting_llm`.
+    pub meeting_llm_provider: String,
+    pub meeting_llm_base_url: String,
+    pub meeting_llm_api_format: String,
+    /// The meeting model; with no provider of its own, a model on the main service. Empty
+    /// with no provider is the main model.
+    pub meeting_llm_model: String,
     /// Keep only the enrolled voice in local recognition, dropping other talkers.
     pub voice_isolation_enabled: bool,
 }
@@ -456,12 +466,39 @@ impl Default for AppConfig {
             mute_system_audio: true,
             learn_from_edits: true,
             llm_fallback_model: String::new(),
+            meeting_llm_provider: String::new(),
+            meeting_llm_base_url: String::new(),
+            meeting_llm_api_format: String::new(),
+            meeting_llm_model: String::new(),
             voice_isolation_enabled: false,
         }
     }
 }
 
 impl AppConfig {
+    /// The settings meetings use: the meeting service and model in place of the main ones,
+    /// where they are set.
+    pub fn for_meetings(mut self) -> Self {
+        if self.has_meeting_service() {
+            self.llm_provider = self.meeting_llm_provider.trim().to_string();
+            self.llm_base_url = self.meeting_llm_base_url.trim().to_string();
+            self.llm_api_format = self.meeting_llm_api_format.trim().to_string();
+            self.llm_model = self.meeting_llm_model.trim().to_string();
+            return self;
+        }
+        let meeting = self.meeting_llm_model.trim();
+        if !meeting.is_empty() {
+            self.llm_model = meeting.to_string();
+        }
+        self
+    }
+
+    /// Whether meetings use a service of their own. Until its base URL is filled in, that
+    /// service is not set up, and meetings say so instead of falling back to the main one.
+    pub fn has_meeting_service(&self) -> bool {
+        !self.meeting_llm_provider.trim().is_empty()
+    }
+
     /// Settings saved by a version with the hosted service can still name it as a provider.
     fn migrate_removed_managed_cloud(&mut self) {
         const REMOVED_PROVIDER: &str = "cloud";
@@ -2337,6 +2374,47 @@ fn correction_identity_exists(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meetings_use_their_own_model_where_one_is_set() {
+        let config = AppConfig {
+            llm_model: "small".into(),
+            ..Default::default()
+        };
+        assert_eq!(config.clone().for_meetings().llm_model, "small");
+        let set = AppConfig {
+            meeting_llm_model: " large ".into(),
+            ..config
+        };
+        let meetings = set.clone().for_meetings();
+        assert_eq!(meetings.llm_model, "large");
+        assert_eq!(set.llm_model, "small");
+        let elsewhere = AppConfig {
+            llm_provider: "groq".into(),
+            llm_base_url: "https://api.groq.com/openai/v1".into(),
+            llm_api_format: "chat_completions".into(),
+            meeting_llm_provider: "zhipu".into(),
+            meeting_llm_base_url: "https://api.z.ai/api/anthropic/v1".into(),
+            meeting_llm_api_format: "anthropic_messages".into(),
+            meeting_llm_model: "glm-5.3".into(),
+            ..set
+        }
+        .for_meetings();
+        assert_eq!(
+            (
+                elsewhere.llm_provider.as_str(),
+                elsewhere.llm_base_url.as_str(),
+                elsewhere.llm_api_format.as_str(),
+                elsewhere.llm_model.as_str()
+            ),
+            (
+                "zhipu",
+                "https://api.z.ai/api/anthropic/v1",
+                "anthropic_messages",
+                "glm-5.3"
+            )
+        );
+    }
 
     #[test]
     fn stored_managed_cloud_speech_moves_to_the_local_model() {

@@ -153,7 +153,7 @@ fn validate_credential_target(
     let namespace = namespace.trim().to_string();
     let provider = provider.trim().to_string();
 
-    if namespace != "stt" && namespace != "llm" {
+    if namespace != "stt" && namespace != "llm" && namespace != "meeting_llm" {
         return Err(format!("unknown credential namespace: {namespace}"));
     }
     if provider.is_empty() {

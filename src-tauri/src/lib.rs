@@ -15,6 +15,7 @@ pub mod local_stt;
 mod meeting_record;
 pub mod meetings;
 pub mod minutes;
+pub mod minutes_style;
 pub mod mirrors;
 pub mod native_hotkey;
 pub mod output;
@@ -1243,6 +1244,7 @@ pub fn run() {
             commands::minutes::meeting_translate,
             commands::minutes::meeting_polish,
             commands::minutes::meeting_speakers_check,
+            commands::minutes::meeting_speaker_names,
             commands::minutes::meeting_title,
             commands::local_stt::meeting_languages,
             commands::local_stt::meeting_record_pause,
@@ -1250,6 +1252,9 @@ pub fn run() {
             commands::local_stt::log_reveal,
             commands::minutes::meeting_learn,
             commands::minutes::minutes_templates,
+            commands::minutes::minutes_style,
+            commands::minutes::minutes_style_save,
+            commands::minutes::minutes_learn,
             commands::minutes::minutes_template_import,
             commands::minutes::minutes_template_remove,
             commands::minutes::minutes_template_save,

@@ -113,6 +113,7 @@ import {
   type MeetingPhase,
 } from '../../stores/meetingStore'
 import { MeetingMinutes } from './MeetingMinutes'
+import { MinutesForm } from './MinutesForm'
 import { MeetingLanguages, MOST_LANGUAGES } from './MeetingLanguages'
 
 const KNOWN_ERRORS = [
@@ -277,6 +278,7 @@ export function MeetingCard() {
     tidying,
     unpolished,
     terms,
+    namesFound,
     making,
     progress,
     soFar,
@@ -478,6 +480,7 @@ export function MeetingCard() {
       times: [],
       unpolished: null,
       terms: null,
+      namesFound: null,
       ...(same
         ? {}
         : {
@@ -925,7 +928,12 @@ export function MeetingCard() {
           return
         }
         // A note taken while the meeting runs carries the moment it was begun at.
-        const typed = stampNote(event.target.value, event.target.selectionStart, level.seconds)
+        const typed = stampNote(
+          event.target.value,
+          event.target.selectionStart,
+          level.seconds,
+          notes,
+        )
         set({ notes: typed.value })
         if (typed.value !== event.target.value) {
           window.requestAnimationFrame(() =>
@@ -1603,6 +1611,11 @@ export function MeetingCard() {
           onClose={() => setPicking(null)}
           confirm={picking.meeting ? { label: t('meeting.minutes'), onConfirm: makeOf } : undefined}
         >
+          {picking.meeting && (
+            <div className="flex flex-wrap items-center gap-2">
+              <MinutesForm />
+            </div>
+          )}
           {picking.meeting && sound && (
             <label className="flex cursor-pointer items-center gap-2 text-[12px] text-text-secondary">
               <input
@@ -1803,6 +1816,54 @@ export function MeetingCard() {
                 onSettle={settleTerms}
                 onSkip={() => set({ terms: { ...terms, open: false } })}
               />
+            )}
+            {namesFound?.id === id && !going && (
+              <div
+                role="group"
+                aria-label={t('meeting.namesFound')}
+                className="space-y-1.5 rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2.5 text-[12px]"
+              >
+                <div className="text-text-secondary">{t('meeting.namesFound')}</div>
+                {namesFound.list.map((found) => {
+                  const drop = () => {
+                    const list = namesFound.list.filter((other) => other.speaker !== found.speaker)
+                    set({ namesFound: list.length > 0 ? { id: namesFound.id, list } : null })
+                  }
+                  return (
+                    <div key={found.speaker} className="flex flex-wrap items-center gap-2">
+                      <span style={{ color: speakerColor(found.speaker) }} className="font-medium">
+                        {label} {found.speaker} → {found.name}
+                      </span>
+                      <span
+                        className="min-w-0 flex-1 truncate text-text-tertiary"
+                        title={found.quote}
+                      >
+                        “{found.quote}”
+                      </span>
+                      <button
+                        type="button"
+                        className="btn-quiet px-2 text-accent"
+                        onClick={() => {
+                          set({
+                            names: {
+                              ...useMeetingStore.getState().names,
+                              [found.speaker]: found.name,
+                            },
+                          })
+                          nameKept(found.speaker, found.name)
+                          drop()
+                          persist()
+                        }}
+                      >
+                        {t('meeting.nameTake')}
+                      </button>
+                      <button type="button" className="btn-quiet px-2" onClick={drop}>
+                        {t('meeting.nameLeave')}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
             {speakerNumbers.length > 0 && (
               <div className="flex flex-wrap gap-2">

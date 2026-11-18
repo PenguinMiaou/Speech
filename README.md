@@ -109,7 +109,7 @@ Terms the model was not sure of come with the sentence they were said in, a butt
 | Voice sample, dictionary, history, settings         | Stored on the machine                                                 |
 | API keys                                            | In the system keychain or credential manager                          |
 
-At launch the app asks GitHub whether a newer release exists; this can be switched off under Settings, About.
+At launch the app asks GitHub and the project's copy on ModelScope whether a newer release exists, and public download proxies only when neither answers; this can be switched off under Settings, About. Models and updates download from whichever of these sources, or the Huggingface mirror, is quickest; a proxy sees the address of the computer downloading through it.
 
 ## More
 

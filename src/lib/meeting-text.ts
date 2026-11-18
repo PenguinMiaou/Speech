@@ -217,12 +217,15 @@ const STAMP = /^\[(\d[\d:]*)\] ?/
 
 /** A note being typed during a meeting, with the line the caret is in marked with the
  * time it was begun at, so that the note can later be found in the recording. A line that
- * is empty or already has its time is left alone. */
+ * is empty or already has its time is left alone, and so is every change that takes text
+ * away from `before`, the notes as they were: a time being deleted is not put back. */
 export function stampNote(
   value: string,
   caret: number,
   seconds: number,
+  before = '',
 ): { value: string; caret: number } {
+  if (value.length <= before.length) return { value, caret }
   const start = value.lastIndexOf('\n', caret - 1) + 1
   const stop = value.indexOf('\n', start)
   const line = value.slice(start, stop < 0 ? undefined : stop)

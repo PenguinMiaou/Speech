@@ -293,6 +293,32 @@ pub fn resolve_llm_config_secret<V: CredentialSecretReader>(
     resolve_config_secret(&config.llm_api_key, "llm", &config.llm_provider, vault)
 }
 
+/// The settings and key meetings use. A meeting service of its own takes the key kept for
+/// it, or else the main key kept for the same service, so one key serves both.
+pub fn resolve_meeting_llm<V: CredentialSecretReader>(
+    config: AppConfig,
+    vault: &V,
+) -> Result<(AppConfig, String)> {
+    if !config.has_meeting_service() {
+        let key = resolve_llm_config_secret(&config, vault)?;
+        return Ok((config.for_meetings(), key));
+    }
+    let main_provider = config.llm_provider.clone();
+    let legacy = config.llm_api_key.clone();
+    let mut meetings = config.for_meetings();
+    meetings.llm_api_key = String::new();
+    let provider = meetings.llm_provider.clone();
+    let key = match vault.get_secret("meeting_llm", &provider)? {
+        Some(key) if !key.trim().is_empty() => key,
+        _ => match vault.get_secret("llm", &provider)? {
+            Some(key) if !key.trim().is_empty() => key,
+            _ if provider == main_provider => legacy,
+            _ => String::new(),
+        },
+    };
+    Ok((meetings, key))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -601,5 +627,50 @@ mod tests {
         let secret = resolve_llm_config_secret(&config, &vault).unwrap();
 
         assert_eq!(secret, "llm-secret");
+    }
+
+    #[test]
+    fn meetings_take_the_key_of_their_own_service() {
+        let vault = MemoryVault::default();
+        vault.set_secret("llm", "groq", "main-key").unwrap();
+        let main = AppConfig {
+            llm_provider: "groq".into(),
+            llm_base_url: "https://api.groq.com/openai/v1".into(),
+            llm_model: "small".into(),
+            meeting_llm_model: "large".into(),
+            ..Default::default()
+        };
+        let (same, key) = resolve_meeting_llm(main.clone(), &vault).unwrap();
+        assert_eq!(
+            (same.llm_model.as_str(), key.as_str()),
+            ("large", "main-key")
+        );
+
+        let elsewhere = AppConfig {
+            meeting_llm_provider: "zhipu".into(),
+            meeting_llm_base_url: "https://api.z.ai/api/anthropic/v1".into(),
+            meeting_llm_api_format: "anthropic_messages".into(),
+            ..main.clone()
+        };
+        let (other, key) = resolve_meeting_llm(elsewhere.clone(), &vault).unwrap();
+        assert_eq!(other.llm_provider, "zhipu");
+        assert_eq!(
+            key, "",
+            "the main service's key is never sent to another service"
+        );
+        vault
+            .set_secret("meeting_llm", "zhipu", "meeting-key")
+            .unwrap();
+        let (_, key) = resolve_meeting_llm(elsewhere, &vault).unwrap();
+        assert_eq!(key, "meeting-key");
+
+        // The same service on its own settings reuses the main key until one is set for it.
+        let same_service = AppConfig {
+            meeting_llm_provider: "groq".into(),
+            meeting_llm_base_url: "https://api.groq.com/openai/v1".into(),
+            ..main
+        };
+        let (_, key) = resolve_meeting_llm(same_service, &vault).unwrap();
+        assert_eq!(key, "main-key");
     }
 }

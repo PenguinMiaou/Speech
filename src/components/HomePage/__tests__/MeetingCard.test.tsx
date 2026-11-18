@@ -380,6 +380,12 @@ describe('MeetingCard', () => {
     expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe(
       '[01:05] budget',
     )
+    // Deleting the time leaves it deleted.
+    fireEvent.change(screen.getByLabelText('meeting.notes'), { target: { value: '[01:0' } })
+    expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe('[01:0')
+    fireEvent.change(screen.getByLabelText('meeting.notes'), {
+      target: { value: '[01:05] budget' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
     fireEvent.click(await screen.findByRole('button', { name: /budget/ }))
     expect(container.querySelector('audio')?.currentTime).toBe(65)
@@ -485,6 +491,8 @@ describe('MeetingCard', () => {
       expect(tauri.meetingMinutes).toHaveBeenCalledWith(
         'First words.',
         'meeting.standupTemplate',
+        '',
+        false,
         '',
       ),
     )
@@ -606,6 +614,27 @@ describe('MeetingCard', () => {
     expect(screen.getByLabelText('meeting.result').textContent).toBe(
       'meeting.speakerLabel 1  00:00\nhello\n\n00:04\nok',
     )
+  })
+
+  it('offers the names the meeting gives its speakers and names one only when taken', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nWang, what do you think?\n\nmeeting.speakerLabel 2  00:04\nfine by me',
+    )
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('fine by me')
+    const id = useMeetingStore.getState().id ?? ''
+    act(() =>
+      useMeetingStore.setState({
+        namesFound: { id, list: [{ speaker: 2, name: 'Wang', quote: 'Wang, what do you think' }] },
+      }),
+    )
+    const offered = within(screen.getByRole('group', { name: 'meeting.namesFound' }))
+    expect(offered.getByText('“Wang, what do you think”')).toBeDefined()
+    expect(useMeetingStore.getState().names[2]).toBeUndefined()
+    fireEvent.click(offered.getByRole('button', { name: 'meeting.nameTake' }))
+    expect(useMeetingStore.getState().names[2]).toBe('Wang')
+    expect(screen.queryByRole('group', { name: 'meeting.namesFound' })).toBeNull()
   })
 
   it('takes the surplus speakers for the most alike when told how many people met', async () => {
@@ -1215,6 +1244,8 @@ describe('MeetingCard', () => {
       '00:00\nwhat was said',
       'meeting.defaultTemplate',
       expect.stringMatching(/^\[00:0\d\] cut the budget$/),
+      false,
+      '',
     )
   })
 

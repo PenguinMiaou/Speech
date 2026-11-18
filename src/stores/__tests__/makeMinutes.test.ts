@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as tauri from '../../lib/tauri'
-import { initialMeeting, makeMinutes, useMeetingStore } from '../meetingStore'
+import { findSpeakerNames, initialMeeting, makeMinutes, useMeetingStore } from '../meetingStore'
 
 vi.mock('../../lib/tauri')
 
@@ -47,6 +47,8 @@ describe('minutes made of a kept meeting in one go', () => {
       'Ann  00:00\nWe ship Friday.\n\nS 2  00:05\nOK.',
       'the template',
       'a note',
+      false,
+      '',
     )
     expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0]).toMatchObject({
       id: 'm-1',
@@ -95,7 +97,18 @@ describe('minutes made of a kept meeting in one go', () => {
       'Ann  00:00\num we ship friday\n\nS 2  00:05\nok',
       'the template',
       'a note',
+      false,
+      '',
     )
+    // The user is told that the text was not tidied up, and the minutes stand.
+    expect(useMeetingStore.getState().error).toBe('meeting.polishFailed')
+  })
+
+  it('writes the minutes in the language last picked', async () => {
+    localStorage.setItem('meeting.minutesLanguage', 'ja')
+    await makeMinutes('S', 'm-1', 'the template', null)
+    expect(vi.mocked(tauri.meetingMinutes).mock.lastCall?.[4]).toBe('ja')
+    localStorage.removeItem('meeting.minutesLanguage')
   })
 
   it('shows its result in the meeting that is open', async () => {
@@ -130,5 +143,44 @@ describe('minutes made of a kept meeting in one go', () => {
     await makeMinutes('S', 'm-2', 'the template', null)
     await first
     expect(tauri.meetingGet).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('names the meeting gives its speakers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useMeetingStore.setState({ ...initialMeeting, id: 'm-1' })
+  })
+
+  it('offers names only for speakers who have none, and names nobody itself', async () => {
+    vi.mocked(tauri.meetingSpeakerNames).mockResolvedValue([
+      { speaker: 1, name: 'Bob', quote: 'Bob, over to you' },
+      { speaker: 2, name: 'Cleo', quote: 'thanks Cleo' },
+    ])
+    await findSpeakerNames('m-1', kept.transcript, 'S', { 1: 'Ann' })
+    expect(tauri.meetingSpeakerNames).toHaveBeenCalledWith([
+      { speaker: 1, text: 'um we ship friday' },
+      { speaker: 2, text: 'ok' },
+    ])
+    expect(useMeetingStore.getState().namesFound).toEqual({
+      id: 'm-1',
+      list: [{ speaker: 2, name: 'Cleo', quote: 'thanks Cleo' }],
+    })
+    expect(useMeetingStore.getState().names).toEqual({})
+  })
+
+  it('asks nothing when every speaker has a name', async () => {
+    await findSpeakerNames('m-1', kept.transcript, 'S', { 1: 'Ann', 2: 'Ben' })
+    expect(tauri.meetingSpeakerNames).not.toHaveBeenCalled()
+    expect(useMeetingStore.getState().namesFound).toBeNull()
+  })
+
+  it('offers nothing for a meeting that is no longer open', async () => {
+    vi.mocked(tauri.meetingSpeakerNames).mockResolvedValue([
+      { speaker: 2, name: 'Cleo', quote: 'thanks Cleo' },
+    ])
+    useMeetingStore.setState({ id: 'm-2' })
+    await findSpeakerNames('m-1', kept.transcript, 'S', {})
+    expect(useMeetingStore.getState().namesFound).toBeNull()
   })
 })

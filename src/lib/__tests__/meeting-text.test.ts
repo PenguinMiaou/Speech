@@ -234,6 +234,26 @@ describe('meeting text', () => {
     expect(stampNote('', 0, 5)).toEqual({ value: '', caret: 0 })
   })
 
+  it('lets the time of a note be deleted, and marks the next line typed', () => {
+    let value = '[00:10] 预算\n[00:16] 排期'
+    let caret = value.length
+    let seconds = 20
+    const press = (next: string, at: number) => {
+      const stamped = stampNote(next, at, seconds, value)
+      value = stamped.value
+      caret = stamped.caret
+      seconds += 1
+    }
+    // Back over the second line, its time and the line break, one key at a time.
+    while (value !== '[00:10] 预算')
+      press(value.slice(0, caret - 1) + value.slice(caret), caret - 1)
+    expect(value).toBe('[00:10] 预算')
+    press(value + '\n', caret + 1)
+    expect(value).toBe('[00:10] 预算\n')
+    press(value + '会', caret + 1)
+    expect(value).toMatch(/^\[00:10\] 预算\n\[00:\d\d\] 会$/)
+  })
+
   it('finds the notes that can be looked up in the recording', () => {
     expect(stampedNotes('[01:05] 预算\n没有时间的一行\n[1:02:10] 排期\n[00:07] ')).toEqual([
       { seconds: 65, time: '01:05', text: '预算' },

@@ -1,21 +1,30 @@
-use crate::credentials::{resolve_llm_config_secret, SystemCredentialVault};
+use crate::credentials::{resolve_meeting_llm, SystemCredentialVault};
 use crate::minutes::Template;
 use crate::storage;
 
 /// Writes the minutes of a meeting transcript after a template, with the language model
 /// chosen in the settings.
+/// The settings and key meetings use: the meeting service where one is set, else the main one.
+async fn meeting_llm(
+    config_state: &storage::ConfigManager,
+) -> Result<(storage::AppConfig, String), String> {
+    let config = config_state.load().await.map_err(|e| e.to_string())?;
+    resolve_meeting_llm(config, &SystemCredentialVault).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn meeting_minutes(
     transcript: String,
     template: String,
     notes: Option<String>,
+    full: Option<bool>,
+    language: Option<String>,
     config_state: tauri::State<'_, storage::ConfigManager>,
     dictionary: tauri::State<'_, storage::DictionaryStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -35,8 +44,45 @@ pub async fn meeting_minutes(
         &template,
         &notes,
         &words,
+        crate::minutes::Form {
+            full: full.unwrap_or(false),
+            language: language.unwrap_or_default(),
+            ..Default::default()
+        },
     )
     .await
+}
+
+/// The rules learned for writing minutes after the template `text` names, or that the
+/// minutes in `text` follow.
+#[tauri::command]
+pub fn minutes_style(text: String) -> Vec<String> {
+    crate::minutes_style::rules(&text)
+}
+
+/// Keeps the rules for the template `text` names as the user left them.
+#[tauri::command]
+pub fn minutes_style_save(text: String, rules: Vec<String>) -> Result<Vec<String>, String> {
+    crate::minutes_style::save(&text, &rules)
+}
+
+/// Learns from how the user changed minutes how they want them written. Returns the rules
+/// now kept for their template.
+#[tauri::command]
+pub async fn minutes_learn(
+    before: String,
+    after: String,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Vec<String>, String> {
+    let (config, api_key) = meeting_llm(&config_state).await?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    crate::minutes_style::learn(&client, &config, &api_key, &before, &after).await
 }
 
 #[tauri::command]
@@ -70,9 +116,7 @@ pub async fn meeting_ask(
     config_state: tauri::State<'_, storage::ConfigManager>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -93,9 +137,7 @@ pub async fn meetings_ask(
     config_state: tauri::State<'_, storage::ConfigManager>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -116,9 +158,7 @@ pub async fn meeting_title(
     config_state: tauri::State<'_, storage::ConfigManager>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -140,9 +180,7 @@ pub async fn meeting_polish(
     dictionary: tauri::State<'_, storage::DictionaryStore>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<Vec<String>, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -182,9 +220,7 @@ pub async fn meeting_speakers_check(
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<Vec<crate::minutes::Said>, String> {
     use tauri::Emitter;
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
@@ -198,6 +234,24 @@ pub async fn meeting_speakers_check(
         );
     })
     .await
+}
+
+/// The names the transcript itself gives its speakers, each with the words that give it,
+/// for the user to take or leave. Nothing is named here.
+#[tauri::command]
+pub async fn meeting_speaker_names(
+    pieces: Vec<crate::minutes::Said>,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Vec<crate::minutes::NameFound>, String> {
+    let (config, api_key) = meeting_llm(&config_state).await?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    crate::minutes::find_names(&client, &config, &api_key, &pieces).await
 }
 
 /// Learns from a correction the user made to the meeting's words: a word put right goes
@@ -238,9 +292,7 @@ pub async fn meeting_translate(
     config_state: tauri::State<'_, storage::ConfigManager>,
     client: tauri::State<'_, reqwest::Client>,
 ) -> Result<String, String> {
-    let config = config_state.load().await.map_err(|e| e.to_string())?;
-    let api_key =
-        resolve_llm_config_secret(&config, &SystemCredentialVault).map_err(|e| e.to_string())?;
+    let (config, api_key) = meeting_llm(&config_state).await?;
     let configured = !config.llm_base_url.trim().is_empty()
         && !config.llm_model.trim().is_empty()
         && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);

@@ -252,6 +252,10 @@ export interface AppConfig {
   mute_system_audio: boolean
   learn_from_edits: boolean
   llm_fallback_model: string
+  meeting_llm_provider: LlmProvider | ''
+  meeting_llm_base_url: string
+  meeting_llm_api_format: string
+  meeting_llm_model: string
   voice_isolation_enabled: boolean
 }
 
@@ -814,6 +818,10 @@ const defaultConfig: AppConfig = {
   mute_system_audio: true,
   learn_from_edits: true,
   llm_fallback_model: '',
+  meeting_llm_provider: '',
+  meeting_llm_base_url: '',
+  meeting_llm_api_format: '',
+  meeting_llm_model: '',
   voice_isolation_enabled: false,
 }
 

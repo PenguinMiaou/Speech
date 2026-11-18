@@ -184,21 +184,21 @@ export interface CredentialStatus {
 }
 
 export async function getCredentialStatus(
-  namespace: 'stt' | 'llm',
+  namespace: 'stt' | 'llm' | 'meeting_llm',
   provider: string,
 ): Promise<CredentialStatus> {
   return invoke('get_credential_status', { namespace, provider })
 }
 
 export async function readCredential(
-  namespace: 'stt' | 'llm',
+  namespace: 'stt' | 'llm' | 'meeting_llm',
   provider: string,
 ): Promise<string | null> {
   return invoke('read_credential', { namespace, provider })
 }
 
 export async function setCredential(
-  namespace: 'stt' | 'llm',
+  namespace: 'stt' | 'llm' | 'meeting_llm',
   provider: string,
   value: string,
 ): Promise<void> {
@@ -1085,12 +1085,31 @@ export interface MinutesTemplate {
 
 /** Writes minutes after `template` with the language model chosen in the settings.
  * `notes` is what the user typed during the meeting. */
+/** The rules learned for writing minutes after the template that `text` names, or that
+ * the minutes in `text` follow. */
+export function minutesStyle(text: string): Promise<string[]> {
+  return invoke('minutes_style', { text })
+}
+
+/** Keeps the rules for the template that `text` names as the user left them. */
+export function minutesStyleSave(text: string, rules: string[]): Promise<string[]> {
+  return invoke('minutes_style_save', { text, rules })
+}
+
+/** Learns from how the user changed minutes how they want them written; resolves with the
+ * rules now kept for their template. */
+export function minutesLearn(before: string, after: string): Promise<string[]> {
+  return invoke('minutes_learn', { before, after })
+}
+
 export function meetingMinutes(
   transcript: string,
   template: string,
   notes: string,
+  full = false,
+  language = '',
 ): Promise<string> {
-  return invoke('meeting_minutes', { transcript, template, notes })
+  return invoke('meeting_minutes', { transcript, template, notes, full, language })
 }
 
 /** Answers a question about a meeting with the language model chosen in the settings. */
@@ -1137,6 +1156,20 @@ export function onMeetingTerms(handler: (terms: MeetingTerm[]) => void): Promise
 
 /** Checks who said what by the sense of it, with the polish model. As many pieces come
  * back, in the same order, with every word kept. */
+/** A name the transcript itself gives a speaker, with the words that give it. */
+export interface SpeakerNameFound {
+  speaker: number
+  name: string
+  quote: string
+}
+
+/** The names the transcript gives its speakers, for the user to take or leave. */
+export function meetingSpeakerNames(
+  pieces: { speaker: number; text: string }[],
+): Promise<SpeakerNameFound[]> {
+  return invoke('meeting_speaker_names', { pieces })
+}
+
 export function meetingSpeakersCheck(
   pieces: { speaker: number; text: string }[],
 ): Promise<{ speaker: number; text: string }[]> {

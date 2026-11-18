@@ -16,6 +16,10 @@ const baseConfig = {
   llm_api_key: '',
   llm_api_format: 'chat_completions',
   llm_fallback_model: '',
+  meeting_llm_provider: '',
+  meeting_llm_base_url: '',
+  meeting_llm_api_format: '',
+  meeting_llm_model: '',
 }
 
 const mockStore = {
@@ -57,6 +61,7 @@ describe('LlmConnectionForm', () => {
     mockStore.llmLatencyMs = null
     mockStore.llmModels = []
     vi.mocked(fetchLlmModels).mockResolvedValue([])
+    vi.mocked(readCredential).mockResolvedValue('stored-key')
     vi.mocked(benchLlmConnection).mockResolvedValue({ latencyMs: 120, reasoningActive: false })
   })
 
@@ -78,6 +83,43 @@ describe('LlmConnectionForm', () => {
     expect((field as HTMLInputElement).value).toBe('spare')
     fireEvent.change(field, { target: { value: '' } })
     expect(mockStore.updateConfig).toHaveBeenCalledWith({ llm_fallback_model: '' })
+  })
+
+  it('edits the service meetings use apart from the main one', async () => {
+    mockStore.config = {
+      ...baseConfig,
+      meeting_llm_provider: 'zhipu',
+      meeting_llm_base_url: 'https://api.z.ai/api/anthropic/v1',
+      meeting_llm_api_format: 'anthropic_messages',
+      meeting_llm_model: 'glm-5.3',
+    }
+    vi.mocked(readCredential).mockImplementation(async (namespace) =>
+      namespace === 'llm' ? 'shared-key' : null,
+    )
+    const { container } = render(<LlmConnectionForm meeting />)
+    // With no key of its own, the main key kept for the same service is shown.
+    await screen.findByDisplayValue('shared-key')
+    expect(readCredential).toHaveBeenCalledWith('meeting_llm', 'zhipu')
+    expect(container.querySelector('[data-field="fallback-model"]')).toBeNull()
+    expect(screen.getByText('glm-5.3')).toBeTruthy()
+
+    const input = screen.getByLabelText('settings.apiKey')
+    fireEvent.change(input, { target: { value: 'meeting-key' } })
+    fireEvent.blur(input)
+    await waitFor(() =>
+      expect(setCredential).toHaveBeenCalledWith('meeting_llm', 'zhipu', 'meeting-key'),
+    )
+
+    fireEvent.click(screen.getByRole('radio', { name: /Anthropic/i }))
+    expect(mockStore.updateConfig).toHaveBeenCalledWith({
+      meeting_llm_api_format: 'anthropic_messages',
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'settings.test' }))
+    await waitFor(() => expect(benchLlmConnection).toHaveBeenCalled())
+    expect(mockStore.setLlmTestStatus).not.toHaveBeenCalled()
+    expect(mockStore.updateConfig).not.toHaveBeenCalledWith(
+      expect.objectContaining({ llm_model: expect.anything() }),
+    )
   })
 
   it('fills the URL, provider and default model when a listed service is picked', () => {

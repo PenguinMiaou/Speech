@@ -44,6 +44,8 @@ describe('MeetingMinutes', () => {
       'what was said',
       'meeting.defaultTemplate',
       '',
+      false,
+      '',
     )
   })
 
@@ -60,6 +62,8 @@ describe('MeetingMinutes', () => {
       expect(tauri.meetingMinutes).toHaveBeenCalledWith(
         'what was said',
         `meeting.${kind}Template`,
+        '',
+        false,
         '',
       )
       expect(screen.queryByRole('dialog')).toBeNull()
@@ -81,7 +85,7 @@ describe('MeetingMinutes', () => {
       within(screen.getByRole('dialog')).getByRole('button', { name: 'meeting.minutes' }),
     )
     await screen.findByText('minutes')
-    expect(tauri.meetingMinutes).toHaveBeenCalledWith('what was said', '## Done', '')
+    expect(tauri.meetingMinutes).toHaveBeenCalledWith('what was said', '## Done', '', false, '')
   })
 
   it('goes back to the built-in template when the chosen one is removed', async () => {
@@ -101,6 +105,8 @@ describe('MeetingMinutes', () => {
     expect(tauri.meetingMinutes).toHaveBeenCalledWith(
       'what was said',
       'meeting.defaultTemplate',
+      '',
+      false,
       '',
     )
   })
@@ -176,5 +182,74 @@ describe('MeetingMinutes', () => {
     fireEvent.change(box, { target: { value: 'my minutes' } })
     fireEvent.click(screen.getByRole('button', { name: 'meeting.editMinutes' }))
     await screen.findByText('my minutes')
+  })
+
+  it('learns from a change by hand how the minutes should be written', async () => {
+    vi.mocked(tauri.minutesTemplates).mockResolvedValue([])
+    vi.mocked(tauri.minutesStyle).mockResolvedValue([])
+    vi.mocked(tauri.minutesLearn).mockResolvedValue(['One line per point', 'No background'])
+    vi.mocked(tauri.minutesStyleSave).mockResolvedValue(['No background'])
+    render(<Held written={'# Minutes\n- a long point'} />)
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.editMinutes' }))
+    fireEvent.change(screen.getByLabelText('meeting.minutesResult'), {
+      target: { value: '# Minutes\n- short' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.editMinutes' }))
+    expect(tauri.minutesLearn).toHaveBeenCalledWith(
+      '# Minutes\n- a long point',
+      '# Minutes\n- short',
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.style' }))
+    expect(screen.getByText('One line per point')).toBeTruthy()
+    fireEvent.click(screen.getAllByRole('button', { name: 'meeting.styleForget' })[0])
+    expect(tauri.minutesStyleSave).toHaveBeenCalledWith('# Minutes', ['No background'])
+    expect(screen.queryByText('One line per point')).toBeNull()
+  })
+
+  it('writes full minutes once full is chosen, and remembers the choice', async () => {
+    vi.mocked(tauri.meetingMinutes).mockResolvedValue('the minutes')
+    await ready()
+    const brief = screen.getByRole('radio', { name: 'meeting.lengthBrief' })
+    expect(brief.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('radio', { name: 'meeting.lengthFull' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+    await screen.findByText('the minutes')
+    expect(tauri.meetingMinutes).toHaveBeenCalledWith(
+      'what was said',
+      'meeting.defaultTemplate',
+      '',
+      true,
+      '',
+    )
+    expect(localStorage.getItem('meeting.minutesFull')).toBe('1')
+    localStorage.removeItem('meeting.minutesFull')
+  })
+
+  it('writes the minutes in the language picked, and remembers it', async () => {
+    vi.mocked(tauri.meetingMinutes).mockResolvedValue('the minutes')
+    await ready()
+    const language = screen.getByRole('combobox', { name: 'meeting.minutesLanguage' })
+    // By default the minutes are written in the language the meeting was held in.
+    expect((language as HTMLSelectElement).value).toBe('')
+    fireEvent.change(language, { target: { value: 'en' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+    await screen.findByText('the minutes')
+    expect(tauri.meetingMinutes).toHaveBeenCalledWith(
+      'what was said',
+      'meeting.defaultTemplate',
+      '',
+      false,
+      'en',
+    )
+    expect(localStorage.getItem('meeting.minutesLanguage')).toBe('en')
+    localStorage.removeItem('meeting.minutesLanguage')
+  })
+
+  it('learns nothing when the minutes were opened and left as they were', async () => {
+    vi.mocked(tauri.minutesTemplates).mockResolvedValue([])
+    render(<Held written="the minutes" />)
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.editMinutes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.editMinutes' }))
+    expect(tauri.minutesLearn).not.toHaveBeenCalled()
   })
 })

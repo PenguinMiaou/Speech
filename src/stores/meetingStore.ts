@@ -13,6 +13,7 @@ import {
   meetingGet,
   meetingPolish,
   meetingSpeakersCheck,
+  meetingSpeakerNames,
   onFileTranscribeProgress,
   onMeetingPolishing,
   onMeetingTerms,
@@ -30,6 +31,7 @@ import {
   type MeetingRecord,
   type TranscribeOptions,
   type MeetingSegment,
+  type SpeakerNameFound,
 } from '../lib/tauri'
 import {
   renameSpeakers,
@@ -81,6 +83,9 @@ export interface MeetingState {
   /** The terms the polish model could not be sure how to spell, asked about once
    * when they are found and again whenever the user opens the question. */
   terms: { id: string; list: MeetingTerm[]; open: boolean } | null
+  /** Names the transcript itself gives speakers who have none, for the user to take or
+   * leave. */
+  namesFound: { id: string; list: SpeakerNameFound[] } | null
   paragraphs: Paragraph[]
   /** The text of a transcribed file. */
   text: string | null
@@ -140,6 +145,7 @@ export const initialMeeting: MeetingState = {
   tidying: null,
   unpolished: null,
   terms: null,
+  namesFound: null,
   making: null,
   paragraphs: [],
   text: null,
@@ -277,6 +283,45 @@ export function timeWords(speakerLabel: string): Promise<void> {
     })
     .catch(() => {})
     .finally(() => useMeetingStore.setState({ sorting: false }))
+}
+
+/** Whether minutes are written in full rather than brief, as the user last chose. */
+const MINUTES_FULL = 'meeting.minutesFull'
+
+export function minutesFull(): boolean {
+  try {
+    return localStorage.getItem(MINUTES_FULL) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setMinutesFull(full: boolean) {
+  try {
+    localStorage.setItem(MINUTES_FULL, full ? '1' : '0')
+  } catch {
+    // Kept for this time only.
+  }
+}
+
+/** The language minutes are written in, by its code, as the user last chose; empty for the
+ * language the meeting was held in. */
+const MINUTES_LANGUAGE = 'meeting.minutesLanguage'
+
+export function minutesLanguage(): string {
+  try {
+    return localStorage.getItem(MINUTES_LANGUAGE) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function setMinutesLanguage(language: string) {
+  try {
+    localStorage.setItem(MINUTES_LANGUAGE, language)
+  } catch {
+    // Kept for this time only.
+  }
 }
 
 /** Where the notes of the recording still running are kept, in case it is cut short. */
@@ -520,6 +565,33 @@ function tidied(
   })
 }
 
+/** Looks for the names the transcript gives its unnamed speakers, and offers them for
+ * the meeting `id`. Nothing is named until the user takes a name. */
+export function findSpeakerNames(
+  id: string,
+  text: string,
+  speakerLabel: string,
+  named: Record<number, string>,
+): Promise<void> {
+  const speakers = speakersOf(text, speakerLabel)
+  const unnamed = new Set(
+    speakers.filter((speaker): speaker is number => speaker !== null && !named[speaker]?.trim()),
+  )
+  if (unnamed.size === 0) return Promise.resolve()
+  const lines = text.split('\n')
+  const pieces = spokenLines(text, speakerLabel).map((line, order) => ({
+    speaker: speakers[order] ?? 0,
+    text: lines[line],
+  }))
+  return Promise.resolve(meetingSpeakerNames(pieces))
+    .then((found) => {
+      const list = (found ?? []).filter((name) => unnamed.has(name.speaker))
+      if (list.length > 0 && useMeetingStore.getState().id === id)
+        useMeetingStore.setState({ namesFound: { id, list } })
+    })
+    .catch(() => {})
+}
+
 /** Puts a meeting right in steps: first the words that were misheard, then, where the
  * speakers are told apart, who said what by the sense of it. It goes on while another
  * page or meeting is open, and its result is kept with the meeting either way. */
@@ -543,6 +615,7 @@ export function tidyMeeting(speakerLabel: string, source?: string): Promise<void
         // Only a meeting that is still as it was sent off takes the answer.
         if (now.text !== text) return
         useMeetingStore.setState({ text: next.text, times: next.times, unpolished })
+        void findSpeakerNames(id, next.text, speakerLabel, now.names)
         return persistMeeting(speakerLabel)
       }
       return Promise.resolve(meetingGet(id)).then((kept) => {
@@ -626,7 +699,12 @@ export function makeMinutes(
       const timed = record.times ?? []
       const right = await tidied(heard, speakerLabel, timed, record.started_at, () =>
         begin('speakers'),
-      ).catch((): Tidied => ({ text: heard, times: timed }))
+      ).catch((): Tidied => {
+        // The minutes are still written from the words as heard, and the user is told
+        // that the text was not tidied up.
+        useMeetingStore.setState({ error: 'meeting.polishFailed' })
+        return { text: heard, times: timed }
+      })
       const better = right.text
       if (better !== heard) {
         record = await keep(
@@ -638,12 +716,15 @@ export function makeMinutes(
           },
         )
       }
+      void findSpeakerNames(id, better, speakerLabel, record.names ?? {})
       begin('minutes')
       const minutes =
         (await meetingMinutes(
           renameSpeakers(better, speakerLabel, record.names ?? {}),
           template,
           record.notes,
+          minutesFull(),
+          minutesLanguage(),
         )) ?? ''
       await keep({ ...record, minutes }, { minutes })
     })

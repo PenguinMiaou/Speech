@@ -146,6 +146,12 @@ async fn speed_of(client: &reqwest::Client, url: &str) -> Option<u64> {
     (received > 0).then(|| (received as f64 / seconds) as u64)
 }
 
+/// Whether `url` goes through a public proxy or mirror rather than to the file's own
+/// server or the project's ModelScope copy.
+pub fn relayed(url: &str) -> bool {
+    url.starts_with(HUGGINGFACE_MIRROR) || GITHUB_PROXIES.iter().any(|proxy| url.starts_with(proxy))
+}
+
 /// Remembers which source delivered a file.
 pub fn worked(used: &str) {
     *LAST.lock().unwrap_or_else(|p| p.into_inner()) = Some(host_of(used).to_string());
@@ -276,6 +282,15 @@ mod tests {
         )
         .await;
         assert_eq!(order, vec![quick, slow, silent, refused]);
+    }
+
+    #[test]
+    fn only_the_mirror_and_the_proxies_are_relayed() {
+        let found = candidates_from(GH, Some(COPY));
+        let through: Vec<bool> = found.iter().map(|url| relayed(url)).collect();
+        assert_eq!(through[..2], [false, false]);
+        assert!(through[2..].iter().all(|through| *through));
+        assert!(relayed(&candidates_from(HF, None)[1]));
     }
 
     #[test]

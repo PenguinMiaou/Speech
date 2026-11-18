@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, ChevronDown, Globe, Loader2, RefreshCw, XCircle } from 'lucide-react'
-import { useAppStore, type LlmApiFormat } from '../../stores/appStore'
+import {
+  useAppStore,
+  type AppConfig,
+  type LlmApiFormat,
+  type LlmProvider,
+  type TestStatus,
+} from '../../stores/appStore'
 import { LLM_DEFAULT_CONFIG, llmProviderRequiresApiKey } from '../../lib/constants'
 import {
   CUSTOM_LLM_PROVIDER,
@@ -29,18 +35,59 @@ function errorText(error: unknown): string | null {
   return typeof error === 'string' ? error : null
 }
 
-/** Base URL, then API key, then model. The service is worked out from the URL. */
-export function LlmConnectionForm() {
+/** The settings one connection form edits: the main service or the one meetings use. */
+const FIELDS = {
+  main: {
+    provider: 'llm_provider',
+    baseUrl: 'llm_base_url',
+    apiFormat: 'llm_api_format',
+    model: 'llm_model',
+    namespace: 'llm',
+  },
+  meeting: {
+    provider: 'meeting_llm_provider',
+    baseUrl: 'meeting_llm_base_url',
+    apiFormat: 'meeting_llm_api_format',
+    model: 'meeting_llm_model',
+    namespace: 'meeting_llm',
+  },
+} as const
+
+type Connection = { provider: string; baseUrl: string; apiFormat: string; model: string }
+
+/** Base URL, then API key, then model. The service is worked out from the URL. With
+ * `meeting`, the service and model meetings use, apart from everyday dictation. */
+export function LlmConnectionForm({ meeting = false }: { meeting?: boolean } = {}) {
   const { t } = useTranslation()
   const config = useAppStore((s) => s.config)
-  const updateConfig = useAppStore((s) => s.updateConfig)
-  const testStatus = useAppStore((s) => s.llmTestStatus)
-  const setTestStatus = useAppStore((s) => s.setLlmTestStatus)
-  const latencyMs = useAppStore((s) => s.llmLatencyMs)
-  const setLatencyMs = useAppStore((s) => s.setLlmLatencyMs)
-  const models = useAppStore((s) => s.llmModels)
-  const setModels = useAppStore((s) => s.setLlmModels)
-  const [apiKey, setApiKey] = useState(config.llm_api_key)
+  const updateAppConfig = useAppStore((s) => s.updateConfig)
+  const fields = meeting ? FIELDS.meeting : FIELDS.main
+  const updateConfig = (values: Partial<Connection>) => {
+    const patch: Record<string, unknown> = {}
+    for (const [name, value] of Object.entries(values)) {
+      patch[fields[name as keyof Connection]] = value
+    }
+    updateAppConfig(patch as Partial<AppConfig>)
+  }
+  // The main form shares its test result and model list with the rest of the app; the
+  // meeting form keeps its own.
+  const sharedStatus = useAppStore((s) => s.llmTestStatus)
+  const setSharedStatus = useAppStore((s) => s.setLlmTestStatus)
+  const sharedLatency = useAppStore((s) => s.llmLatencyMs)
+  const setSharedLatency = useAppStore((s) => s.setLlmLatencyMs)
+  const sharedModels = useAppStore((s) => s.llmModels)
+  const setSharedModels = useAppStore((s) => s.setLlmModels)
+  const [ownStatus, setOwnStatus] = useState<TestStatus>('idle')
+  const [ownLatency, setOwnLatency] = useState<number | null>(null)
+  const [ownModels, setOwnModels] = useState<string[]>([])
+  const testStatus = meeting ? ownStatus : sharedStatus
+  const setTestStatus = meeting ? setOwnStatus : setSharedStatus
+  const latencyMs = meeting ? ownLatency : sharedLatency
+  const setLatencyMs = meeting ? setOwnLatency : setSharedLatency
+  const models = meeting ? ownModels : sharedModels
+  const setModels = meeting ? setOwnModels : setSharedModels
+  const legacyKey = meeting ? '' : config.llm_api_key
+  const [apiKey, setApiKey] = useState(legacyKey)
   const [fetching, setFetching] = useState(false)
   const [testError, setTestError] = useState<string | null>(null)
   const [reasoningActive, setReasoningActive] = useState(false)
@@ -48,33 +95,37 @@ export function LlmConnectionForm() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const provider = config.llm_provider
-  const baseUrl = config.llm_base_url
-  const apiFormat = config.llm_api_format || llmDefaultApiFormat(provider)
+  const provider = config[fields.provider] as LlmProvider
+  const baseUrl = config[fields.baseUrl]
+  const chosenModel = config[fields.model]
+  const apiFormat = (config[fields.apiFormat] as LlmApiFormat) || llmDefaultApiFormat(provider)
   const requiresApiKey = llmProviderRequiresApiKey(provider)
   const canReachService = Boolean(baseUrl.trim()) && (!requiresApiKey || Boolean(apiKey))
 
   useEffect(() => {
     let cancelled = false
-    const legacyKey = config.llm_api_key
     setApiKey(legacyKey)
     setCredentialError(null)
-    readCredential('llm', provider)
+    // A meeting service with no key of its own uses the main key kept for the same service.
+    const read = async () =>
+      (await readCredential(fields.namespace, provider)) ||
+      (meeting ? await readCredential('llm', provider) : null)
+    read()
       .then((secret) => {
-        if (!cancelled) setApiKey(secret ?? legacyKey)
+        if (!cancelled) setApiKey(secret || legacyKey)
       })
       .catch((error) => console.error('[credentials] failed to read LLM credential', error))
     return () => {
       cancelled = true
     }
-  }, [config.llm_api_key, provider])
+  }, [legacyKey, provider, fields.namespace, meeting])
 
   const persistKey = useCallback(
     (value: string, delayMs = 350) => {
       if (saveTimer.current) clearTimeout(saveTimer.current)
       saveTimer.current = setTimeout(() => {
         saveTimer.current = null
-        setCredential('llm', provider, value)
+        setCredential(fields.namespace, provider, value)
           .then(() => setCredentialError(null))
           .catch((error) => {
             setCredentialError(errorText(error) ?? String(error))
@@ -82,7 +133,7 @@ export function LlmConnectionForm() {
           })
       }, delayMs)
     },
-    [provider],
+    [provider, fields.namespace],
   )
 
   const refreshModels = useCallback(async () => {
@@ -140,9 +191,9 @@ export function LlmConnectionForm() {
   const typeBaseUrl = (value: string) => {
     const next = llmProviderFromBaseUrl(value)
     updateConfig({
-      llm_provider: next,
-      llm_base_url: value,
-      llm_api_format: next === provider ? apiFormat : llmDefaultApiFormat(next),
+      provider: next,
+      baseUrl: value,
+      apiFormat: next === provider ? apiFormat : llmDefaultApiFormat(next),
     })
     setModels([])
     resetConnection()
@@ -150,17 +201,17 @@ export function LlmConnectionForm() {
 
   const pickEndpoint = (endpoint: LlmEndpoint) => {
     updateConfig({
-      llm_provider: endpoint.provider,
-      llm_base_url: endpoint.baseUrl,
-      llm_model: endpoint.model,
-      llm_api_format: llmDefaultApiFormat(endpoint.provider),
+      provider: endpoint.provider,
+      baseUrl: endpoint.baseUrl,
+      model: endpoint.model,
+      apiFormat: llmDefaultApiFormat(endpoint.provider),
     })
     setModels([])
     resetConnection()
   }
 
   const chooseFormat = (value: LlmApiFormat) => {
-    updateConfig({ llm_api_format: value })
+    updateConfig({ apiFormat: value })
     setModels([])
     resetConnection()
   }
@@ -184,12 +235,12 @@ export function LlmConnectionForm() {
       setFetching(false)
     }
 
-    let model = config.llm_model.trim()
+    let model = chosenModel.trim()
     if (!model) {
       const preferred = LLM_DEFAULT_CONFIG[provider]?.model
       if (preferred && listed.includes(preferred)) {
         model = preferred
-        updateConfig({ llm_model: preferred })
+        updateConfig({ model: preferred })
       }
     }
     if (!model) {
@@ -307,12 +358,12 @@ export function LlmConnectionForm() {
         <FieldLabel>{t('settings.model')}</FieldLabel>
         <div className="flex gap-2">
           <ModelPicker
-            value={config.llm_model}
+            value={chosenModel}
             models={models}
             timings={timings}
             onTime={canReachService ? timeModel : undefined}
             onChange={(model) => {
-              updateConfig({ llm_model: model })
+              updateConfig({ model })
               setLatencyMs(null)
               setTestError(null)
             }}
@@ -334,21 +385,23 @@ export function LlmConnectionForm() {
         )}
       </div>
 
-      <div data-field="fallback-model">
-        <label>
-          <FieldLabel>{t('settings.fallbackModel')}</FieldLabel>
-          <input
-            type="text"
-            value={config.llm_fallback_model}
-            onChange={(event) => updateConfig({ llm_fallback_model: event.target.value })}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            className={`w-full px-2.5 py-2 ${FIELD_CLASS}`}
-          />
-        </label>
-        <p className="mt-1 text-[11px] text-text-tertiary">{t('settings.fallbackModelHint')}</p>
-      </div>
+      {!meeting && (
+        <div data-field="fallback-model">
+          <label>
+            <FieldLabel>{t('settings.fallbackModel')}</FieldLabel>
+            <input
+              type="text"
+              value={config.llm_fallback_model}
+              onChange={(event) => updateAppConfig({ llm_fallback_model: event.target.value })}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              className={`w-full px-2.5 py-2 ${FIELD_CLASS}`}
+            />
+          </label>
+          <p className="mt-1 text-[11px] text-text-tertiary">{t('settings.fallbackModelHint')}</p>
+        </div>
+      )}
     </div>
   )
 }

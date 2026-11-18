@@ -97,6 +97,9 @@ const mockAppStore = {
     selected_text_enabled: false,
     target_lang: 'en',
     translation: { targets: ['en'], active_target: 'en' },
+    meeting_llm_provider: '',
+    meeting_llm_base_url: '',
+    meeting_llm_model: '',
   },
   updateConfig: vi.fn(),
   setConfig: vi.fn(),
@@ -140,6 +143,9 @@ describe('LlmPane', () => {
       selected_text_enabled: false,
       target_lang: 'en',
       translation: { targets: ['en'], active_target: 'en' },
+      meeting_llm_provider: '',
+      meeting_llm_base_url: '',
+      meeting_llm_model: '',
     }
     mockAppStore.llmTestStatus = 'idle'
     mockAppStore.llmLatencyMs = null
@@ -156,6 +162,38 @@ describe('LlmPane', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+  })
+
+  describe('Meeting model', () => {
+    it('turns a meeting service of its own on from the main one, and off again', () => {
+      const { rerender } = render(<LlmPane />)
+      const meetings = screen.getByRole('region', { name: 'settings.meetingModel' })
+      expect(meetings.querySelectorAll('[data-field="api-key"]')).toHaveLength(0)
+      fireEvent.click(within(meetings).getByRole('switch'))
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({
+        meeting_llm_provider: 'openai',
+        meeting_llm_base_url: 'https://api.openai.com/v1',
+        meeting_llm_api_format: undefined,
+        meeting_llm_model: 'gpt-4o-mini',
+      })
+
+      mockAppStore.config = {
+        ...mockAppStore.config,
+        meeting_llm_provider: 'openai',
+        meeting_llm_base_url: 'https://api.openai.com/v1',
+        meeting_llm_model: 'gpt-4o',
+      }
+      rerender(<LlmPane />)
+      const shown = screen.getByRole('region', { name: 'settings.meetingModel' })
+      expect(shown.querySelectorAll('[data-field="api-key"]')).toHaveLength(1)
+      fireEvent.click(within(shown).getByRole('switch'))
+      expect(mockAppStore.updateConfig).toHaveBeenLastCalledWith({
+        meeting_llm_provider: '',
+        meeting_llm_base_url: '',
+        meeting_llm_api_format: '',
+        meeting_llm_model: '',
+      })
+    })
   })
 
   describe('Scope', () => {

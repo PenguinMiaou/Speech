@@ -1,15 +1,20 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, LayoutTemplate, Pencil } from 'lucide-react'
+import { Check, LayoutTemplate, Pencil, Sparkles, X } from 'lucide-react'
 import {
   copyText,
   meetingAsk,
   meetingMinutes,
+  minutesLearn,
+  minutesStyle,
+  minutesStyleSave,
   minutesTemplates,
   saveTextFile,
   type MinutesTemplate,
 } from '../../lib/tauri'
 import { BUILT_IN, OWN, own, ownKind, TemplateGallery, templateText } from './TemplateGallery'
+import { minutesFull, minutesLanguage } from '../../stores/meetingStore'
+import { MinutesForm } from './MinutesForm'
 
 const KNOWN_ERRORS = ['llm_not_configured']
 
@@ -43,6 +48,45 @@ export function MeetingMinutes({
   const [asking, setAsking] = useState(false)
   const [editing, setEditing] = useState(false)
   const [picking, setPicking] = useState(false)
+  /** The rules learned for writing minutes after the template these minutes follow. */
+  const [style, setStyle] = useState<string[]>([])
+  const [showingStyle, setShowingStyle] = useState(false)
+  /** Set while the model learns from the user's change. */
+  const [learning, setLearning] = useState(false)
+  /** The minutes as they were when the user began to change them. */
+  const before = useRef<string | null>(null)
+  const firstLine = (minutes ?? '').split('\n').find((line) => line.trim() !== '') ?? ''
+
+  useEffect(() => {
+    if (!firstLine) return setStyle([])
+    void Promise.resolve(minutesStyle(firstLine))
+      .then((rules) => setStyle(rules ?? []))
+      .catch(() => {})
+  }, [firstLine])
+
+  /** Begins or ends a change by hand; an ended change teaches how the user wants minutes. */
+  const toggleEditing = () => {
+    if (!editing) {
+      before.current = minutes
+      setEditing(true)
+      return
+    }
+    setEditing(false)
+    const given = before.current
+    before.current = null
+    if (given === null || minutes === null || given === minutes) return
+    setLearning(true)
+    void Promise.resolve(minutesLearn(given, minutes))
+      .then((rules) => rules && setStyle(rules))
+      .catch(() => {})
+      .finally(() => setLearning(false))
+  }
+
+  const forget = (rule: string) => {
+    const rules = style.filter((other) => other !== rule)
+    setStyle(rules)
+    void Promise.resolve(minutesStyleSave(firstLine, rules)).catch(() => {})
+  }
 
   useEffect(() => {
     void Promise.resolve(minutesTemplates())
@@ -60,7 +104,15 @@ export function MeetingMinutes({
     setPicking(false)
     setWorking(true)
     setError(null)
-    Promise.resolve(meetingMinutes(transcript, templateText(t, templates, chosen), notes))
+    Promise.resolve(
+      meetingMinutes(
+        transcript,
+        templateText(t, templates, chosen),
+        notes,
+        minutesFull(),
+        minutesLanguage(),
+      ),
+    )
       .then((text) => onMinutes(text ?? ''))
       .catch((reason) => fail(reason, 'minutes'))
       .finally(() => setWorking(false))
@@ -96,6 +148,7 @@ export function MeetingMinutes({
           <LayoutTemplate size={14} />
           <span className="truncate">{chosenName}</span>
         </button>
+        <MinutesForm />
         <button type="button" onClick={write} disabled={working} className="btn-record ml-auto">
           {working ? t('meeting.minutesWorking') : t('meeting.minutes')}
         </button>
@@ -152,7 +205,7 @@ export function MeetingMinutes({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setEditing(!editing)}
+              onClick={toggleEditing}
               aria-label={t('meeting.editMinutes')}
               aria-pressed={editing}
               title={t('meeting.editMinutes')}
@@ -170,7 +223,44 @@ export function MeetingMinutes({
             >
               {t('meeting.save')}
             </button>
+            {(style.length > 0 || learning) && (
+              <button
+                type="button"
+                onClick={() => setShowingStyle(!showingStyle)}
+                aria-expanded={showingStyle}
+                className={`btn-quiet ml-auto flex items-center gap-1 ${learning ? 'animate-pulse' : ''}`}
+              >
+                <Sparkles size={14} />
+                {learning
+                  ? t('meeting.styleLearning')
+                  : t('meeting.style', { count: style.length })}
+              </button>
+            )}
           </div>
+          {showingStyle && style.length > 0 && (
+            <div className="rounded-[8px] border border-border px-3 py-2 text-[12px]">
+              <p className="text-text-tertiary">{t('meeting.styleNote')}</p>
+              <ul
+                aria-label={t('meeting.style', { count: style.length })}
+                className="mt-1.5 space-y-1"
+              >
+                {style.map((rule) => (
+                  <li key={rule} className="flex items-start gap-2 text-text-secondary">
+                    <span className="min-w-0 flex-1">{rule}</span>
+                    <button
+                      type="button"
+                      onClick={() => forget(rule)}
+                      aria-label={t('meeting.styleForget', { rule })}
+                      title={t('meeting.styleForget', { rule })}
+                      className="btn-quiet px-1"
+                    >
+                      <X size={12} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
