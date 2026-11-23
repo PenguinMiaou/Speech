@@ -239,6 +239,8 @@ export interface AppConfig {
   theme: Theme
   auto_start: boolean
   close_to_tray: boolean
+  /** Offer to record when a meeting app is found taking sound from the microphone. */
+  meeting_detect: boolean
   start_minimized: boolean
   recording_limit_mode: 'auto' | 'custom'
   custom_recording_limit_seconds: number
@@ -279,6 +281,9 @@ interface AppState {
   // Recording
   audioVolume: number
   setAudioVolume: (v: number) => void
+  /** True while a dictation's microphone has heard nothing at all: muted, or not allowed. */
+  micSilent: boolean
+  setMicSilent: (silent: boolean) => void
   partialTranscript: string
   setPartialTranscript: (t: string) => void
   finalTranscript: string
@@ -805,6 +810,7 @@ const defaultConfig: AppConfig = {
   theme: 'system',
   auto_start: true,
   close_to_tray: true,
+  meeting_detect: true,
   start_minimized: false,
   recording_limit_mode: 'auto',
   custom_recording_limit_seconds: 600,
@@ -827,12 +833,15 @@ const defaultConfig: AppConfig = {
 
 export const useAppStore = create<AppState>((set) => ({
   pipelineState: 'idle',
-  setPipelineState: (pipelineState) => set({ pipelineState }),
+  setPipelineState: (pipelineState) =>
+    set(pipelineState === 'recording' ? { pipelineState } : { pipelineState, micSilent: false }),
   activeVoiceMode: null,
   setActiveVoiceMode: (activeVoiceMode) => set({ activeVoiceMode }),
 
   audioVolume: 0,
   setAudioVolume: (audioVolume) => set({ audioVolume }),
+  micSilent: false,
+  setMicSilent: (micSilent) => set({ micSilent }),
   partialTranscript: '',
   setPartialTranscript: (partialTranscript) => set({ partialTranscript }),
   finalTranscript: '',

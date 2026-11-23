@@ -407,7 +407,7 @@ pub async fn meeting_record_start(
             languages.len()
         ),
     );
-    crate::meeting_record::start(
+    let started = crate::meeting_record::start(
         input_device,
         by_speaker,
         system_sound,
@@ -425,7 +425,10 @@ pub async fn meeting_record_start(
             };
         },
     )
-    .await
+    .await;
+    // A meeting the app records itself is not offered again.
+    crate::meeting_probe::set_busy(started.is_ok());
+    started
 }
 
 /// Pauses the meeting recording or goes on with it. What is said during a pause is not
@@ -482,6 +485,7 @@ pub fn meeting_record_level() -> Option<MeetingLevel> {
 #[tauri::command]
 pub async fn meeting_record_stop(discard: bool) -> Result<Option<String>, String> {
     let stopped = crate::meeting_record::stop(discard).await;
+    crate::meeting_probe::set_busy(false);
     crate::applog::note(
         "meeting",
         &format!(

@@ -43,6 +43,9 @@ function safeUnlisten(unlisten: Unlisten) {
   }
 }
 
+/** The level below which the microphone hears nothing at all; as in the app's back end. */
+const MIC_DEAD_LEVEL = 0.0005
+
 export function useTauriEvents() {
   const { t } = useTranslation()
   const {
@@ -81,7 +84,17 @@ export function useTauriEvents() {
         })
     }
 
-    addListener<number>('audio:volume', setAudioVolume)
+    addListener<number>('audio:volume', (volume) => {
+      setAudioVolume(volume)
+      // The microphone hears something after all.
+      if (volume > MIC_DEAD_LEVEL && useAppStore.getState().micSilent) {
+        useAppStore.getState().setMicSilent(false)
+      }
+    })
+    addListener<null>('audio:silent', () => {
+      useAppStore.getState().setMicSilent(true)
+      toast(t('capsule.errors.micSilent'), 'info')
+    })
     addListener<string>('stt:partial', setPartialTranscript)
     addListener<string>('stt:final', setFinalTranscript)
     addListener<string>('llm:chunk', appendPolishedChunk)

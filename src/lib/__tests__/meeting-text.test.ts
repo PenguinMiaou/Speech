@@ -29,6 +29,7 @@ import {
   saidBy,
   speakersOf,
   withSpeakerAt,
+  withoutSection,
   withSpeakersChecked,
   withRunsJoined,
   withSpeakersJoined,
@@ -595,5 +596,26 @@ describe('wordsLike', () => {
   it('leaves out a word heard exactly so, and puts the nearest first', () => {
     expect(wordsLike(['Tauri'], dictionary)).toEqual([])
     expect(wordsLike(['Taury'], ['Taurus', 'Tauri'])).toEqual(['Tauri', 'Taurus'])
+  })
+})
+
+describe('withoutSection', () => {
+  const text = 'S 1  00:00\nfirst\n\nS 2  00:10\nsecond\n\nS 1  00:20\nthird'
+  it('takes out a heading, what was said under it and the blank line after it', () => {
+    expect(withoutSection(text, 'S', 3)).toEqual({
+      text: 'S 1  00:00\nfirst\n\nS 1  00:20\nthird',
+      heading: 1,
+    })
+    expect(withoutSection(text, 'S', 0)?.text).toBe('S 2  00:10\nsecond\n\nS 1  00:20\nthird')
+  })
+  it('takes the blank line before the last section along', () => {
+    expect(withoutSection(text, 'S', 6)).toEqual({
+      text: 'S 1  00:00\nfirst\n\nS 2  00:10\nsecond',
+      heading: 2,
+    })
+  })
+  it('leaves the text alone where the line is no heading', () => {
+    expect(withoutSection(text, 'S', 1)).toBeNull()
+    expect(withoutSection(text, 'S', 99)).toBeNull()
   })
 })

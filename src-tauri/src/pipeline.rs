@@ -198,6 +198,14 @@ fn should_finalize_stt_task(
         && active_session_id.load(Ordering::SeqCst) == task_session_id
 }
 
+/// Whether a dictation that has gone on `elapsed` with its microphone at most `loudest`
+/// should now tell the user the microphone hears nothing, unless it has `told` them.
+fn microphone_dead(told: bool, elapsed: std::time::Duration, loudest: f32) -> bool {
+    !told
+        && elapsed >= crate::audio::devices::DEAD_AFTER
+        && loudest < crate::audio::devices::DEAD_LEVEL
+}
+
 /// After a switch to a microphone that works, the user is asked to say it again.
 fn no_speech_user_error(microphone_switched: bool) -> crate::error::UserError {
     let code = if microphone_switched {
@@ -1735,6 +1743,11 @@ impl PipelineHandle {
         let audio_handle_ref = self.audio_handle.clone();
         let state_ref = self.state.clone();
         tokio::spawn(async move {
+            // A microphone that hears nothing at all is told of once, while there is
+            // still time to unmute it, instead of only after the dictation.
+            let began = std::time::Instant::now();
+            let mut loudest = 0.0_f32;
+            let mut told = false;
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(VOLUME_POLL_INTERVAL_MS)).await;
                 let current = PipelineState::from_u8(state_ref.load(Ordering::SeqCst));
@@ -1748,6 +1761,11 @@ impl PipelineHandle {
                     .map(|h| h.get_volume())
                     .unwrap_or(0.0);
                 let _ = app_handle.emit("audio:volume", vol);
+                loudest = loudest.max(vol);
+                if microphone_dead(told, began.elapsed(), loudest) {
+                    told = true;
+                    let _ = app_handle.emit("audio:silent", ());
+                }
             }
         });
 
@@ -3463,6 +3481,18 @@ fn heard(accumulated: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_microphone_that_hears_nothing_at_all_is_told_of_once_after_a_moment() {
+        use std::time::Duration;
+        let soon = Duration::from_millis(500);
+        let later = Duration::from_millis(2_500);
+        assert!(!microphone_dead(false, soon, 0.0));
+        assert!(microphone_dead(false, later, 0.0));
+        assert!(!microphone_dead(true, later, 0.0));
+        // A quiet room is not a dead microphone.
+        assert!(!microphone_dead(false, later, 0.002));
+    }
     use super::*;
 
     #[test]

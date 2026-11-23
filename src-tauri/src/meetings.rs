@@ -43,6 +43,18 @@ pub struct Meeting {
     /// The folder the user keeps it in. Empty when it is in none.
     #[serde(default)]
     pub folder: String,
+    /// The questions asked of it and their answers, the newest first.
+    #[serde(default)]
+    pub answers: Vec<Answer>,
+}
+
+/// A question asked of a meeting, with the answer it got and when, in milliseconds since
+/// 1970.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Answer {
+    pub question: String,
+    pub answer: String,
+    pub at: u64,
 }
 
 /// A meeting's text as it stood before it was tidied.
@@ -117,7 +129,7 @@ fn save_in(dir: &Path, meeting: &Meeting) -> Result<(), String> {
     std::fs::write(file, raw).map_err(|error| error.to_string())
 }
 
-fn get_in(dir: &Path, id: &str) -> Result<Meeting, String> {
+pub(crate) fn get_in(dir: &Path, id: &str) -> Result<Meeting, String> {
     let raw = std::fs::read(file_of(dir, id)?).map_err(|_| "meeting_not_found".to_string())?;
     serde_json::from_slice(&raw).map_err(|_| "meeting_not_found".to_string())
 }
@@ -130,7 +142,7 @@ fn set_folder_in(dir: &Path, id: &str, folder: &str) -> Result<(), String> {
 }
 
 /// Every meeting, the newest first.
-fn list_in(dir: &Path) -> Vec<Summary> {
+pub(crate) fn list_in(dir: &Path) -> Vec<Summary> {
     let mut all: Vec<Summary> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -208,7 +220,7 @@ fn around(text: &str, word: &str) -> String {
 
 /// The meetings that hold every word of `query`, in their text, notes, minutes or title,
 /// the newest first. Capital and small letters count as the same.
-fn search_in(dir: &Path, query: &str) -> Vec<Found> {
+pub(crate) fn search_in(dir: &Path, query: &str) -> Vec<Found> {
     let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     if words.is_empty() {
         return Vec::new();

@@ -12,6 +12,10 @@ pub mod hotkey;
 mod linux_x11;
 pub mod llm;
 pub mod local_stt;
+pub mod mcp;
+pub mod meeting_offer;
+pub mod meeting_probe;
+pub mod meeting_questions;
 mod meeting_record;
 pub mod meetings;
 pub mod minutes;
@@ -927,6 +931,8 @@ pub fn run() {
             let mut initial_config =
                 tauri::async_runtime::block_on(config_manager.load()).unwrap_or_default();
             sync_auto_start_preference(&app_handle, &config_manager, &mut initial_config);
+            meeting_probe::set_enabled(initial_config.meeting_detect);
+            meeting_probe::start_watch(app_handle.clone());
             app.manage(config_manager);
             app.manage(history_store);
             app.manage(dictionary_store);
@@ -1254,6 +1260,11 @@ pub fn run() {
             commands::minutes::minutes_templates,
             commands::minutes::minutes_style,
             commands::minutes::minutes_style_save,
+            commands::minutes::meeting_questions,
+            commands::minutes::meeting_questions_save,
+            meeting_offer::meeting_offer_current,
+            meeting_offer::meeting_offer_take,
+            meeting_offer::meeting_offer_dismiss,
             commands::minutes::minutes_learn,
             commands::minutes::minutes_template_import,
             commands::minutes::minutes_template_remove,

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { changes } from '../../lib/word-diff'
 import { formatted, hasFormat, plainOf } from '../../lib/meeting-format'
 import {
@@ -35,6 +36,12 @@ interface Props {
   /** Given when a speaker can be named where they speak, with what that field is called. */
   onName?: (speaker: number, name: string) => void
   nameLabel?: string
+  /** Given when a section can be taken out of the text: called with its heading's line
+   * once the user has clicked twice, the second time to confirm, with what the button is
+   * called each time. */
+  onCut?: (line: number) => void
+  cutLabel?: string
+  cutConfirmLabel?: string
 }
 
 /** The place in words set out in several pieces that was clicked, counted in their
@@ -77,6 +84,9 @@ export function Transcript({
   allLabel,
   onName,
   nameLabel,
+  onCut,
+  cutLabel,
+  cutConfirmLabel,
 }: Props) {
   const lines = transcriptLines(text, speakerLabel)
   const was = before === undefined ? [] : transcriptLines(before, speakerLabel)
@@ -92,6 +102,8 @@ export function Transcript({
   const [raw, setRaw] = useState<number | null>(null)
   const [choosing, setChoosing] = useState<number | null>(null)
   const [all, setAll] = useState(false)
+  // The heading whose section is to be taken out once the user confirms.
+  const [cutting, setCutting] = useState<number | null>(null)
   const numbers = [
     ...new Set(lines.flatMap((line) => ('text' in line || !line.speaker ? [] : [line.speaker]))),
   ].sort((a, b) => a - b)
@@ -276,7 +288,7 @@ export function Transcript({
           {'text' in line ? (
             words(line, index)
           ) : (
-            <>
+            <span className="group/section">
               {line.speaker !== null && !goesOn[index] && (
                 <>
                   {onSpeaker ? (
@@ -366,7 +378,28 @@ export function Transcript({
               ) : (
                 <span className="text-[12px] tabular-nums text-text-tertiary">{line.time}</span>
               )}
-            </>
+              {onCut && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (cutting !== index) return setCutting(index)
+                    setCutting(null)
+                    onCut(index)
+                  }}
+                  onBlur={() => setCutting((now) => (now === index ? null : now))}
+                  aria-label={cutting === index ? cutConfirmLabel : cutLabel}
+                  title={cutting === index ? cutConfirmLabel : cutLabel}
+                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border-none bg-transparent p-0 align-middle text-[12px] ${
+                    cutting === index
+                      ? 'text-error'
+                      : 'text-text-tertiary opacity-0 hover:text-error focus:opacity-100 group-hover/section:opacity-100'
+                  }`}
+                >
+                  <Trash2 size={12} />
+                  {cutting === index && cutConfirmLabel}
+                </button>
+              )}
+            </span>
           )}
         </Fragment>
       ))}

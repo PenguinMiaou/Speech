@@ -311,6 +311,32 @@ describe('MeetingCard', () => {
     expect(tauri.meetingLanguages).toHaveBeenCalledWith(['en'])
   })
 
+  it('says so when the microphone hears nothing at all, and not when it hears the room', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('meeting.micSilent')
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({
+      seconds: 10,
+      volume: 0.002,
+      waiting: 0,
+    })
+    await waitFor(() => expect(screen.queryByText('meeting.micSilent')).toBeNull(), {
+      timeout: 2000,
+    })
+  })
+
+  it('begins recording when asked from the offer window, once its settings are in', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 1, volume: 0.1, waiting: 0 })
+    useMeetingStore.setState({ recordAsked: true })
+    await ready()
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    expect(tauri.meetingRecordStart).toHaveBeenCalledTimes(1)
+    expect(useMeetingStore.getState().recordAsked).toBe(false)
+  })
+
   it('settles who spoke when a recording ends', async () => {
     vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
     vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
@@ -614,6 +640,23 @@ describe('MeetingCard', () => {
     expect(screen.getByLabelText('meeting.result').textContent).toBe(
       'meeting.speakerLabel 1  00:00\nhello\n\n00:04\nok',
     )
+  })
+
+  it('takes a section out of the text once the user confirms', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nprivate aside\n\nmeeting.speakerLabel 1  00:09\nback to it',
+    )
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('private aside')
+    fireEvent.click(screen.getAllByRole('button', { name: 'meeting.cut' })[1])
+    // The first click only asks.
+    expect(screen.getByText('private aside')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.cutConfirm' }))
+    expect(useMeetingStore.getState().text).toBe(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 1  00:09\nback to it',
+    )
+    expect(screen.queryByText('private aside')).toBeNull()
   })
 
   it('offers the names the meeting gives its speakers and names one only when taken', async () => {
@@ -1223,6 +1266,34 @@ describe('MeetingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.deleteMeeting' }))
     await waitFor(() => expect(tauri.meetingDelete).toHaveBeenCalledWith('m-1'))
+  })
+
+  it('keeps the questions asked of a meeting with it, and shows them when it is opened again', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nthe budget',
+      notes: '',
+      minutes: '',
+      names: {},
+      answers: [{ question: 'earlier?', answer: 'yes', at: 1 }],
+    })
+    vi.mocked(tauri.meetingAsk).mockResolvedValue('on Friday')
+    vi.mocked(tauri.meetingSave).mockResolvedValue()
+    await ready()
+    fireEvent.click(await screen.findByText('budget talk'))
+    await screen.findByText('earlier?')
+    fireEvent.click(screen.getByRole('tab', { name: 'meeting.tabMinutes' }))
+    fireEvent.change(screen.getByLabelText('meeting.ask'), { target: { value: 'when?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.askButton' }))
+    await waitFor(() => expect(tauri.meetingSave).toHaveBeenCalled())
+    expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0].answers).toEqual([
+      { question: 'when?', answer: 'on Friday', at: expect.any(Number) },
+      { question: 'earlier?', answer: 'yes', at: 1 },
+    ])
   })
 
   it('hands the notes taken during the meeting to the minutes', async () => {

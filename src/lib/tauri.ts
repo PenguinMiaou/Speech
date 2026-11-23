@@ -1023,6 +1023,25 @@ export interface MeetingRecord {
     shaped?: string
     times?: { end_ms: number; chars: number; marks: [number, number][] }[]
   } | null
+  /** The questions asked of it and their answers, the newest first. */
+  answers?: MeetingAnswer[]
+}
+
+/** A question asked of a meeting, the answer it got, and when, in milliseconds. */
+export interface MeetingAnswer {
+  question: string
+  answer: string
+  at: number
+}
+
+/** The questions the user keeps to ask of any meeting. */
+export function meetingQuestions(): Promise<string[]> {
+  return invoke('meeting_questions')
+}
+
+/** Keeps the questions to ask of any meeting; resolves with what is now kept. */
+export function meetingQuestionsSave(questions: string[]): Promise<string[]> {
+  return invoke('meeting_questions_save', { questions })
 }
 
 export interface MeetingSummary {
@@ -1148,6 +1167,42 @@ export function onMeetingPolishing(
 export interface MeetingTerm {
   spelling: string
   others: string[]
+}
+
+/** A meeting app, or a browser, found taking sound from the microphone. */
+export interface MeetingApp {
+  name: string
+  id: string
+  /** A browser holds the microphone for many things besides meetings. */
+  browser: boolean
+  /** Found by taking and playing sound at once, not by its name: a call in any program. */
+  call: boolean
+}
+
+/** Calls `handler` when a meeting is found going on, once for each meeting. */
+export function onMeetingDetected(handler: (found: MeetingApp) => void): Promise<UnlistenFn> {
+  return listen<MeetingApp>('meeting:detected', (event) => handler(event.payload))
+}
+
+/** The meeting the offer window is asking about, if any. */
+export function meetingOfferCurrent(): Promise<MeetingApp | null> {
+  return invoke('meeting_offer_current')
+}
+
+/** Takes up the offer to record a meeting found going on: the main window comes forward
+ * and begins recording. */
+export function meetingOfferTake(): Promise<void> {
+  return invoke('meeting_offer_take')
+}
+
+/** Lets the offer to record a meeting go. */
+export function meetingOfferDismiss(): Promise<void> {
+  return invoke('meeting_offer_dismiss')
+}
+
+/** Calls `handler` when the user asked, from the capsule, for the meeting to be recorded. */
+export function onMeetingRecordAsked(handler: () => void): Promise<UnlistenFn> {
+  return listen('meeting:record-asked', () => handler())
 }
 
 export function onMeetingTerms(handler: (terms: MeetingTerm[]) => void): Promise<UnlistenFn> {

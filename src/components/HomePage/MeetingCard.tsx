@@ -94,6 +94,7 @@ import {
   withLines,
   withRunsJoined,
   withSpeakerAt,
+  withoutSection,
   withSpeakersJoined,
   withSpellings,
 } from '../../lib/meeting-text'
@@ -132,6 +133,10 @@ const KNOWN_ERRORS = [
 const SPEAKERS_KEY = 'meeting.speakers'
 const SYSTEM_SOUND_KEY = 'meeting.systemSound'
 const TRANSLATE_KEY = 'meeting.translate'
+/** Below this level the microphone hears nothing at all, not even the room; after this many
+ * seconds of a recording that is told. */
+const MIC_DEAD_LEVEL = 0.0005
+const MIC_DEAD_AFTER = 4
 const TRANSLATE_TO_KEY = 'meeting.translateTo'
 const LANGUAGES_KEY = 'meeting.languages'
 const POLISH_KEY = 'meeting.polishAfter'
@@ -268,6 +273,7 @@ export function MeetingCard() {
     notes,
     names,
     minutes,
+    answers,
     id,
     interim,
     title,
@@ -404,6 +410,9 @@ export function MeetingCard() {
   /** Counts the seconds while a file is worked on, so that the time shown moves. */
   const [, tick] = useState(0)
   const [level, setLevel] = useState({ seconds: 0, volume: 0, waiting: 0 })
+  /** The loudest the microphone has been in this recording, to tell one that hears nothing
+   * at all: muted, or not allowed. */
+  const [loudest, setLoudest] = useState(0)
   const liveRef = useRef<HTMLDivElement>(null)
   const [speakers, setSpeakers] = useState(false)
   const [speakersInstalled, setSpeakersInstalled] = useState(false)
@@ -430,6 +439,9 @@ export function MeetingCard() {
   const [voices, setVoices] = useState<string[]>([])
   const [tab, setTab] = useState('text')
   const [models, setModels] = useState<string[]>([])
+  /** How many of the settings a recording needs, read when the page opens, are in. */
+  const [prepared, setPrepared] = useState(0)
+  const recordAsked = useMeetingStore((s) => s.recordAsked)
   const [model, setModel] = useState<string | null>(null)
   const optionsRef = useRef<TranscribeOptions>({
     speakerLabel: null,
@@ -485,6 +497,7 @@ export function MeetingCard() {
         ? {}
         : {
             minutes: null,
+            answers: [],
             id: null,
             notes: '',
             title: '',
@@ -596,6 +609,7 @@ export function MeetingCard() {
         setSpeakers(status.installed && remembered(SPEAKERS_KEY, true))
       })
       .catch(() => {})
+      .finally(() => setPrepared((done) => done + 1))
     const timing = Promise.resolve(
       onWordTimesProgress(({ downloaded, total }) =>
         setTimesDownload(total > 0 ? Math.round((downloaded / total) * 100) : 0),
@@ -617,6 +631,7 @@ export function MeetingCard() {
         setModels((all ?? []).filter((entry) => entry.installed).map((entry) => entry.id)),
       )
       .catch(() => {})
+      .finally(() => setPrepared((done) => done + 1))
     return () => {
       void timing.then((stop) => stop?.())
       void dropped.then((stop) => stop?.())
@@ -628,7 +643,11 @@ export function MeetingCard() {
     if (phase !== 'recording' && phase !== 'finishing') return
     const read = () =>
       void Promise.resolve(meetingRecordLevel())
-        .then((now) => now && setLevel(now))
+        .then((now) => {
+          if (!now) return
+          setLevel(now)
+          setLoudest((was) => Math.max(was, now.volume))
+        })
         .catch(() => {})
     read()
     const timer = window.setInterval(read, 500)
@@ -699,6 +718,7 @@ export function MeetingCard() {
       notes: '',
       names: {},
       minutes: null,
+      answers: [],
       id: null,
       voicesAtHand: true,
       title: '',
@@ -713,6 +733,7 @@ export function MeetingCard() {
     })
     setPaused(false)
     setLevel({ seconds: 0, volume: 0, waiting: 0 })
+    setLoudest(0)
     enter('recording')
     Promise.resolve(
       meetingRecordStart(inputDevice, bySpeaker, systemSound, model, languages),
@@ -722,6 +743,15 @@ export function MeetingCard() {
       enter('idle')
     })
   }
+
+  // The user asked from the offer window to record a meeting going on: it begins once the
+  // settings a recording needs are in.
+  useEffect(() => {
+    if (!recordAsked || prepared < 2) return
+    useMeetingStore.setState({ recordAsked: false })
+    if (now() === 'idle') record()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordAsked, prepared])
 
   const pause = () => {
     if (now() !== 'recording') return
@@ -868,6 +898,7 @@ export function MeetingCard() {
           notes: meeting.notes,
           names: meeting.names ?? {},
           minutes: meeting.minutes || null,
+          answers: meeting.answers ?? [],
           voicesAtHand: false,
           title: meeting.title ?? '',
           folder: meeting.folder ?? '',
@@ -1005,6 +1036,33 @@ export function MeetingCard() {
       })
       .catch(() => {})
   }
+  /** Takes a section out of the meeting's text, with its times. The text as it was before
+   * the tidy-up loses the section too where it still lines up with the text, and is let go
+   * otherwise, so that the words taken out are not kept there. */
+  const cut = (line: number) => {
+    if (written === null) return
+    const left = withoutSection(written, label, line)
+    if (!left) return
+    const keptTimes =
+      times.length > left.heading ? times.filter((_, at) => at !== left.heading) : times
+    const lines = written.split('\n').length
+    const cutOf = (text: string | undefined) =>
+      text !== undefined && text.split('\n').length === lines
+        ? withoutSection(text, label, line)?.text
+        : undefined
+    const was = heard ? { text: cutOf(heard.text), shaped: cutOf(heard.shaped) } : null
+    const stillHeard =
+      heard && was?.text !== undefined && (heard.shaped === undefined || was.shaped !== undefined)
+        ? {
+            ...heard,
+            text: was.text,
+            ...(was.shaped === undefined ? {} : { shaped: was.shaped }),
+            ...(heard.times ? { times: heard.times.filter((_, at) => at !== left.heading) } : {}),
+          }
+        : null
+    set({ text: left.text, times: keptTimes, ...(heard ? { unpolished: stillHeard } : {}) })
+    persist()
+  }
   const giveTo = (line: number, speaker: number, all: boolean) => {
     if (written === null) return
     set({ text: withSpeakerAt(written, label, line, speaker, all) })
@@ -1026,6 +1084,7 @@ export function MeetingCard() {
       paragraphs: [],
       id: null,
       minutes: null,
+      answers: [],
       notes: '',
       names: {},
       title: '',
@@ -1495,6 +1554,14 @@ export function MeetingCard() {
             {interim && <p className="text-text-tertiary">{interim}</p>}
           </div>
           {notesBox}
+          {phase === 'recording' &&
+            !paused &&
+            level.seconds >= MIC_DEAD_AFTER &&
+            loudest < MIC_DEAD_LEVEL && (
+              <p role="alert" className="mt-3 text-[13px] text-error">
+                {t('meeting.micSilent')}
+              </p>
+            )}
           {phase === 'finishing' && (
             <p className="mt-3 text-[13px] text-text-secondary">
               {t('meeting.finishing', { seconds: level.waiting })}
@@ -1898,6 +1965,9 @@ export function MeetingCard() {
                 nameKept(number, name)
               }}
               nameLabel={t('meeting.speakerName')}
+              onCut={cut}
+              cutLabel={t('meeting.cut')}
+              cutConfirmLabel={t('meeting.cutConfirm')}
             />
           </div>
           <div hidden={tab !== 'minutes'}>
@@ -1916,6 +1986,11 @@ export function MeetingCard() {
                 onSeek={kept ? (seconds) => player.current?.seek(seconds, true) : undefined}
                 onEdit={(changed) => {
                   set({ minutes: changed })
+                  persist()
+                }}
+                answers={answers}
+                onAnswers={(next) => {
+                  set({ answers: next })
                   persist()
                 }}
               />

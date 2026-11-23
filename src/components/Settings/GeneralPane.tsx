@@ -279,6 +279,11 @@ export function GeneralPane() {
               onChange={(checked) => updateConfig({ capsule_auto_hide: checked })}
               label={t('settings.hideCapsuleWhenIdle')}
             />
+            <Toggle
+              checked={config.meeting_detect}
+              onChange={(checked) => updateConfig({ meeting_detect: checked })}
+              label={t('settings.meetingDetect')}
+            />
             {(
               [
                 ['editSelection', 'settings.editSelectionHotkey'],

@@ -1,15 +1,18 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, LayoutTemplate, Pencil, Sparkles, X } from 'lucide-react'
+import { Check, Copy, LayoutTemplate, Pencil, Sparkles, Star, X } from 'lucide-react'
 import {
   copyText,
   meetingAsk,
   meetingMinutes,
+  meetingQuestions,
+  meetingQuestionsSave,
   minutesLearn,
   minutesStyle,
   minutesStyleSave,
   minutesTemplates,
   saveTextFile,
+  type MeetingAnswer,
   type MinutesTemplate,
 } from '../../lib/tauri'
 import { BUILT_IN, OWN, own, ownKind, TemplateGallery, templateText } from './TemplateGallery'
@@ -17,6 +20,8 @@ import { minutesFull, minutesLanguage } from '../../stores/meetingStore'
 import { MinutesForm } from './MinutesForm'
 
 const KNOWN_ERRORS = ['llm_not_configured']
+/** The most questions and answers kept with a meeting. */
+const MOST_ANSWERS = 20
 
 /** Turns a meeting's text into minutes after a template, the built-in one or one the
  * user imported. */
@@ -27,6 +32,8 @@ export function MeetingMinutes({
   onMinutes,
   onEdit,
   onSeek,
+  answers = [],
+  onAnswers,
 }: {
   transcript: string
   notes: string
@@ -37,6 +44,10 @@ export function MeetingMinutes({
   onEdit: (minutes: string) => void
   /** Given when the meeting's sound can be played: a time in the minutes jumps to it. */
   onSeek?: (seconds: number) => void
+  /** The questions asked of the meeting and their answers, the newest first. */
+  answers?: MeetingAnswer[]
+  /** Called with the questions and answers as they now stand, to be kept with the meeting. */
+  onAnswers?: (answers: MeetingAnswer[]) => void
 }) {
   const { t } = useTranslation()
   const [templates, setTemplates] = useState<MinutesTemplate[]>([])
@@ -44,7 +55,11 @@ export function MeetingMinutes({
   const [working, setWorking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState<string | null>(null)
+  /** The questions the user keeps to ask of any meeting. */
+  const [kept, setKept] = useState<string[]>([])
+  /** The meeting and its answers as they are now, for an answer that comes later. */
+  const latest = useRef({ transcript, answers, onAnswers })
+  latest.current = { transcript, answers, onAnswers }
   const [asking, setAsking] = useState(false)
   const [editing, setEditing] = useState(false)
   const [picking, setPicking] = useState(false)
@@ -63,6 +78,12 @@ export function MeetingMinutes({
       .then((rules) => setStyle(rules ?? []))
       .catch(() => {})
   }, [firstLine])
+
+  useEffect(() => {
+    void Promise.resolve(meetingQuestions())
+      .then((all) => setKept(all ?? []))
+      .catch(() => {})
+  }, [])
 
   /** Begins or ends a change by hand; an ended change teaches how the user wants minutes. */
   const toggleEditing = () => {
@@ -118,15 +139,40 @@ export function MeetingMinutes({
       .finally(() => setWorking(false))
   }
 
-  const ask = () => {
-    if (asking || !question.trim()) return
+  const ask = (asked = question) => {
+    const plain = asked.trim()
+    if (asking || !plain) return
+    setQuestion(plain)
     setAsking(true)
     setError(null)
-    Promise.resolve(meetingAsk(transcript, question.trim()))
-      .then((text) => setAnswer(text ?? ''))
+    // The answer belongs to the meeting it was asked of: it is dropped if another meeting
+    // is open by the time it comes, and goes before the answers as they then stand.
+    const askedOf = transcript
+    Promise.resolve(meetingAsk(transcript, plain))
+      .then((text) => {
+        if (latest.current.transcript !== askedOf) return
+        latest.current.onAnswers?.(
+          [
+            { question: plain, answer: text ?? '', at: Date.now() },
+            ...latest.current.answers,
+          ].slice(0, MOST_ANSWERS),
+        )
+      })
       .catch((reason) => fail(reason, 'ask'))
       .finally(() => setAsking(false))
   }
+  const keepQuestions = (next: string[]) => {
+    setKept(next)
+    void Promise.resolve(meetingQuestionsSave(next))
+      .then((now) => now && setKept(now))
+      .catch(() => {})
+  }
+  /** The questions that come with the app, then the user's own. */
+  const ready = [
+    t('meeting.questionFollowUp'),
+    t('meeting.questionRisks'),
+    t('meeting.questionBrief'),
+  ]
 
   const chosenName =
     chosen === BUILT_IN
@@ -182,10 +228,93 @@ export function MeetingMinutes({
           {asking ? t('meeting.asking') : t('meeting.askButton')}
         </button>
       </form>
-      {answer !== null && (
-        <p role="status" className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed">
-          {withTimes(answer, onSeek)}
-        </p>
+      <div
+        role="group"
+        aria-label={t('meeting.questionsKept')}
+        className="mt-2 flex flex-wrap gap-1.5 text-[12px]"
+      >
+        {ready.map((each) => (
+          <button
+            key={each}
+            type="button"
+            disabled={asking}
+            onClick={() => ask(each)}
+            className="rounded-full border border-border px-2.5 py-1 text-text-secondary hover:bg-bg-secondary"
+          >
+            {each}
+          </button>
+        ))}
+        {kept.map((each) => (
+          <span
+            key={each}
+            className="inline-flex items-center rounded-full border border-border text-text-secondary"
+          >
+            <button
+              type="button"
+              disabled={asking}
+              onClick={() => ask(each)}
+              className="max-w-[260px] truncate rounded-l-full py-1 pl-2.5 pr-1 hover:bg-bg-secondary"
+            >
+              {each}
+            </button>
+            <button
+              type="button"
+              onClick={() => keepQuestions(kept.filter((other) => other !== each))}
+              aria-label={t('meeting.questionForget', { question: each })}
+              title={t('meeting.questionForget', { question: each })}
+              className="rounded-r-full py-1 pl-0.5 pr-2 hover:text-error"
+            >
+              <X size={11} />
+            </button>
+          </span>
+        ))}
+        {question.trim() !== '' &&
+          !kept.includes(question.trim()) &&
+          !ready.includes(question.trim()) && (
+            <button
+              type="button"
+              onClick={() => keepQuestions([...kept, question.trim()])}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-text-tertiary hover:text-accent"
+            >
+              <Star size={11} />
+              {t('meeting.questionKeep')}
+            </button>
+          )}
+      </div>
+      {answers.length > 0 && (
+        <ul aria-label={t('meeting.answers')} className="mt-2 space-y-2">
+          {answers.map((each, index) => (
+            <li
+              key={`${each.at}-${index}`}
+              className="rounded-[8px] border border-border px-3 py-2 text-[13px] leading-relaxed"
+            >
+              <div className="flex items-start gap-2">
+                <p className="min-w-0 flex-1 font-medium text-text-secondary">{each.question}</p>
+                <button
+                  type="button"
+                  onClick={() => void copyText(each.answer)}
+                  aria-label={t('meeting.copy')}
+                  title={t('meeting.copy')}
+                  className="btn-quiet px-1"
+                >
+                  <Copy size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onAnswers?.(answers.filter((_, at) => at !== index))}
+                  aria-label={t('meeting.answerForget')}
+                  title={t('meeting.answerForget')}
+                  className="btn-quiet px-1"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <p role={index === 0 ? 'status' : undefined} className="mt-1 whitespace-pre-wrap">
+                {withTimes(each.answer, onSeek)}
+              </p>
+            </li>
+          ))}
+        </ul>
       )}
       {error && <p className="mt-2 text-[12px] text-error">{t(error)}</p>}
       {minutes !== null && (

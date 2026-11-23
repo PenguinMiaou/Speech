@@ -66,6 +66,18 @@ pub fn minutes_style_save(text: String, rules: Vec<String>) -> Result<Vec<String
     crate::minutes_style::save(&text, &rules)
 }
 
+/// The questions the user keeps to ask of any meeting.
+#[tauri::command]
+pub fn meeting_questions() -> Vec<String> {
+    crate::meeting_questions::list()
+}
+
+/// Keeps the questions to ask of any meeting as the user left them.
+#[tauri::command]
+pub fn meeting_questions_save(questions: Vec<String>) -> Result<Vec<String>, String> {
+    crate::meeting_questions::save(&questions)
+}
+
 /// Learns from how the user changed minutes how they want them written. Returns the rules
 /// now kept for their template.
 #[tauri::command]

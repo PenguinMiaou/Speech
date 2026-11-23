@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CapsuleRecording } from '../CapsuleRecording'
 import { CapsuleProcessing } from '../CapsuleProcessing'
 import { abortRecording } from '../../../lib/tauri'
+import { useAppStore } from '../../../stores/appStore'
 
 vi.mock('framer-motion', () => ({
   motion: new Proxy(
@@ -72,5 +73,14 @@ describe('Capsule cancel buttons', () => {
     expect(onPointerDown).not.toHaveBeenCalled()
     expect(onPointerUp).not.toHaveBeenCalled()
     expect(abortRecording).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a microphone that hears nothing at all in place of the wave, until the dictation ends', () => {
+    useAppStore.getState().setPipelineState('recording')
+    useAppStore.getState().setMicSilent(true)
+    render(<CapsuleRecording />)
+    expect(screen.getByRole('alert').getAttribute('aria-label')).toBe('capsule.errors.micSilent')
+    useAppStore.getState().setPipelineState('idle')
+    expect(useAppStore.getState().micSilent).toBe(false)
   })
 })

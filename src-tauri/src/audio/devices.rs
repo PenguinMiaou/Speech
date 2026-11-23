@@ -15,6 +15,11 @@ pub struct InputDevice {
 
 /// Below this level a microphone hears nothing: it is muted, unplugged or the wrong input.
 pub const SILENT_LEVEL: f32 = 0.003;
+/// Below this level a microphone hears nothing at all, not even the room: it is muted, or
+/// the app was not allowed to use it.
+pub const DEAD_LEVEL: f32 = 0.000_5;
+/// How long a dictation goes on before a microphone that hears nothing at all is told of.
+pub const DEAD_AFTER: Duration = Duration::from_millis(2_000);
 /// A microphone at this level is hearing a voice.
 pub const VOICE_LEVEL: f32 = 0.01;
 /// How long the chosen microphone may stay silent before the others are checked.

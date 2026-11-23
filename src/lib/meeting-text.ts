@@ -336,6 +336,29 @@ export function withSpeakerAt(
     .join('\n')
 }
 
+/** The transcript without the section whose heading is at `line`: the heading, what was
+ * said under it, and the blank line that parts it from the next, or from the one before
+ * where it is the last. `heading` counts the headings before it, which is where its times
+ * stand among the meeting's times. Null where `line` is no heading. */
+export function withoutSection(
+  text: string,
+  speakerLabel: string,
+  line: number,
+): { text: string; heading: number } | null {
+  const parsed = transcriptLines(text, speakerLabel)
+  if (!parsed[line] || 'text' in parsed[line]) return null
+  let next = parsed.findIndex((each, index) => index > line && !('text' in each))
+  if (next === -1) next = parsed.length
+  const lines = text.split('\n')
+  let from = line
+  // The last section takes the blank line before it along, not one after it.
+  if (next === parsed.length) {
+    while (from > 0 && lines[from - 1].trim() === '') from -= 1
+  }
+  const heading = parsed.slice(0, line).filter((each) => !('text' in each)).length
+  return { text: [...lines.slice(0, from), ...lines.slice(next)].join('\n'), heading }
+}
+
 /** How much each numbered speaker said, in characters. */
 export function saidBy(text: string, speakerLabel: string): Record<number, number> {
   const said: Record<number, number> = {}

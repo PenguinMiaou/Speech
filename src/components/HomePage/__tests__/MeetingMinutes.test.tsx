@@ -13,6 +13,7 @@ const seek = vi.fn()
 
 function Held({ written = null }: { written?: string | null }) {
   const [minutes, setMinutes] = useState<string | null>(written)
+  const [answers, setAnswers] = useState<tauri.MeetingAnswer[]>([])
   return (
     <MeetingMinutes
       transcript="what was said"
@@ -21,6 +22,8 @@ function Held({ written = null }: { written?: string | null }) {
       onMinutes={setMinutes}
       onEdit={setMinutes}
       onSeek={seek}
+      answers={answers}
+      onAnswers={setAnswers}
     />
   )
 }
@@ -124,6 +127,44 @@ describe('MeetingMinutes', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.askButton' }))
     expect((await screen.findByRole('status')).textContent).toBe('on Friday')
     expect(tauri.meetingAsk).toHaveBeenCalledWith('what was said', 'when?')
+  })
+
+  it('keeps each answer with its question, the newest first, and lets one go', async () => {
+    vi.mocked(tauri.meetingAsk).mockResolvedValueOnce('on Friday').mockResolvedValueOnce('Ann')
+    await ready()
+    fireEvent.change(screen.getByLabelText('meeting.ask'), { target: { value: 'when?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.askButton' }))
+    await screen.findByText('on Friday')
+    fireEvent.change(screen.getByLabelText('meeting.ask'), { target: { value: 'who?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.askButton' }))
+    await screen.findByText('Ann')
+    const kept = within(screen.getByRole('list', { name: 'meeting.answers' }))
+    expect(kept.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'who?Ann',
+      'when?on Friday',
+    ])
+    fireEvent.click(kept.getAllByRole('button', { name: 'meeting.answerForget' })[1])
+    expect(screen.queryByText('on Friday')).toBeNull()
+  })
+
+  it("asks a question that comes with the app, and keeps the user's own to ask again", async () => {
+    vi.mocked(tauri.meetingAsk).mockResolvedValue('the email')
+    vi.mocked(tauri.meetingQuestions).mockResolvedValue([])
+    vi.mocked(tauri.meetingQuestionsSave).mockImplementation((all) => Promise.resolve(all))
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.questionFollowUp' }))
+    await screen.findByText('the email')
+    expect(tauri.meetingAsk).toHaveBeenCalledWith('what was said', 'meeting.questionFollowUp')
+    fireEvent.change(screen.getByLabelText('meeting.ask'), { target: { value: 'any risks?' } })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.questionKeep' }))
+    expect(tauri.meetingQuestionsSave).toHaveBeenCalledWith(['any risks?'])
+    const kept = await screen.findByRole('button', { name: 'any risks?' })
+    fireEvent.click(kept)
+    await waitFor(() =>
+      expect(tauri.meetingAsk).toHaveBeenLastCalledWith('what was said', 'any risks?'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.questionForget' }))
+    expect(tauri.meetingQuestionsSave).toHaveBeenLastCalledWith([])
   })
 
   it('does not ask an empty question', async () => {

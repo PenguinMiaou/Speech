@@ -1,6 +1,7 @@
 pub mod case_guard;
 pub mod context_policy;
 pub mod fact_guard;
+pub mod language_guard;
 pub mod openai;
 pub mod prompt;
 pub mod protocol;
@@ -153,6 +154,23 @@ pub async fn polish_keeping_facts(
     on_chunk: Option<&ChunkCallback>,
 ) -> Result<PolishResponse, AppError> {
     let reply = provider.polish(config, req, on_chunk).await?;
+    if translation_missed(req, &reply.polished_text) {
+        // The cleaned text came back untranslated: it is translated once more on its own.
+        tracing::warn!("The translation came back in the speaker's language, asking again");
+        crate::applog::note(
+            "polish",
+            "a translation came back untranslated; asked again",
+        );
+        let mut again = req.clone();
+        again.raw_text = reply.polished_text.clone();
+        again.long_speech = false;
+        if let Ok(second) = provider.polish(config, &again, None).await {
+            if !translation_missed(req, &second.polished_text) {
+                return Ok(second);
+            }
+        }
+        return Ok(reply);
+    }
     if !req.long_speech || fact_guard::kept_what_was_said(&req.raw_text, &reply.polished_text) {
         return Ok(reply);
     }
@@ -160,6 +178,19 @@ pub async fn polish_keeping_facts(
     let mut plain = req.clone();
     plain.long_speech = false;
     provider.polish(config, &plain, None).await
+}
+
+/// Whether `req` is a translation by the translate key, which is never typed as it is
+/// written, and `text` is not in the language asked for.
+fn translation_missed(req: &PolishRequest, text: &str) -> bool {
+    req.translate_enabled
+        && req.voice_intent.kind == crate::voice_intent::VoiceIntentKind::TranslateInsert
+        && req
+            .selected_text
+            .as_deref()
+            .is_none_or(|t| t.trim().is_empty())
+        && !text.trim().is_empty()
+        && !language_guard::reads_as(text, &req.target_lang)
 }
 
 /// Polishes with the main model and, when that fails before any text reached the user,

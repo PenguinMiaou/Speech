@@ -10,6 +10,7 @@ import {
   meetingTranslate,
   meetingWordTimes,
   type FileTranscribeProgress,
+  type MeetingAnswer,
   meetingGet,
   meetingPolish,
   meetingSpeakersCheck,
@@ -80,6 +81,8 @@ export interface MeetingState {
   /** The kept meeting minutes are being made of in one go, the steps that takes, the one
    * it is at and how far within it, and since when. */
   making: { id: string; steps: MakingStep[]; at: number; within: number; since: number } | null
+  /** Set when the user asked from the capsule for the meeting going on to be recorded. */
+  recordAsked: boolean
   /** The terms the polish model could not be sure how to spell, asked about once
    * when they are found and again whenever the user opens the question. */
   terms: { id: string; list: MeetingTerm[]; open: boolean } | null
@@ -100,6 +103,8 @@ export interface MeetingState {
   names: Record<number, string>
   /** The minutes written for this meeting. */
   minutes: string | null
+  /** The questions asked of this meeting and their answers, the newest first. */
+  answers: MeetingAnswer[]
   /** Set once the meeting has text and is kept among the past meetings. */
   id: string | null
   startedAt: number
@@ -147,6 +152,7 @@ export const initialMeeting: MeetingState = {
   terms: null,
   namesFound: null,
   making: null,
+  recordAsked: false,
   paragraphs: [],
   text: null,
   recorded: false,
@@ -155,6 +161,7 @@ export const initialMeeting: MeetingState = {
   notes: '',
   names: {},
   minutes: null,
+  answers: [],
   id: null,
   startedAt: 0,
   voicesAtHand: false,
@@ -200,6 +207,7 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
       transcript,
       notes: state.notes,
       minutes: state.minutes ?? '',
+      answers: state.answers,
       names: state.names,
       title: state.title.trim(),
       folder: state.folder,
@@ -658,8 +666,11 @@ export function makeMinutes(
       making ? { making: { ...making, at: making.steps.indexOf(step), within: 0 } } : {},
     )
   /** Keeps what a step made, and shows it where the meeting is open. */
-  const keep = (record: MeetingRecord, shown: Partial<MeetingState>) => {
-    if (useMeetingStore.getState().id === id) useMeetingStore.setState(shown)
+  const keep = (step: MeetingRecord, shown: Partial<MeetingState>) => {
+    const open = useMeetingStore.getState()
+    // Questions asked of the open meeting while this runs are kept too.
+    const record = open.id === id ? { ...step, answers: open.answers } : step
+    if (open.id === id) useMeetingStore.setState(shown)
     return Promise.resolve(meetingSave(record)).then(() => record)
   }
   return Promise.resolve(meetingGet(id))

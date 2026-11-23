@@ -402,6 +402,9 @@ pub struct AppConfig {
     pub meeting_llm_model: String,
     /// Keep only the enrolled voice in local recognition, dropping other talkers.
     pub voice_isolation_enabled: bool,
+    /// Offer to write a meeting down when a meeting app starts taking sound from the
+    /// microphone.
+    pub meeting_detect: bool,
 }
 
 impl Default for AppConfig {
@@ -471,6 +474,7 @@ impl Default for AppConfig {
             meeting_llm_api_format: String::new(),
             meeting_llm_model: String::new(),
             voice_isolation_enabled: false,
+            meeting_detect: true,
         }
     }
 }

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { motion, useReducedMotion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { MicOff, X } from 'lucide-react'
+import { useAppStore } from '../../stores/appStore'
 import { abortRecording } from '../../lib/tauri'
 import { Waveform } from './Waveform'
 import { DurationTimer } from './DurationTimer'
@@ -9,6 +10,7 @@ import { TranslateTargetChip } from './TranslateTargetChip'
 export function CapsuleRecording() {
   const { t } = useTranslation()
   const reduced = useReducedMotion()
+  const micSilent = useAppStore((s) => s.micSilent)
 
   const handleCancel = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -32,7 +34,18 @@ export function CapsuleRecording() {
       >
         S
       </span>
-      <Waveform />
+      {micSilent ? (
+        <span
+          role="alert"
+          aria-label={t('capsule.errors.micSilent')}
+          title={t('capsule.errors.micSilent')}
+          className="flex flex-1 items-center justify-center text-red-400"
+        >
+          <MicOff size={14} />
+        </span>
+      ) : (
+        <Waveform />
+      )}
       <TranslateTargetChip />
       <DurationTimer />
       <button

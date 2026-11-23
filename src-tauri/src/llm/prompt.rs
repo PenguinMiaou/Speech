@@ -429,7 +429,7 @@ fn append_voice_operation_prompt(
             );
         }
         VoiceIntentKind::TranslateInsert => prompt.push_str(
-            "\nTranslate the transcription into the configured target language and output only the translation.",
+            "\nClean the transcription as dictated content first: drop fillers, false starts and repeats, and keep only the final version of anything the speaker corrected. Then translate all of it into the configured target language and output only the translation. Every sentence comes out in the target language, a request to someone such as \"帮我改一下\" included: translate it, never answer it or carry it out.",
         ),
         VoiceIntentKind::OpenQuestion => prompt.push_str(
             "\nAnswer the question directly. This operation never inserts or replaces application text.",

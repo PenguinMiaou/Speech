@@ -5,6 +5,7 @@ import { useTheme } from './hooks/useTheme'
 import { useLocalModelActivation } from './hooks/useLocalModelActivation'
 import { useAppStore } from './stores/appStore'
 import { useRoute } from './lib/router'
+import { useMeetingStore } from './stores/meetingStore'
 import {
   loadOnboardingCompleted,
   getConfig,
@@ -15,6 +16,7 @@ import {
   getPlatformCapabilities,
   getHotkeyRegistrationError,
   updateCheck,
+  onMeetingRecordAsked,
 } from './lib/tauri'
 import { autoCheckEnabled } from './lib/update'
 import { Capsule } from './components/Capsule'
@@ -25,6 +27,7 @@ import { MainLayout } from './components/MainLayout'
 import { HomePage } from './components/HomePage'
 import { MeetingPage } from './components/HomePage/MeetingPage'
 import { AskPanel } from './components/AskPanel'
+import { MeetingOffer } from './components/MeetingOffer'
 import { ToastContainer } from './components/Toast'
 
 function CapsuleApp() {
@@ -53,6 +56,23 @@ function CapsuleApp() {
   // which works on both Windows and macOS. The previous rAF-based show approach
   // failed on macOS because WKWebView pauses requestAnimationFrame in hidden windows.
   return <Capsule />
+}
+
+/** The window that asks whether to record a meeting found going on. */
+function OfferApp() {
+  useTheme()
+  const setConfig = useAppStore((s) => s.setConfig)
+  useEffect(() => {
+    getConfig()
+      .then((config) => {
+        setConfig(config)
+        if (config.ui_language && config.ui_language !== i18n.language) {
+          void i18n.changeLanguage(config.ui_language)
+        }
+      })
+      .catch(() => {})
+  }, [setConfig])
+  return <MeetingOffer />
 }
 
 function AskApp() {
@@ -98,7 +118,18 @@ function MainApp() {
   const setHotkeyRegistrationError = useAppStore((s) => s.setHotkeyRegistrationError)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const { route } = useRoute()
+  const { route, navigate } = useRoute()
+
+  // Asked from the offer window to record a meeting going on: the meeting page begins it.
+  useEffect(() => {
+    const stop = Promise.resolve(
+      onMeetingRecordAsked(() => {
+        useMeetingStore.setState({ recordAsked: true })
+        navigate('meeting')
+      }),
+    )
+    return () => void stop.then((unlisten) => unlisten?.())
+  }, [navigate])
 
   useEffect(() => {
     loadOnboardingCompleted().then(async (done) => {
@@ -195,6 +226,7 @@ function App() {
   // Capsule window loads with #capsule hash — detect synchronously, no race condition
   if (window.location.hash === '#capsule') return <CapsuleApp />
   if (window.location.hash === '#ask') return <AskApp />
+  if (window.location.hash === '#offer') return <OfferApp />
   return <MainApp />
 }
 

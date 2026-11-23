@@ -27,6 +27,12 @@ fn arg(name: &str) -> String {
         .unwrap_or_else(|| panic!("missing {name}"))
 }
 
+fn translate_to() -> Option<String> {
+    std::env::var("TRANSLATE")
+        .ok()
+        .filter(|code| !code.is_empty())
+}
+
 fn request(raw_text: String, previous: Option<String>, assistant_name: String) -> PolishRequest {
     PolishRequest {
         raw_text,
@@ -45,12 +51,17 @@ fn request(raw_text: String, previous: Option<String>, assistant_name: String) -
         mapped_scene_prompt: String::new(),
         active_scene_prompt: String::new(),
         polish_custom_prompt: String::new(),
-        translate_enabled: false,
-        target_lang: String::new(),
+        // TRANSLATE=<code> runs the text as the translate hotkey does.
+        translate_enabled: translate_to().is_some(),
+        target_lang: translate_to().unwrap_or_default(),
         selected_text: previous,
         operation_id: None,
         voice_intent: VoiceIntent {
-            kind: VoiceIntentKind::DictateInsert,
+            kind: if translate_to().is_some() {
+                VoiceIntentKind::TranslateInsert
+            } else {
+                VoiceIntentKind::DictateInsert
+            },
             placement: VoiceOutputPlacement::InsertAtCursor,
             confidence: 1.0,
             search_provider: None,
