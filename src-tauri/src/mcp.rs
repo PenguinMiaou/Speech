@@ -101,19 +101,11 @@ fn when(started_at: u64) -> String {
         .unwrap_or_default()
 }
 
-/// A heading of the transcript, `<label> <number>  <time>`, split into the speaker's
-/// number and the rest; None for a line that is not one.
+/// A heading of the transcript naming a numbered speaker, split into the speaker's number,
+/// the label and the time; None for any other line.
 fn heading(line: &str) -> Option<(u32, &str, &str)> {
-    let (who, time) = line.rsplit_once("  ")?;
-    let time = time.trim();
-    let is_time = !time.is_empty()
-        && time.split(':').count() >= 2
-        && time.split(':').all(|part| {
-            !part.is_empty() && part.len() <= 2 && part.chars().all(|c| c.is_ascii_digit())
-        });
-    let (label, number) = who.trim_end().rsplit_once(' ')?;
-    let number = number.parse().ok()?;
-    (is_time && !label.trim().is_empty()).then_some((number, label, time))
+    let found = crate::meetings::heading(line)?;
+    Some((found.number?, found.label, found.time))
 }
 
 /// The transcript with each speaker the user named given by that name.

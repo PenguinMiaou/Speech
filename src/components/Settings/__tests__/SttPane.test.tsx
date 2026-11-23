@@ -5,6 +5,7 @@ import * as tauri from '../../../lib/tauri'
 
 // Mock Tauri
 vi.mock('../../../lib/tauri')
+vi.mock('../MicrophoneSection', () => ({ MicrophoneSection: () => null }))
 
 // Mock i18n
 vi.mock('react-i18next', () => ({

@@ -23,6 +23,7 @@ pub mod minutes_style;
 pub mod mirrors;
 pub mod native_hotkey;
 pub mod output;
+pub mod overview;
 pub mod own_voice;
 pub mod pipeline;
 pub mod platform;
@@ -684,12 +685,18 @@ fn record_hotkey_registration_result(
 
     match result {
         Ok(()) => {
+            if supervisor.snapshot().last_error.is_some() {
+                crate::applog::note("hotkey", "shortcuts registered again");
+            }
             supervisor.record_registration_success(generation);
             set_hotkey_registration_error_state(app, None);
             let _ = app.emit("hotkey:registration-recovered", ());
             Ok(())
         }
         Err(message) => {
+            if supervisor.snapshot().last_error.as_deref() != Some(message.as_str()) {
+                crate::applog::note("hotkey", &format!("shortcuts not registered: {message}"));
+            }
             supervisor.record_registration_failure(generation, message.clone());
             set_hotkey_registration_error_state(app, Some(message.clone()));
             let _ = app.emit("hotkey:registration-failed", message.clone());
@@ -1248,6 +1255,7 @@ pub fn run() {
             commands::minutes::meeting_minutes,
             commands::minutes::meeting_ask,
             commands::minutes::meeting_translate,
+            commands::minutes::meeting_overview,
             commands::minutes::meeting_polish,
             commands::minutes::meeting_speakers_check,
             commands::minutes::meeting_speaker_names,

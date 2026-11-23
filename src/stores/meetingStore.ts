@@ -11,6 +11,7 @@ import {
   meetingWordTimes,
   type FileTranscribeProgress,
   type MeetingAnswer,
+  type MeetingOverview,
   meetingGet,
   meetingPolish,
   meetingSpeakersCheck,
@@ -105,6 +106,8 @@ export interface MeetingState {
   minutes: string | null
   /** The questions asked of this meeting and their answers, the newest first. */
   answers: MeetingAnswer[]
+  /** The chapters of this meeting and what each speaker said; null until asked for. */
+  overview: MeetingOverview | null
   /** Set once the meeting has text and is kept among the past meetings. */
   id: string | null
   startedAt: number
@@ -162,6 +165,7 @@ export const initialMeeting: MeetingState = {
   names: {},
   minutes: null,
   answers: [],
+  overview: null,
   id: null,
   startedAt: 0,
   voicesAtHand: false,
@@ -208,6 +212,7 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
       notes: state.notes,
       minutes: state.minutes ?? '',
       answers: state.answers,
+      overview: state.overview,
       names: state.names,
       title: state.title.trim(),
       folder: state.folder,
@@ -669,7 +674,8 @@ export function makeMinutes(
   const keep = (step: MeetingRecord, shown: Partial<MeetingState>) => {
     const open = useMeetingStore.getState()
     // Questions asked of the open meeting while this runs are kept too.
-    const record = open.id === id ? { ...step, answers: open.answers } : step
+    const record =
+      open.id === id ? { ...step, answers: open.answers, overview: open.overview } : step
     if (open.id === id) useMeetingStore.setState(shown)
     return Promise.resolve(meetingSave(record)).then(() => record)
   }

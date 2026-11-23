@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 /// A transcript longer than this is first reduced to notes, part by part.
-const PART_CHARS: usize = 12_000;
+pub(crate) const PART_CHARS: usize = 12_000;
 /// How long a transcript is still sent whole, in characters: about two hours of talk.
 /// Notes taken part by part lose details and the links between what was said early and
 /// late, so a model that can read the whole is given the whole.
@@ -559,7 +559,7 @@ question."
 }
 
 /// The name a language model knows a translation target by.
-fn language_name(code: &str) -> &str {
+pub(crate) fn language_name(code: &str) -> &str {
     match code {
         "en" => "English",
         "zh" => "Simplified Chinese",
@@ -1837,7 +1837,7 @@ pub fn strong_model(model: &str) -> bool {
 /// The longest transcript sent to the model in one piece. A model on this machine is often
 /// run with a short context and cuts what does not fit without saying so, so it is given
 /// parts as before.
-fn whole_limit(config: &crate::storage::AppConfig) -> usize {
+pub(crate) fn whole_limit(config: &crate::storage::AppConfig) -> usize {
     if runs_here(&config.llm_provider, &config.llm_base_url) {
         PART_CHARS
     } else {
@@ -1934,7 +1934,7 @@ fn part_chars_after(error: &str, sent: usize) -> usize {
 }
 
 /// Whether a refusal from the model's service says the text was longer than it can read.
-fn too_long(error: &str) -> bool {
+pub(crate) fn too_long(error: &str) -> bool {
     let error = error.to_ascii_lowercase();
     if error.starts_with("llm_http_429") {
         return error.contains("request too large") && !error.contains("output tokens");

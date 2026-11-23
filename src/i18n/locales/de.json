@@ -466,7 +466,10 @@
     "punctuationSpoken": "Nur ausgesprochene Zeichen",
     "punctuationNone": "Keine",
     "showLog": "Protokoll anzeigen",
-    "showLogHint": "Nur Zustände und Fehler, nie das Gesagte"
+    "showLogHint": "Nur Zustände und Fehler, nie das Gesagte",
+    "dictationPane": "Diktat",
+    "translationPane": "Übersetzung",
+    "moreShortcuts": "Weitere Tastenkürzel"
   },
   "contextFamilies": {
     "email": "E-Mail",
@@ -826,7 +829,8 @@
       "ask": "Es kam keine Antwort",
       "system_audio_unsupported": "Diese Systemversion kann den Computerton nicht aufnehmen",
       "someFailed": "Einige Dateien konnten nicht in Text umgewandelt werden.",
-      "timesDownload": "Das Modell konnte nicht geladen werden"
+      "timesDownload": "Das Modell konnte nicht geladen werden",
+      "overview": "Der Überblick konnte nicht erstellt werden"
     },
     "live": "Live-Text",
     "listening": "Hört zu. Text erscheint etwa alle fünfzehn Sekunden",
@@ -952,6 +956,17 @@
     "talkTemplateName": "Vortrag",
     "talkTemplate": "# Notizen\n\n## Thema\n\n## Hauptpunkte\nIn der Reihenfolge des Vortrags, jeweils mit Zeit\n\n## Genannte Beispiele und Zahlen\n\n## Fragen aus dem Publikum und die Antworten",
     "standupTemplateName": "Stand-up",
-    "standupTemplate": "# Stand-up\n\nFür jede Person, die gesprochen hat:\n\n## Name\n- Erledigt\n- Als Nächstes\n- Blockiert durch\n\n## Für alle\nBeschlüsse und Aufgaben, jeweils mit Person und Termin"
+    "standupTemplate": "# Stand-up\n\nFür jede Person, die gesprochen hat:\n\n## Name\n- Erledigt\n- Als Nächstes\n- Blockiert durch\n\n## Für alle\nBeschlüsse und Aufgaben, jeweils mit Person und Termin",
+    "tabOverview": "Überblick",
+    "overviewMaking": "Kapitel und Beiträge werden zusammengefasst…",
+    "overviewMake": "Überblick erstellen",
+    "overviewAgain": "Neu erstellen",
+    "overviewStale": "Der Text wurde nach diesem Überblick geändert.",
+    "chapters": "Kapitel",
+    "speakerSummaries": "Was jede Person sagte",
+    "playFrom": "Ab {{time}} abspielen"
+  },
+  "whatsNew": {
+    "title": "Neu in {{version}}"
   }
 }

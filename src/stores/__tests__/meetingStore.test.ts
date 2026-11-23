@@ -202,6 +202,17 @@ describe('when the words of a meeting were said', () => {
     await persistMeeting('Speaker')
     expect(meetingSave).toHaveBeenLastCalledWith(expect.objectContaining({ times }))
   })
+
+  it('keeps the overview with the meeting when it is saved for something else', async () => {
+    const overview = {
+      chars: 14,
+      chapters: [{ at_s: 0, title: 'Launch', summary: 'Friday.' }],
+      speakers: [],
+    }
+    useMeetingStore.setState({ ...initialMeeting, text: 'Speaker 1  00:00\n周五上线', overview })
+    await persistMeeting('Speaker')
+    expect(meetingSave).toHaveBeenLastCalledWith(expect.objectContaining({ overview }))
+  })
 })
 
 describe('the times of the words of a meeting just recorded', () => {

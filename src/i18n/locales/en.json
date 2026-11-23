@@ -466,7 +466,10 @@
     "punctuationSpoken": "Only marks said aloud",
     "punctuationNone": "None",
     "showLog": "Show log",
-    "showLogHint": "States and errors only, never what was said"
+    "showLogHint": "States and errors only, never what was said",
+    "dictationPane": "Dictation",
+    "translationPane": "Translation",
+    "moreShortcuts": "More shortcuts"
   },
   "contextFamilies": {
     "email": "Email",
@@ -826,7 +829,8 @@
       "ask": "No answer came back",
       "system_audio_unsupported": "This system version cannot record the computer's sound",
       "someFailed": "Some files could not be turned into text.",
-      "timesDownload": "The model could not be downloaded"
+      "timesDownload": "The model could not be downloaded",
+      "overview": "No overview was made"
     },
     "live": "Live text",
     "listening": "Listening. Text arrives every fifteen seconds or so",
@@ -952,6 +956,17 @@
     "talkTemplateName": "Talk or lecture",
     "talkTemplate": "# Notes\n\n## What it was about\n\n## Main points\nIn the order they were made, each with its time\n\n## Examples and figures given\n\n## Questions from the audience and the answers",
     "standupTemplateName": "Stand-up",
-    "standupTemplate": "# Stand-up\n\nFor each person who spoke:\n\n## Name\n- Done\n- Doing next\n- Blocked by\n\n## For everyone\nDecisions and tasks, each with who and by when"
+    "standupTemplate": "# Stand-up\n\nFor each person who spoke:\n\n## Name\n- Done\n- Doing next\n- Blocked by\n\n## For everyone\nDecisions and tasks, each with who and by when",
+    "tabOverview": "Overview",
+    "overviewMaking": "Finding the chapters and what each person said…",
+    "overviewMake": "Make an overview",
+    "overviewAgain": "Make it again",
+    "overviewStale": "The text changed after this overview was made.",
+    "chapters": "Chapters",
+    "speakerSummaries": "What each person said",
+    "playFrom": "Play from {{time}}"
+  },
+  "whatsNew": {
+    "title": "What’s new in {{version}}"
   }
 }

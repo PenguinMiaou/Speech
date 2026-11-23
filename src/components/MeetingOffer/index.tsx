@@ -50,26 +50,26 @@ export function MeetingOffer() {
     <div
       role="alertdialog"
       aria-label={t(title, { name: found.name })}
-      className="flex h-full w-full items-center gap-3 rounded-[12px] border border-border bg-bg-primary/85 px-4 text-text-primary"
+      className="flex h-full w-full items-center gap-3.5 rounded-[12px] border border-border bg-bg-primary/85 px-5 text-text-primary"
     >
-      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-accent text-white">
-        <Mic size={17} />
+      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accent text-white">
+        <Mic size={19} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold">{t(title, { name: found.name })}</p>
-        <p className="mt-0.5 truncate text-[12px] text-text-secondary">{t('meeting.offerAsk')}</p>
-        <div className="mt-2 flex gap-2">
+        <p className="truncate text-[14px] font-semibold">{t(title, { name: found.name })}</p>
+        <p className="mt-0.5 truncate text-[13px] text-text-secondary">{t('meeting.offerAsk')}</p>
+        <div className="mt-2.5 flex gap-2">
           <button
             type="button"
             onClick={() => answer(true)}
-            className="h-7 rounded-[6px] bg-accent px-3 text-[12px] font-medium text-white hover:bg-accent-hover"
+            className="h-8 rounded-[6px] bg-accent px-4 text-[13px] font-medium text-white hover:bg-accent-hover"
           >
             {t('meeting.offerRecord')}
           </button>
           <button
             type="button"
             onClick={() => answer(false)}
-            className="h-7 rounded-[6px] border border-border bg-bg-secondary px-3 text-[12px] text-text-primary hover:bg-bg-tertiary"
+            className="h-8 rounded-[6px] border border-border bg-bg-secondary px-4 text-[13px] text-text-primary hover:bg-bg-tertiary"
           >
             {t('meeting.offerIgnore')}
           </button>
@@ -81,7 +81,7 @@ export function MeetingOffer() {
         aria-label={t('meeting.offerIgnore')}
         className="self-start mt-3 rounded-[6px] p-1 text-text-tertiary hover:bg-bg-secondary hover:text-text-primary"
       >
-        <X size={14} />
+        <X size={15} />
       </button>
     </div>
   )

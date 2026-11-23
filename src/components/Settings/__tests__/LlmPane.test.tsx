@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import { LlmPane } from '../LlmPane'
+import { MeetingsPane } from '../MeetingsPane'
+import { TranslationPane } from '../TranslationPane'
 import * as tauri from '../../../lib/tauri'
 
 // Mock Tauri
@@ -164,9 +166,9 @@ describe('LlmPane', () => {
     vi.clearAllMocks()
   })
 
-  describe('Meeting model', () => {
+  describe('Meeting model, on the Meetings pane', () => {
     it('turns a meeting service of its own on from the main one, and off again', () => {
-      const { rerender } = render(<LlmPane />)
+      const { rerender } = render(<MeetingsPane />)
       const meetings = screen.getByRole('region', { name: 'settings.meetingModel' })
       expect(meetings.querySelectorAll('[data-field="api-key"]')).toHaveLength(0)
       fireEvent.click(within(meetings).getByRole('switch'))
@@ -183,7 +185,7 @@ describe('LlmPane', () => {
         meeting_llm_base_url: 'https://api.openai.com/v1',
         meeting_llm_model: 'gpt-4o',
       }
-      rerender(<LlmPane />)
+      rerender(<MeetingsPane />)
       const shown = screen.getByRole('region', { name: 'settings.meetingModel' })
       expect(shown.querySelectorAll('[data-field="api-key"]')).toHaveLength(1)
       fireEvent.click(within(shown).getByRole('switch'))
@@ -193,6 +195,11 @@ describe('LlmPane', () => {
         meeting_llm_api_format: '',
         meeting_llm_model: '',
       })
+    })
+
+    it('is no longer on the AI Polish pane', () => {
+      render(<LlmPane />)
+      expect(screen.queryByRole('region', { name: 'settings.meetingModel' })).toBeNull()
     })
   })
 
@@ -499,13 +506,23 @@ describe('LlmPane', () => {
       expect(screen.queryByText('Gmail')).not.toBeInTheDocument()
     })
 
-    it('shows a compact translate-to control next to translation when enabled', () => {
+    it('shows a compact translate-to control on the Translation pane, even before always-translate is on', () => {
+      mockAppStore.config.translate_enabled = false
+
+      render(<TranslationPane />)
+      expect(screen.getByText('Translate to')).toBeInTheDocument()
+      // The language control stays a compact dropdown, not a row of choices.
+      expect(screen.queryAllByRole('radio')).toHaveLength(0)
+      fireEvent.click(screen.getByRole('switch', { name: 'Always translate output' }))
+      expect(mockAppStore.updateConfig).toHaveBeenCalledWith({ translate_enabled: true })
+    })
+
+    it('keeps translation off the AI Polish pane', () => {
       mockAppStore.config.translate_enabled = true
 
       render(<LlmPane />)
-      expect(screen.getByText('Translate to')).toBeInTheDocument()
-      // Only the three API formats, so the language control stays a compact dropdown.
-      expect(screen.getAllByRole('radio')).toHaveLength(3)
+      expect(screen.queryByText('Translate to')).not.toBeInTheDocument()
+      expect(screen.queryByText('Always translate output')).not.toBeInTheDocument()
     })
   })
 })

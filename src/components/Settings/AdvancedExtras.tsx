@@ -17,28 +17,33 @@ function whole(text: string, least: number, most: number): number {
   return Number.isFinite(value) ? Math.min(most, Math.max(least, value)) : least
 }
 
-/** Output and history choices the backend already honours. */
-export function AdvancedExtras() {
+/** Output and history choices the backend already honours: the ones for putting text in,
+ * the ones for keeping history, or both. */
+export function AdvancedExtras({ part }: { part?: 'output' | 'history' }) {
   const { t } = useTranslation()
   const config = useAppStore((s) => s.config)
   const updateConfig = useAppStore((s) => s.updateConfig)
   const pasting = config.output_mode === 'clipboard'
+  const output = part !== 'history'
+  const history = part !== 'output'
 
   return (
     <>
-      <Toggle
-        checked={config.streaming_insert_enabled}
-        onChange={(checked) => updateConfig({ streaming_insert_enabled: checked })}
-        label={t('settings.streamingInsert')}
-      />
-      {pasting && (
+      {output && (
+        <Toggle
+          checked={config.streaming_insert_enabled}
+          onChange={(checked) => updateConfig({ streaming_insert_enabled: checked })}
+          label={t('settings.streamingInsert')}
+        />
+      )}
+      {output && pasting && (
         <Toggle
           checked={config.restore_clipboard_after_paste}
           onChange={(checked) => updateConfig({ restore_clipboard_after_paste: checked })}
           label={t('settings.restoreClipboardAfterPaste')}
         />
       )}
-      {pasting && !isMacPlatform() && (
+      {output && pasting && !isMacPlatform() && (
         <Row label={t('settings.pasteShortcut')}>
           <LogoSelect
             compact
@@ -53,7 +58,7 @@ export function AdvancedExtras() {
           />
         </Row>
       )}
-      {isWindowsPlatform() && (
+      {output && isWindowsPlatform() && (
         <Row label={t('settings.windowsSendInputNewlineMode')}>
           <LogoSelect
             compact
@@ -72,7 +77,7 @@ export function AdvancedExtras() {
           />
         </Row>
       )}
-      {config.history_enabled && (
+      {history && config.history_enabled && (
         <>
           <Row label={t('settings.historyRetentionDays')}>
             <input

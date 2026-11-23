@@ -1,3 +1,4 @@
+import { WhatsNew, markWhatsNewSeen } from './components/WhatsNew'
 import { useEffect, useState } from 'react'
 import i18n from './i18n'
 import { useTauriEvents } from './hooks/useTauriEvents'
@@ -134,6 +135,8 @@ function MainApp() {
   useEffect(() => {
     loadOnboardingCompleted().then(async (done) => {
       setOnboardingCompleted(done)
+      // A first run has nothing new to tell of: only updates show what they changed.
+      if (!done) markWhatsNewSeen()
       try {
         const [
           config,
@@ -217,6 +220,7 @@ function MainApp() {
       {route === 'meeting' && <MeetingPage />}
       {route === 'settings' && <Settings />}
       {route === 'history' && <History />}
+      <WhatsNew />
       <ToastContainer />
     </MainLayout>
   )

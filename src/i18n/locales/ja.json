@@ -466,7 +466,10 @@
     "punctuationSpoken": "声に出した記号だけ",
     "punctuationNone": "付けない",
     "showLog": "ログを表示",
-    "showLogHint": "状態とエラーのみ。話した内容は記録しません"
+    "showLogHint": "状態とエラーのみ。話した内容は記録しません",
+    "dictationPane": "音声入力",
+    "translationPane": "翻訳",
+    "moreShortcuts": "その他のショートカット"
   },
   "contextFamilies": {
     "email": "メールアドレス",
@@ -826,7 +829,8 @@
       "ask": "回答が得られませんでした",
       "system_audio_unsupported": "このシステムのバージョンではパソコンの音を録音できません",
       "someFailed": "文字にできなかったファイルがあります。",
-      "timesDownload": "モデルをダウンロードできませんでした"
+      "timesDownload": "モデルをダウンロードできませんでした",
+      "overview": "概要を作成できませんでした"
     },
     "live": "リアルタイムの文字",
     "listening": "聞き取り中。文字は約15秒ごとに出ます",
@@ -952,6 +956,17 @@
     "talkTemplateName": "講演・講義",
     "talkTemplate": "# ノート\n\n## テーマ\n\n## 主なポイント\n話された順に、それぞれ時刻を付ける\n\n## 挙げられた例と数字\n\n## 質疑応答",
     "standupTemplateName": "スタンドアップ",
-    "standupTemplate": "# スタンドアップ\n\n発言した人ごとに：\n\n## 名前\n- やったこと\n- 次にやること\n- 困っていること\n\n## 全体\n決定事項とタスク、担当者と期限を書く"
+    "standupTemplate": "# スタンドアップ\n\n発言した人ごとに：\n\n## 名前\n- やったこと\n- 次にやること\n- 困っていること\n\n## 全体\n決定事項とタスク、担当者と期限を書く",
+    "tabOverview": "概要",
+    "overviewMaking": "章立てと各発言をまとめています…",
+    "overviewMake": "概要を作成",
+    "overviewAgain": "作り直す",
+    "overviewStale": "この概要の作成後にテキストが変更されました。",
+    "chapters": "章",
+    "speakerSummaries": "各発言者のまとめ",
+    "playFrom": "{{time}} から再生"
+  },
+  "whatsNew": {
+    "title": "{{version}} の新機能"
   }
 }

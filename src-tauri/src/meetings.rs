@@ -10,6 +10,70 @@ use serde::{Deserialize, Serialize};
 /// How much of a meeting's text the list shows.
 const PREVIEW_CHARS: usize = 80;
 
+/// A heading of a transcript: `<label> <number>  <time>` for a numbered speaker,
+/// `<label>  <time>` for the first speaker, or the time alone where speakers are not told
+/// apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Heading<'a> {
+    /// What speakers are called; empty for a time alone.
+    pub label: &'a str,
+    /// The speaker's number; None where the label stands alone or there is no speaker.
+    pub number: Option<u32>,
+    pub time: &'a str,
+}
+
+/// Whether `text` is a time as a transcript writes it: minutes and seconds, with hours in
+/// front where there are any.
+fn is_time(text: &str) -> bool {
+    let parts: Vec<&str> = text.split(':').collect();
+    (2..=3).contains(&parts.len())
+        && parts.iter().all(|part| {
+            !part.is_empty() && part.len() <= 2 && part.chars().all(|c| c.is_ascii_digit())
+        })
+}
+
+/// The heading `line` is; None for a line of what was said.
+pub fn heading(line: &str) -> Option<Heading<'_>> {
+    let line = line.trim_end();
+    if is_time(line.trim_start()) {
+        return Some(Heading {
+            label: "",
+            number: None,
+            time: line.trim_start(),
+        });
+    }
+    let (who, time) = line.rsplit_once("  ")?;
+    let (who, time) = (who.trim(), time.trim());
+    if !is_time(time) || who.is_empty() || who.chars().count() > 40 {
+        return None;
+    }
+    match who.rsplit_once(' ') {
+        Some((label, number)) if number.chars().all(|c| c.is_ascii_digit()) => {
+            let label = label.trim_end();
+            (!label.is_empty()).then_some(Heading {
+                label,
+                number: Some(number.parse().ok()?),
+                time,
+            })
+        }
+        _ => Some(Heading {
+            label: who,
+            number: None,
+            time,
+        }),
+    }
+}
+
+/// The seconds from the start a transcript's time stands for.
+pub fn seconds_of(time: &str) -> Option<u64> {
+    if !is_time(time) {
+        return None;
+    }
+    time.split(':').try_fold(0_u64, |total, part| {
+        Some(total * 60 + part.parse::<u64>().ok()?)
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Meeting {
     pub id: String,
@@ -46,6 +110,9 @@ pub struct Meeting {
     /// The questions asked of it and their answers, the newest first.
     #[serde(default)]
     pub answers: Vec<Answer>,
+    /// Its chapters and what each speaker said, once they were asked for.
+    #[serde(default)]
+    pub overview: Option<crate::overview::Overview>,
 }
 
 /// A question asked of a meeting, with the answer it got and when, in milliseconds since
@@ -387,6 +454,27 @@ pub fn delete_audio(id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn headings_come_in_three_shapes() {
+        let numbered = super::heading("Speaker 2  01:05").unwrap();
+        assert_eq!(
+            (numbered.label, numbered.number, numbered.time),
+            ("Speaker", Some(2), "01:05")
+        );
+        let first = super::heading("说话人  1:02:03").unwrap();
+        assert_eq!(
+            (first.label, first.number, first.time),
+            ("说话人", None, "1:02:03")
+        );
+        let alone = super::heading("00:42").unwrap();
+        assert_eq!((alone.label, alone.number), ("", None));
+        assert!(super::heading("We met at 10  10:30 sharp").is_none());
+        assert!(super::heading("The roses need water.").is_none());
+        assert_eq!(super::seconds_of("1:02:03"), Some(3723));
+        assert_eq!(super::seconds_of("05:55"), Some(355));
+        assert_eq!(super::seconds_of("5"), None);
+    }
 
     #[test]
     fn a_meeting_keeps_the_terms_it_was_unsure_of_and_reads_older_ones_without_them() {

@@ -9,24 +9,32 @@ import { LlmPane } from './LlmPane'
 import { DictionaryPane } from './DictionaryPane'
 import { ScenesPane } from './ScenesPane'
 import { AboutPane } from './AboutPane'
-import { LanguagePane } from './LanguagePane'
+import { DictationPane } from './DictationPane'
+import { TranslationPane } from './TranslationPane'
+import { MeetingsPane } from './MeetingsPane'
 import { DirtyBar } from './shared/DirtyBar'
 import { useDirtyConfig } from './shared/useDirtyConfig'
 
 const paneTitleKeys: Record<PaneId, string> = {
   general: 'settings.general',
+  dictation: 'settings.dictationPane',
   stt: 'settings.speechRecognition',
   llm: 'settings.aiPolish',
+  translation: 'settings.translationPane',
+  meetings: 'nav.meeting',
   dictionary: 'settings.dictionary',
   scenes: 'settings.scenes',
-  language: 'settings.language',
   about: 'settings.about',
 }
+
+/** Panes that were folded into another, by the one that holds them now. */
+const movedPanes: Record<string, PaneId> = { language: 'general' }
 
 function paneFromHash(): PaneId | null {
   const query = window.location.hash.split('?')[1]
   if (!query) return null
-  const requested = new URLSearchParams(query).get('pane')
+  const asked = new URLSearchParams(query).get('pane')
+  const requested = asked ? (movedPanes[asked] ?? asked) : null
   return requested && requested in paneTitleKeys ? (requested as PaneId) : null
 }
 
@@ -79,11 +87,13 @@ export function Settings() {
               transition={{ duration: 0.1, ease: 'easeOut' }}
             >
               {activePane === 'general' && <GeneralPane />}
+              {activePane === 'dictation' && <DictationPane />}
               {activePane === 'stt' && <SttPane />}
               {activePane === 'llm' && <LlmPane />}
+              {activePane === 'translation' && <TranslationPane />}
+              {activePane === 'meetings' && <MeetingsPane />}
               {activePane === 'dictionary' && <DictionaryPane />}
               {activePane === 'scenes' && <ScenesPane />}
-              {activePane === 'language' && <LanguagePane />}
               {activePane === 'about' && <AboutPane />}
             </motion.div>
           </div>

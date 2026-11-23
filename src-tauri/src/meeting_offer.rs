@@ -8,9 +8,9 @@ use tauri::{Emitter, Manager};
 
 const LABEL: &str = "offer";
 /// The offer window's size in logical pixels, and its distance from the screen's edges.
-pub const WIDTH: f64 = 380.0;
-pub const HEIGHT: f64 = 104.0;
-const MARGIN: f64 = 16.0;
+pub const WIDTH: f64 = 420.0;
+pub const HEIGHT: f64 = 120.0;
+const MARGIN: f64 = 28.0;
 
 /// The meeting last offered, for the offer window to show when it opens.
 static OFFERED: Mutex<Option<MeetingApp>> = Mutex::new(None);
@@ -39,6 +39,7 @@ pub fn show(app: &tauri::AppHandle, found: &MeetingApp) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
+    let _ = window.set_size(tauri::LogicalSize::new(WIDTH, HEIGHT));
     if let Ok(Some(monitor)) = window.primary_monitor() {
         let area = monitor.work_area();
         let (x, y) = corner(
@@ -88,20 +89,18 @@ mod tests {
 
     #[test]
     fn the_offer_sits_in_the_corner_of_the_work_area_clear_of_its_edges() {
+        let (width, height, margin) = (WIDTH as i32, HEIGHT as i32, MARGIN as i32);
         // A 1920 by 1040 work area above a taskbar, at twice the scale.
         assert_eq!(
             corner(0, 0, 3840, 2080, 2.0, false),
-            (3840 - 760 - 32, 2080 - 208 - 32)
+            (3840 - 2 * (width + margin), 2080 - 2 * (height + margin))
         );
         // On macOS, under the menu bar at the top.
         assert_eq!(
             corner(0, 50, 2880, 1750, 2.0, true),
-            (2880 - 760 - 32, 50 + 32)
+            (2880 - 2 * (width + margin), 50 + 2 * margin)
         );
         // A screen to the left of the main one.
-        assert_eq!(
-            corner(-1920, 0, 1920, 1040, 1.0, false).0,
-            -1920 + 1920 - 380 - 16
-        );
+        assert_eq!(corner(-1920, 0, 1920, 1040, 1.0, false).0, -width - margin);
     }
 }

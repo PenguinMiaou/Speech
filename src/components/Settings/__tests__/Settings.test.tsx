@@ -322,6 +322,13 @@ function renderSettings() {
   return render(<Settings />)
 }
 
+/** Settings opened on the Dictation pane, where the shortcuts are. */
+function renderDictation() {
+  const view = renderSettings()
+  clickSidebarItem('settings.dictationPane')
+  return view
+}
+
 // 侧边栏导航按钮：精确匹配 sidebar 内的 <button data-motion="button"> 子元素
 function clickSidebarItem(label: string) {
   const spans = screen.getAllByText(label)
@@ -345,7 +352,7 @@ describe('Settings tab 切换', () => {
   })
 
   it('初始渲染显示简化后的常用设置', () => {
-    renderSettings()
+    renderDictation()
 
     expect(screen.getByText('settings.hotkey')).toBeDefined()
     expect(screen.getByText('settings.dictationHotkey')).toBeDefined()
@@ -362,8 +369,8 @@ describe('Settings tab 切换', () => {
     expect(screen.queryByText('settings.diagnostics')).toBeNull()
   })
 
-  it('General pane keeps Ask visible and hides low-frequency settings until More is opened', () => {
-    renderSettings()
+  it('Dictation pane keeps Ask visible and the rarer shortcuts behind More shortcuts', () => {
+    renderDictation()
 
     expect(screen.getByText('settings.hotkey')).toBeDefined()
     expect(screen.getByText('settings.askHotkey')).toBeDefined()
@@ -373,17 +380,16 @@ describe('Settings tab 切换', () => {
     expect(screen.queryByText('settings.maxRecordingDuration')).toBeNull()
     expect(screen.queryByText('settings.historyPrivacy')).toBeNull()
     expect(screen.queryByText('settings.launchAtStartup')).toBeNull()
+    expect(document.querySelector('[data-hotkey-role="editSelection"]')).toBeNull()
 
-    fireEvent.click(screen.getByText('settings.advancedGeneral'))
+    fireEvent.click(screen.getByText('settings.moreShortcuts'))
 
     expect(screen.getAllByText('settings.askHotkey')).toHaveLength(1)
-    expect(screen.getByText('settings.saveHistory')).toBeDefined()
-    expect(screen.getByText('settings.launchAtStartup')).toBeDefined()
+    expect(document.querySelector('[data-hotkey-role="editSelection"]')).not.toBeNull()
+    expect(screen.queryByText('settings.launchAtStartup')).toBeNull()
+    expect(screen.queryByText('settings.saveHistory')).toBeNull()
     expect(screen.queryByText('settings.diagnostics')).toBeNull()
-    expect(screen.queryByText('settings.restoreClipboardAfterPaste')).toBeNull()
     expect(screen.queryByText('settings.maxRecordingDuration')).toBeNull()
-    expect(screen.queryByText('settings.historyPrivacy')).toBeNull()
-    expect(screen.getByText('settings.hideCapsuleWhenIdle')).toBeDefined()
   })
 
   it('keeps unsaved drafts dirty after leaving and reopening Settings', () => {
@@ -418,8 +424,8 @@ describe('Settings tab 切换', () => {
     expect(screen.queryByText('settings.waylandHotkeyLimited')).toBeNull()
   })
 
-  it('General pane starts Ask recording from a lightweight Try Ask entry', async () => {
-    renderSettings()
+  it('Dictation pane starts Ask recording from a lightweight Try Ask entry', async () => {
+    renderDictation()
 
     fireEvent.click(screen.getByLabelText('settings.tryAsk'))
 
@@ -453,11 +459,11 @@ describe('Settings tab 切换', () => {
     }
   })
 
-  it('More settings keeps only preference toggles visible', () => {
+  it('General pane holds the app behaviour and history toggles and no shortcuts', () => {
     renderSettings()
-    fireEvent.click(screen.getByText('settings.advancedGeneral'))
 
-    expect(screen.getAllByText('settings.askHotkey')).toHaveLength(1)
+    expect(screen.queryByText('settings.askHotkey')).toBeNull()
+    expect(screen.queryByText('settings.outputMode')).toBeNull()
     expect(screen.getByText('settings.launchAtStartup')).toBeDefined()
     expect(screen.getByText('settings.saveHistory')).toBeDefined()
     expect(screen.getByText('settings.startMinimized')).toBeDefined()
@@ -477,7 +483,7 @@ describe('Settings tab 切换', () => {
     expect(useAppStore.getState().config.history_enabled).toBe(false)
   })
 
-  it('General pane shows compact hotkey conflict status', async () => {
+  it('Dictation pane shows compact hotkey conflict status', async () => {
     const { getHotkeyStatus } = await import('../../../lib/tauri')
     vi.mocked(getHotkeyStatus).mockResolvedValueOnce(
       mockHotkeyStatus({
@@ -486,7 +492,7 @@ describe('Settings tab 切换', () => {
       }),
     )
 
-    renderSettings()
+    renderDictation()
 
     expect(await screen.findByText('settings.hotkeyConflict')).toBeDefined()
   })
@@ -505,7 +511,7 @@ describe('Settings tab 切换', () => {
       )
 
     try {
-      renderSettings()
+      renderDictation()
 
       expect(screen.queryByText('settings.hotkeyRegistrationFailed')).toBeNull()
     } finally {
@@ -526,7 +532,7 @@ describe('Settings tab 切换', () => {
     useAppStore.getState().setHotkeyRegistrationError('Shortcut is already registered')
 
     try {
-      renderSettings()
+      renderDictation()
 
       expect(screen.getByText('settings.hotkeyRegistrationFailed')).toBeDefined()
     } finally {
@@ -546,7 +552,7 @@ describe('Settings tab 切换', () => {
       }),
     )
 
-    renderSettings()
+    renderDictation()
 
     await waitFor(() => {
       expect(useAppStore.getState().hotkeyRegistrationError).toBeNull()
@@ -569,7 +575,7 @@ describe('Settings tab 切换', () => {
       )
 
     try {
-      renderSettings()
+      renderDictation()
 
       await waitFor(() => {
         expect(resumeHotkey).toHaveBeenCalled()
@@ -583,8 +589,8 @@ describe('Settings tab 切换', () => {
     }
   })
 
-  it('General pane does not expose the optional Ask hotkey disable action', () => {
-    renderSettings()
+  it('Dictation pane does not expose the optional Ask hotkey disable action', () => {
+    renderDictation()
 
     expect(screen.queryByLabelText('settings.disableAskHotkey')).toBeNull()
     expect(useAppStore.getState().config.ask_hotkey).toBe('Ctrl+.')
@@ -600,7 +606,7 @@ describe('Settings tab 切换', () => {
     useAppStore.getState().updateConfig({ hotkey: 'RightAlt' })
     seedSavedConfig()
 
-    renderSettings()
+    renderDictation()
 
     expect(await screen.findByText('RightAlt')).toBeDefined()
     expect(screen.queryByText('settings.hotkeyInvalid')).toBeNull()
@@ -621,7 +627,7 @@ describe('Settings tab 切换', () => {
     })
 
     try {
-      renderSettings()
+      renderDictation()
 
       fireEvent.click(screen.getByText('Ctrl+.'))
       expect(screen.getByRole('button', { name: 'Right Alt + Space' })).toBeTruthy()
@@ -639,8 +645,8 @@ describe('Settings tab 切换', () => {
   })
 
   it('offers hotkeys for editing a selection, switching scene and opening the app', () => {
-    renderSettings()
-    fireEvent.click(screen.getByText('settings.advancedGeneral'))
+    renderDictation()
+    fireEvent.click(screen.getByText('settings.moreShortcuts'))
     for (const role of ['editSelection', 'switchScene', 'openApp']) {
       expect(document.querySelector(`[data-hotkey-role="${role}"]`)).not.toBeNull()
     }
@@ -649,7 +655,7 @@ describe('Settings tab 切换', () => {
   it('blocks local Ask hotkey drafts that conflict with Dictation', async () => {
     vi.useFakeTimers()
     try {
-      renderSettings()
+      renderDictation()
       fireEvent.click(screen.getByText('Ctrl+.'))
       await act(async () => {
         await Promise.resolve()
@@ -671,7 +677,7 @@ describe('Settings tab 切换', () => {
   it('blocks local Dictation hotkey drafts that conflict with Ask', async () => {
     vi.useFakeTimers()
     try {
-      renderSettings()
+      renderDictation()
       fireEvent.click(screen.getByText('Ctrl+/'))
       await act(async () => {
         await Promise.resolve()
@@ -737,11 +743,23 @@ describe('Settings tab 切换', () => {
     expect(useAppStore.getState().onboardingStep).toBe(0)
   })
 
-  it('界面语言在单独的“语言”页里选择并保存', () => {
+  it('界面语言在“通用”页里选择并保存', () => {
     renderSettings()
-    clickSidebarItem('settings.language')
     fireEvent.click(screen.getByRole('button', { name: '日本語' }))
     expect(useAppStore.getState().config.ui_language).toBe('ja')
+  })
+
+  it('opens a pane named in the address, and the old language pane as General', () => {
+    window.location.hash = '#/settings?pane=meetings'
+    const view = renderSettings()
+    expect(screen.getByText('settings.meetingDetect')).toBeDefined()
+    view.unmount()
+
+    window.location.hash = '#/settings?pane=language'
+    renderSettings()
+    expect(screen.getByRole('button', { name: '日本語' })).toBeDefined()
+    expect(screen.getByText('settings.launchAtStartup')).toBeDefined()
+    window.location.hash = ''
   })
 
   it('“关于”页不再放界面语言', () => {
@@ -756,7 +774,7 @@ describe('Settings tab 切换', () => {
     clickSidebarItem('settings.aiPolish')
     expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
 
-    clickSidebarItem('settings.general')
+    clickSidebarItem('settings.dictationPane')
     expect(screen.getByText('settings.hotkey')).toBeDefined()
   })
 
@@ -765,7 +783,7 @@ describe('Settings tab 切换', () => {
     clickSidebarItem('settings.aiPolish')
     expect(screen.getByText('settings.enableAiPolish')).toBeDefined()
 
-    clickSidebarItem('settings.general')
+    clickSidebarItem('settings.dictationPane')
     expect(screen.getByText('settings.hotkey')).toBeDefined()
     expect(screen.getByLabelText('settings.tryAsk')).toBeDefined()
 
@@ -801,7 +819,7 @@ describe('Settings tab 切换', () => {
       useAppStore.getState().updateConfig({ ask_hotkey: 'Command+.' })
       seedSavedConfig()
 
-      renderSettings()
+      renderDictation()
       fireEvent.click(screen.getByText('Command+.'))
       await act(async () => {
         await Promise.resolve()

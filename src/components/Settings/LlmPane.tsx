@@ -11,7 +11,6 @@ import { ChevronDown, MoreHorizontal } from 'lucide-react'
 import { AppLogo } from '../AppLogo'
 import { LlmConnectionForm } from './LlmConnectionForm'
 import { ContextAdaptationApps } from './ContextAdaptationApps'
-import { TranslationTargets } from './TranslationTargets'
 import { WritingRules } from './WritingRules'
 import { AppStyleMappingDialog } from './AppStyleMappingDialog'
 import { ManageAppMappingsDialog } from './ManageAppMappingsDialog'
@@ -95,35 +94,6 @@ export function LlmPane() {
     <div className="space-y-4">
       <LlmConnectionForm />
 
-      <section
-        aria-label={t('settings.meetingModel')}
-        className="space-y-3 border-t border-border pt-4"
-      >
-        <Toggle
-          checked={Boolean(config.meeting_llm_provider)}
-          onChange={(checked) =>
-            updateConfig(
-              checked
-                ? {
-                    meeting_llm_provider: config.llm_provider,
-                    meeting_llm_base_url: config.llm_base_url,
-                    meeting_llm_api_format: config.llm_api_format,
-                    meeting_llm_model: config.llm_model,
-                  }
-                : {
-                    meeting_llm_provider: '',
-                    meeting_llm_base_url: '',
-                    meeting_llm_api_format: '',
-                    meeting_llm_model: '',
-                  },
-            )
-          }
-          label={t('settings.meetingModel')}
-        />
-        <p className="text-[11px] text-text-tertiary">{t('settings.meetingModelHint')}</p>
-        {config.meeting_llm_provider && <LlmConnectionForm meeting />}
-      </section>
-
       <div className="space-y-3 pt-1">
         <div>
           <Toggle
@@ -206,21 +176,6 @@ export function LlmPane() {
                   {t('settings.browserAccessHint')}
                 </p>
               )}
-            </div>
-          )}
-        </div>
-        <div>
-          <Toggle
-            checked={config.translate_enabled}
-            onChange={(checked) => updateConfig({ translate_enabled: checked })}
-            label={t('settings.translationMode')}
-          />
-          {config.translate_enabled && (
-            <div className="mt-2 ml-[52px] min-w-0">
-              <TranslationTargets
-                value={config.translation}
-                onChange={(translation) => updateConfig({ translation })}
-              />
             </div>
           )}
         </div>

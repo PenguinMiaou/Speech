@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { LocalModelCard } from './LocalModelCard'
 import { LogoSelect } from './shared/LogoSelect'
 import { VoiceIsolationSection } from './VoiceIsolationSection'
+import { MicrophoneSection } from './MicrophoneSection'
 import { SttProviderSelect } from './SttProviderSelect'
 import { isMacPlatform, useAppStore } from '../../stores/appStore'
 import {
@@ -67,9 +68,8 @@ export function SttPane() {
   const credentialSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [apiKeyDraft, setApiKeyDraft] = useState(legacyApiKey)
   const [sttDiagnostics, setSttDiagnostics] = useState<SttProviderDiagnostics | null>(null)
-  const supportsAppleSpeech = platformCapabilities
-    ? platformCapabilities.os === 'macos'
-    : isMacPlatform()
+  const onMac = platformCapabilities ? platformCapabilities.os === 'macos' : isMacPlatform()
+  const supportsAppleSpeech = onMac
   const visibleSttProviders = STT_PROVIDERS.filter(
     (provider) => provider.value !== APPLE_SPEECH_PROVIDER || supportsAppleSpeech,
   )
@@ -302,6 +302,11 @@ export function SttPane() {
 
   return (
     <div className="space-y-5">
+      <div>
+        <h3 className="section-label mb-2.5">{t('settings.microphoneSection')}</h3>
+        <MicrophoneSection showMute={onMac} />
+      </div>
+
       <FormField label={t('settings.provider')}>
         <SttProviderSelect
           label={t('settings.provider')}

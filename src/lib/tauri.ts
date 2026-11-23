@@ -1025,6 +1025,29 @@ export interface MeetingRecord {
   } | null
   /** The questions asked of it and their answers, the newest first. */
   answers?: MeetingAnswer[]
+  /** Its chapters and what each speaker said, once they were asked for. */
+  overview?: MeetingOverview | null
+}
+
+/** One topic of a meeting, from the second it began at. */
+export interface MeetingChapter {
+  at_s: number
+  title: string
+  summary: string
+}
+
+/** What one speaker, by their number in the transcript, said over the meeting. */
+export interface MeetingSpeakerSummary {
+  speaker: number
+  summary: string
+}
+
+/** The chapters of a meeting and what each speaker said; `chars` is how long the text was
+ * when they were made. */
+export interface MeetingOverview {
+  chars: number
+  chapters: MeetingChapter[]
+  speakers: MeetingSpeakerSummary[]
 }
 
 /** A question asked of a meeting, the answer it got, and when, in milliseconds. */
@@ -1129,6 +1152,17 @@ export function meetingMinutes(
   language = '',
 ): Promise<string> {
   return invoke('meeting_minutes', { transcript, template, notes, full, language })
+}
+
+/** The chapters of a meeting and what each speaker said. `transcript` keeps the speakers'
+ * numbers in its headings, which begin with `label`; `names` are the names given them. */
+export function meetingOverview(
+  transcript: string,
+  label: string,
+  names: Record<number, string>,
+  language = '',
+): Promise<MeetingOverview> {
+  return invoke('meeting_overview', { transcript, label, names, language })
 }
 
 /** Answers a question about a meeting with the language model chosen in the settings. */

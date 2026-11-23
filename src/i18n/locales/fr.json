@@ -466,7 +466,10 @@
     "punctuationSpoken": "Seulement les signes prononcés",
     "punctuationNone": "Aucune",
     "showLog": "Afficher le journal",
-    "showLogHint": "États et erreurs uniquement, jamais ce qui a été dit"
+    "showLogHint": "États et erreurs uniquement, jamais ce qui a été dit",
+    "dictationPane": "Dictée",
+    "translationPane": "Traduction",
+    "moreShortcuts": "Autres raccourcis"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -826,7 +829,8 @@
       "ask": "Aucune réponse n’est arrivée",
       "system_audio_unsupported": "Cette version du système ne peut pas enregistrer le son de l’ordinateur",
       "someFailed": "Certains fichiers n’ont pas pu être transcrits.",
-      "timesDownload": "Le modèle n’a pas pu être téléchargé"
+      "timesDownload": "Le modèle n’a pas pu être téléchargé",
+      "overview": "L’aperçu n’a pas pu être créé"
     },
     "live": "Texte en direct",
     "listening": "À l’écoute. Le texte arrive environ toutes les quinze secondes",
@@ -952,6 +956,17 @@
     "talkTemplateName": "Conférence",
     "talkTemplate": "# Notes\n\n## Sujet\n\n## Points principaux\nDans l’ordre de l’exposé, chacun avec son heure\n\n## Exemples et chiffres cités\n\n## Questions du public et réponses",
     "standupTemplateName": "Point quotidien",
-    "standupTemplate": "# Point quotidien\n\nPour chaque personne qui a parlé :\n\n## Nom\n- Fait\n- À faire ensuite\n- Bloqué par\n\n## Pour tous\nDécisions et tâches, avec le responsable et l’échéance"
+    "standupTemplate": "# Point quotidien\n\nPour chaque personne qui a parlé :\n\n## Nom\n- Fait\n- À faire ensuite\n- Bloqué par\n\n## Pour tous\nDécisions et tâches, avec le responsable et l’échéance",
+    "tabOverview": "Aperçu",
+    "overviewMaking": "Recherche des chapitres et des propos de chacun…",
+    "overviewMake": "Créer un aperçu",
+    "overviewAgain": "Recréer",
+    "overviewStale": "Le texte a changé depuis cet aperçu.",
+    "chapters": "Chapitres",
+    "speakerSummaries": "Ce que chacun a dit",
+    "playFrom": "Lire à partir de {{time}}"
+  },
+  "whatsNew": {
+    "title": "Nouveautés de {{version}}"
   }
 }

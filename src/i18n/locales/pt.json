@@ -466,7 +466,10 @@
     "punctuationSpoken": "Só os sinais ditos em voz alta",
     "punctuationNone": "Nenhuma",
     "showLog": "Mostrar registo",
-    "showLogHint": "Apenas estados e erros, nunca o que foi dito"
+    "showLogHint": "Apenas estados e erros, nunca o que foi dito",
+    "dictationPane": "Ditado",
+    "translationPane": "Tradução",
+    "moreShortcuts": "Mais atalhos"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -826,7 +829,8 @@
       "ask": "Não chegou nenhuma resposta",
       "system_audio_unsupported": "Esta versão do sistema não consegue gravar o som do computador",
       "someFailed": "Alguns arquivos não puderam ser transcritos.",
-      "timesDownload": "Não foi possível baixar o modelo"
+      "timesDownload": "Não foi possível baixar o modelo",
+      "overview": "Não foi possível criar a visão geral"
     },
     "live": "Texto ao vivo",
     "listening": "A ouvir. O texto chega a cada quinze segundos, aproximadamente",
@@ -952,6 +956,17 @@
     "talkTemplateName": "Palestra ou aula",
     "talkTemplate": "# Notas\n\n## Tema\n\n## Pontos principais\nNa ordem em que foram ditos, cada um com a hora\n\n## Exemplos e números citados\n\n## Perguntas do público e respostas",
     "standupTemplateName": "Reunião diária",
-    "standupTemplate": "# Reunião diária\n\nPara cada pessoa que falou:\n\n## Nome\n- Feito\n- A seguir\n- Bloqueado por\n\n## Para todos\nDecisões e tarefas, com responsável e prazo"
+    "standupTemplate": "# Reunião diária\n\nPara cada pessoa que falou:\n\n## Nome\n- Feito\n- A seguir\n- Bloqueado por\n\n## Para todos\nDecisões e tarefas, com responsável e prazo",
+    "tabOverview": "Visão geral",
+    "overviewMaking": "Encontrando os capítulos e o que cada pessoa disse…",
+    "overviewMake": "Criar visão geral",
+    "overviewAgain": "Criar de novo",
+    "overviewStale": "O texto mudou depois desta visão geral.",
+    "chapters": "Capítulos",
+    "speakerSummaries": "O que cada pessoa disse",
+    "playFrom": "Reproduzir a partir de {{time}}"
+  },
+  "whatsNew": {
+    "title": "Novidades da {{version}}"
   }
 }

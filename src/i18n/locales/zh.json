@@ -466,7 +466,10 @@
     "punctuationSpoken": "只加说出来的标点",
     "punctuationNone": "不加标点",
     "showLog": "显示日志",
-    "showLogHint": "只记状态和错误，不记说话内容"
+    "showLogHint": "只记状态和错误，不记说话内容",
+    "dictationPane": "听写",
+    "translationPane": "翻译",
+    "moreShortcuts": "更多快捷键"
   },
   "contextFamilies": {
     "email": "邮件",
@@ -826,7 +829,8 @@
       "ask": "没有得到回答",
       "system_audio_unsupported": "这台电脑的系统版本录不了电脑声音",
       "someFailed": "有文件没能转成文字。",
-      "timesDownload": "模型没有下载成功"
+      "timesDownload": "模型没有下载成功",
+      "overview": "速览没有生成成功"
     },
     "live": "实时文字",
     "listening": "正在听，文字每隔十几秒出一段",
@@ -952,6 +956,17 @@
     "talkTemplateName": "讲座 / 分享",
     "talkTemplate": "# 笔记\n\n## 主题\n\n## 主要观点\n按讲述顺序，每条带时间\n\n## 提到的例子和数字\n\n## 听众提问和回答",
     "standupTemplateName": "站会",
-    "standupTemplate": "# 站会\n\n每个发言的人写一节：\n\n## 姓名\n- 已完成\n- 接下来做\n- 卡在哪里\n\n## 共同事项\n结论和待办，每条写明负责人和期限"
+    "standupTemplate": "# 站会\n\n每个发言的人写一节：\n\n## 姓名\n- 已完成\n- 接下来做\n- 卡在哪里\n\n## 共同事项\n结论和待办，每条写明负责人和期限",
+    "tabOverview": "速览",
+    "overviewMaking": "正在整理章节和每个人的发言…",
+    "overviewMake": "生成速览",
+    "overviewAgain": "重新生成",
+    "overviewStale": "生成速览之后文字有改动。",
+    "chapters": "章节",
+    "speakerSummaries": "每人发言",
+    "playFrom": "从 {{time}} 开始播放"
+  },
+  "whatsNew": {
+    "title": "{{version}} 更新了什么"
   }
 }

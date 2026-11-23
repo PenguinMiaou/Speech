@@ -13,6 +13,10 @@ use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
 pub const HOTKEY_SUPERVISOR_RETRY_DELAY_SECS: u64 = 3;
 pub const HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT: u8 = 3;
+/// After the quick tries, how long between further tries. The shortcuts are never given up
+/// on, as what stopped them (another program holding a key, the system not yet ready after
+/// waking) may pass at any time.
+pub const HOTKEY_SUPERVISOR_SLOW_RETRY_DELAY_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeySupervisorState {
@@ -71,9 +75,7 @@ impl HotkeySupervisor {
 
     pub fn begin_retry_registration_attempt(&self) -> Option<u64> {
         let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        if guard.state != HotkeySupervisorState::Failed
-            || guard.retry_attempts > HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT
-        {
+        if guard.state != HotkeySupervisorState::Failed {
             return None;
         }
         guard.state = HotkeySupervisorState::Starting;
@@ -146,12 +148,12 @@ impl HotkeySupervisor {
 
     pub fn next_retry_delay(&self) -> Option<Duration> {
         let guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        if guard.state == HotkeySupervisorState::Failed
-            && guard.retry_attempts <= HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT
-        {
+        if guard.state != HotkeySupervisorState::Failed {
+            None
+        } else if guard.retry_attempts <= HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT {
             Some(Duration::from_secs(HOTKEY_SUPERVISOR_RETRY_DELAY_SECS))
         } else {
-            None
+            Some(Duration::from_secs(HOTKEY_SUPERVISOR_SLOW_RETRY_DELAY_SECS))
         }
     }
 }
@@ -1668,7 +1670,7 @@ mod tests {
     }
 
     #[test]
-    fn hotkey_supervisor_stops_fast_retry_after_configured_attempts() {
+    fn hotkey_supervisor_slows_retry_after_configured_attempts() {
         let supervisor = HotkeySupervisor::default();
 
         for attempt in 0..=HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT {
@@ -1682,7 +1684,13 @@ mod tests {
             snapshot.retry_attempts,
             HOTKEY_SUPERVISOR_FAST_RETRY_LIMIT + 1
         );
-        assert_eq!(supervisor.next_retry_delay(), None);
+        assert_eq!(
+            supervisor.next_retry_delay(),
+            Some(std::time::Duration::from_secs(
+                HOTKEY_SUPERVISOR_SLOW_RETRY_DELAY_SECS
+            ))
+        );
+        assert!(supervisor.begin_retry_registration_attempt().is_some());
     }
 
     #[test]

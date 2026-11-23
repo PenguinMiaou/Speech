@@ -323,3 +323,35 @@ pub async fn meeting_translate(
     };
     crate::minutes::translate(&client, &config, &api_key, &text, &target, &piece).await
 }
+
+/// The chapters of a meeting and what each of its speakers said, with the language model
+/// chosen for meetings. `transcript` keeps the speakers' numbers in its headings, which
+/// `label` begins; `names` are the names the user gave them; `language` is the code of the
+/// language to write in, or empty for the meeting's own.
+#[tauri::command]
+pub async fn meeting_overview(
+    transcript: String,
+    label: String,
+    names: Option<std::collections::HashMap<u32, String>>,
+    language: Option<String>,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<crate::overview::Overview, String> {
+    let (config, api_key) = meeting_llm(&config_state).await?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    crate::overview::overview(
+        &client,
+        &config,
+        &api_key,
+        &transcript,
+        &label,
+        &names.unwrap_or_default(),
+        &language.unwrap_or_default(),
+    )
+    .await
+}

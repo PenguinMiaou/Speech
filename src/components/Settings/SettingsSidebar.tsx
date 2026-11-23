@@ -1,4 +1,14 @@
-import { Settings, Mic, Sparkles, BookOpen, Info, Languages, LayoutGrid } from 'lucide-react'
+import {
+  Settings,
+  Keyboard,
+  Mic,
+  Sparkles,
+  Languages,
+  AudioLines,
+  BookOpen,
+  LayoutGrid,
+  Info,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
 import { spring } from '../../lib/animations'
@@ -6,11 +16,13 @@ import { useAppStore } from '../../stores/appStore'
 
 const PANES = [
   { id: 'general', labelKey: 'settings.general', icon: Settings },
+  { id: 'dictation', labelKey: 'settings.dictationPane', icon: Keyboard },
   { id: 'stt', labelKey: 'settings.speechRecognition', icon: Mic },
   { id: 'llm', labelKey: 'settings.aiPolish', icon: Sparkles },
+  { id: 'translation', labelKey: 'settings.translationPane', icon: Languages },
+  { id: 'meetings', labelKey: 'nav.meeting', icon: AudioLines },
   { id: 'dictionary', labelKey: 'settings.dictionary', icon: BookOpen },
   { id: 'scenes', labelKey: 'settings.scenes', icon: LayoutGrid },
-  { id: 'language', labelKey: 'settings.language', icon: Languages },
   { id: 'about', labelKey: 'settings.about', icon: Info },
 ] as const
 

@@ -1268,6 +1268,57 @@ describe('MeetingCard', () => {
     await waitFor(() => expect(tauri.meetingDelete).toHaveBeenCalledWith('m-1'))
   })
 
+  it('keeps a late overview with its own meeting, not the one opened since', async () => {
+    const A = {
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nthe budget',
+      notes: '',
+      minutes: '',
+      names: {},
+    }
+    const B = { ...A, id: 'm-2', started_at: 1_700_000_100_000, transcript: '00:00\nthe garden' }
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: A.started_at, preview: 'budget talk', has_minutes: false },
+      { id: 'm-2', started_at: B.started_at, preview: 'garden talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockImplementation((id: string) =>
+      Promise.resolve(id === 'm-1' ? A : B),
+    )
+    let answer: (made: tauri.MeetingOverview) => void = () => {}
+    vi.mocked(tauri.meetingOverview).mockReturnValueOnce(new Promise((done) => (answer = done)))
+    vi.mocked(tauri.meetingSave).mockClear()
+    await ready()
+    fireEvent.click(await screen.findByText('budget talk'))
+    fireEvent.click(await screen.findByRole('tab', { name: 'meeting.tabOverview' }))
+    await waitFor(() => expect(tauri.meetingOverview).toHaveBeenCalledTimes(1))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
+    fireEvent.click(await screen.findByText('garden talk'))
+    await waitFor(() =>
+      expect(screen.getByLabelText('meeting.result').textContent).toBe('00:00\nthe garden'),
+    )
+    // Opening another meeting leaves the overview tab, so nothing is asked of it.
+    expect(screen.getByRole('tab', { name: 'meeting.tabText' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    const made = {
+      chars: 0,
+      chapters: [{ at_s: 0, title: 'Budget', summary: 'The budget.' }],
+      speakers: [],
+    }
+    act(() => answer(made))
+    await waitFor(() =>
+      expect(tauri.meetingSave).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'm-1', overview: { ...made, chars: A.transcript.length } }),
+      ),
+    )
+    for (const [saved] of vi.mocked(tauri.meetingSave).mock.calls) {
+      if (saved.id === 'm-2') expect(saved.overview ?? null).toBeNull()
+    }
+    expect(tauri.meetingOverview).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the questions asked of a meeting with it, and shows them when it is opened again', async () => {
     vi.mocked(tauri.meetingsList).mockResolvedValue([
       { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: false },
@@ -1317,6 +1368,39 @@ describe('MeetingCard', () => {
       expect.stringMatching(/^\[00:0\d\] cut the budget$/),
       false,
       '',
+    )
+  })
+
+  it('makes the overview when its tab is opened, and keeps it with the meeting', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
+    vi.mocked(tauri.meetingOverview).mockResolvedValue({
+      chars: 0,
+      chapters: [{ at_s: 0, title: 'The opening', summary: 'Something was said.' }],
+      speakers: [],
+    })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.stop' }))
+    const tabs = (await screen.findAllByRole('tab')).map((tab) => tab.textContent)
+    expect(tabs).toEqual(['meeting.tabText', 'meeting.tabOverview', 'meeting.tabMinutes'])
+    expect(tauri.meetingOverview).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('tab', { name: 'meeting.tabOverview' }))
+    await screen.findByText('The opening')
+    expect(tauri.meetingOverview).toHaveBeenCalledWith(
+      '00:00\nwhat was said',
+      'meeting.speakerLabel',
+      {},
+      '',
+    )
+    await waitFor(() =>
+      expect(tauri.meetingSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          overview: expect.objectContaining({ chars: '00:00\nwhat was said'.length }),
+        }),
+      ),
     )
   })
 

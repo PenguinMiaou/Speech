@@ -45,6 +45,7 @@ import {
   meetingDelete,
   meetingFolder,
   meetingGet,
+  meetingSave,
   meetingLanguages,
   meetingsAsk,
   meetingsList,
@@ -114,6 +115,7 @@ import {
   type MeetingPhase,
 } from '../../stores/meetingStore'
 import { MeetingMinutes } from './MeetingMinutes'
+import { MeetingOverviewPanel } from './MeetingOverviewPanel'
 import { MinutesForm } from './MinutesForm'
 import { MeetingLanguages, MOST_LANGUAGES } from './MeetingLanguages'
 
@@ -274,6 +276,7 @@ export function MeetingCard() {
     names,
     minutes,
     answers,
+    overview,
     id,
     interim,
     title,
@@ -498,6 +501,7 @@ export function MeetingCard() {
         : {
             minutes: null,
             answers: [],
+            overview: null,
             id: null,
             notes: '',
             title: '',
@@ -709,6 +713,7 @@ export function MeetingCard() {
 
   const record = () => {
     if (now() !== 'idle' || useMeetingStore.getState().making) return
+    setTab((shown) => (shown === 'overview' ? 'text' : shown))
     set({
       error: null,
       text: null,
@@ -719,6 +724,7 @@ export function MeetingCard() {
       names: {},
       minutes: null,
       answers: [],
+      overview: null,
       id: null,
       voicesAtHand: true,
       title: '',
@@ -887,6 +893,8 @@ export function MeetingCard() {
       .then((meeting) => {
         if (!meeting || now() !== 'idle') return
         setPosition(0)
+        // The overview of another meeting is not asked for by itself on opening this one.
+        setTab((shown) => (shown === 'overview' ? 'text' : shown))
         set({
           id: meeting.id,
           startedAt: meeting.started_at,
@@ -899,6 +907,7 @@ export function MeetingCard() {
           names: meeting.names ?? {},
           minutes: meeting.minutes || null,
           answers: meeting.answers ?? [],
+          overview: meeting.overview ?? null,
           voicesAtHand: false,
           title: meeting.title ?? '',
           folder: meeting.folder ?? '',
@@ -1085,6 +1094,7 @@ export function MeetingCard() {
       id: null,
       minutes: null,
       answers: [],
+      overview: null,
       notes: '',
       names: {},
       title: '',
@@ -1826,7 +1836,7 @@ export function MeetingCard() {
       {detail && result !== null && (
         <>
           <div role="tablist" className="-mb-1 flex gap-6 border-b border-border">
-            {(['text', 'minutes'] as const).map((each) => (
+            {(['text', 'overview', 'minutes'] as const).map((each) => (
               <button
                 key={each}
                 type="button"
@@ -1839,7 +1849,13 @@ export function MeetingCard() {
                     : 'border-transparent text-text-secondary hover:text-text-primary'
                 }`}
               >
-                {t(each === 'text' ? 'meeting.tabText' : 'meeting.tabMinutes')}
+                {t(
+                  each === 'text'
+                    ? 'meeting.tabText'
+                    : each === 'overview'
+                      ? 'meeting.tabOverview'
+                      : 'meeting.tabMinutes',
+                )}
               </button>
             ))}
           </div>
@@ -1969,6 +1985,47 @@ export function MeetingCard() {
               cutLabel={t('meeting.cut')}
               cutConfirmLabel={t('meeting.cutConfirm')}
             />
+          </div>
+          <div hidden={tab !== 'overview'}>
+            {written !== null && written.trim() !== '' && (
+              <MeetingOverviewPanel
+                key={id ?? 'new'}
+                meetingId={id}
+                transcript={written}
+                label={label}
+                names={names}
+                overview={overview}
+                active={tab === 'overview'}
+                busy={phase !== 'idle' || tidying !== null || making?.id === id}
+                onOverview={(made) => {
+                  const forId = id
+                  const now = useMeetingStore.getState()
+                  if (now.id === forId) {
+                    set({ overview: made })
+                    persist()
+                    return
+                  }
+                  // Another meeting was opened while this one's overview was made: it goes
+                  // with its own meeting, if that still says what it was made from.
+                  if (!forId) return
+                  void Promise.resolve(meetingGet(forId))
+                    .then((kept) =>
+                      kept && kept.transcript.length === made.chars
+                        ? meetingSave({ ...kept, overview: made })
+                        : undefined,
+                    )
+                    .catch(() => {})
+                }}
+                onSeek={
+                  kept
+                    ? (seconds) => {
+                        setTab('text')
+                        player.current?.seek(seconds, true)
+                      }
+                    : undefined
+                }
+              />
+            )}
           </div>
           <div hidden={tab !== 'minutes'}>
             {notesBox}
