@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Mic,
   Pause,
+  Scissors,
   Play,
   SlidersHorizontal,
   Check,
@@ -42,6 +43,7 @@ import {
   audioSource,
   meetingAudio,
   meetingAudioDelete,
+  meetingAudioTrim,
   meetingDelete,
   meetingFolder,
   meetingGet,
@@ -96,6 +98,8 @@ import {
   withRunsJoined,
   withSpeakerAt,
   withoutSection,
+  transcriptLines,
+  secondsOf,
   withSpeakersJoined,
   withSpellings,
 } from '../../lib/meeting-text'
@@ -107,6 +111,7 @@ import {
   nameFromMinutes,
   nameMeeting,
   recoverMeeting,
+  soundOf,
   timeWords,
   persistMeeting,
   tidyMeeting,
@@ -138,6 +143,10 @@ const TRANSLATE_KEY = 'meeting.translate'
 /** Below this level the microphone hears nothing at all, not even the room; after this many
  * seconds of a recording that is told. */
 const MIC_DEAD_LEVEL = 0.0005
+/** The sound kept after the last words when a silent end is cut off. */
+const TAIL_KEPT_MS = 3_000
+/** How much sound after the last words is offered to be cut off. */
+const SILENT_TAIL_MS = 60_000
 const MIC_DEAD_AFTER = 4
 const TRANSLATE_TO_KEY = 'meeting.translateTo'
 const LANGUAGES_KEY = 'meeting.languages'
@@ -429,6 +438,15 @@ export function MeetingCard() {
   const [position, setPosition] = useState(0)
   /** The text of the file being transcribed, as far as it is written out. */
   const [paused, setPaused] = useState(false)
+  /** The minutes with nothing said after which the recording paused itself; null while it
+   * did not. */
+  const [quietPaused, setQuietPaused] = useState<number | null>(null)
+  /** Bumped when the kept sound is cut in place, so the player reads it afresh. */
+  const [soundVersion, setSoundVersion] = useState(0)
+  const [cuttingTail, setCuttingTail] = useState(false)
+  /** Pause requests not answered yet: until they are, the paused state the recording
+   * reports may be older than the user's click. */
+  const pausing = useRef(0)
   const notesRef = useRef<HTMLTextAreaElement>(null)
   const [download, setDownload] = useState<number | null>(null)
   /** The model that tells when each word was said: whether it is here, and wanted. */
@@ -651,6 +669,12 @@ export function MeetingCard() {
           if (!now) return
           setLevel(now)
           setLoudest((was) => Math.max(was, now.volume))
+          // The recording pauses itself after a while with nothing said, also while this
+          // page is not open, so whether it is paused comes from the recording.
+          if (pausing.current === 0 && typeof now.paused === 'boolean') {
+            setPaused(now.paused)
+            setQuietPaused(now.quiet_paused ?? null)
+          }
         })
         .catch(() => {})
     read()
@@ -713,6 +737,7 @@ export function MeetingCard() {
 
   const record = () => {
     if (now() !== 'idle' || useMeetingStore.getState().making) return
+    setQuietPaused(null)
     setTab((shown) => (shown === 'overview' ? 'text' : shown))
     set({
       error: null,
@@ -762,8 +787,14 @@ export function MeetingCard() {
   const pause = () => {
     if (now() !== 'recording') return
     const next = !paused
+    setQuietPaused(null)
     setPaused(next)
-    void Promise.resolve(meetingRecordPause(next)).catch(() => setPaused(!next))
+    pausing.current += 1
+    void Promise.resolve(meetingRecordPause(next))
+      .catch(() => setPaused(!next))
+      .finally(() => {
+        pausing.current -= 1
+      })
   }
 
   const heardNow = () => useMeetingStore.getState().paragraphs
@@ -851,7 +882,7 @@ export function MeetingCard() {
       .catch(() => {})
     if (meeting)
       void Promise.resolve(meetingAudio(meeting.id))
-        .then((kept) => setSound(kept ?? null))
+        .then((kept) => setSound(soundOf(meeting.id, kept)))
         .catch(() => {})
   }
   /** Makes minutes of the picked meeting in one go, after the picked template. */
@@ -919,7 +950,10 @@ export function MeetingCard() {
           unpolished: meeting.unpolished ? { id: meeting.id, ...meeting.unpolished } : null,
         })
         void Promise.resolve(meetingAudio(meeting.id))
-          .then((kept) => useMeetingStore.getState().id === meeting.id && setKept(kept ?? null))
+          .then(
+            (kept) =>
+              useMeetingStore.getState().id === meeting.id && setKept(soundOf(meeting.id, kept)),
+          )
           .catch(() => {})
       })
       .catch(() => {})
@@ -1070,6 +1104,77 @@ export function MeetingCard() {
           }
         : null
     set({ text: left.text, times: keptTimes, ...(heard ? { unpolished: stillHeard } : {}) })
+    persist()
+  }
+  /** Cuts the kept sound off at `endMs` from its start, before anything else is cut, so
+   * that the text is not cut where the sound could not be. Whether it was, or there is no
+   * sound; shows why where it could not be. */
+  const trimSound = async (forId: string, endMs: number) => {
+    if (!kept) return true
+    try {
+      await meetingAudioTrim(forId, endMs)
+    } catch {
+      if (useMeetingStore.getState().id === forId) setError('meeting.error.trim')
+      return false
+    }
+    // The player reads the shortened sound afresh.
+    if (useMeetingStore.getState().id === forId) setSoundVersion((version) => version + 1)
+    return true
+  }
+  /** Cuts the meeting off from the section whose heading is at `line` to the end: the kept
+   * sound from that section's time on, then its text and the times of that text. The text
+   * as it was before the tidy-up is cut the same where it still lines up, and let go
+   * otherwise. */
+  const cutAfter = async (line: number) => {
+    if (written === null || !id) return
+    const parsed = transcriptLines(written, label)
+    const at = parsed[line]
+    if (!at || 'text' in at) return
+    const forId = id
+    const forText = written
+    const endMs = secondsOf(at.time) * 1000
+    setError(null)
+    if (!(await trimSound(forId, endMs))) return
+    const now = useMeetingStore.getState()
+    if (now.id !== forId || now.text !== forText) return
+    const headingsBefore = parsed.slice(0, line).filter((each) => !('text' in each)).length
+    const all = forText.split('\n')
+    const upTo = (text: string) => {
+      const lines = text.split('\n').slice(0, line)
+      while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
+      return lines.join('\n')
+    }
+    const cutOf = (text: string | undefined) =>
+      text !== undefined && text.split('\n').length === all.length ? upTo(text) : undefined
+    const was = heard ? { text: cutOf(heard.text), shaped: cutOf(heard.shaped) } : null
+    const stillHeard =
+      heard && was?.text !== undefined && (heard.shaped === undefined || was.shaped !== undefined)
+        ? {
+            ...heard,
+            text: was.text,
+            ...(was.shaped === undefined ? {} : { shaped: was.shaped }),
+            ...(heard.times ? { times: heard.times.slice(0, headingsBefore) } : {}),
+          }
+        : null
+    set({
+      text: upTo(forText),
+      times: times.slice(0, headingsBefore),
+      duration: Math.floor(endMs / 1000),
+      ...(heard ? { unpolished: stillHeard } : {}),
+    })
+    persist()
+  }
+  /** Where the last words end, with a moment after them; null where that is not known. */
+  const lastWordsMs = times.length > 0 ? times[times.length - 1].end_ms + TAIL_KEPT_MS : null
+  /** Cuts the kept sound off a moment after the last words, for a recording left running
+   * after the meeting ended with nothing more said. The text stays as it is. */
+  const cutSilentTail = async () => {
+    if (!id || lastWordsMs === null) return
+    const forId = id
+    setError(null)
+    if (!(await trimSound(forId, lastWordsMs))) return
+    if (useMeetingStore.getState().id !== forId) return
+    set({ duration: Math.floor(lastWordsMs / 1000) })
     persist()
   }
   const giveTo = (line: number, speaker: number, all: boolean) => {
@@ -1365,7 +1470,7 @@ export function MeetingCard() {
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => void saveMeetingAudio(id, t('meeting.audioFileName'))}
+                      onClick={() => void saveMeetingAudio(id, t('meeting.audioFileName'), kept)}
                       className={item}
                     >
                       {t('meeting.saveAudio')}
@@ -1564,6 +1669,20 @@ export function MeetingCard() {
             {interim && <p className="text-text-tertiary">{interim}</p>}
           </div>
           {notesBox}
+          {phase === 'recording' && paused && quietPaused !== null && (
+            <div
+              role="alert"
+              className="mt-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] text-text-primary"
+            >
+              <span className="flex-1">{t('meeting.quietPaused', { count: quietPaused })}</span>
+              <button type="button" className="btn-quiet px-2.5" onClick={pause}>
+                {t('meeting.resume')}
+              </button>
+              <button type="button" className="btn-quiet px-2.5" onClick={() => stop(false)}>
+                {t('meeting.stop')}
+              </button>
+            </div>
+          )}
           {phase === 'recording' &&
             !paused &&
             level.seconds >= MIC_DEAD_AFTER &&
@@ -1862,12 +1981,52 @@ export function MeetingCard() {
           <div hidden={tab !== 'text'} className="flex flex-col gap-4">
             {kept && (
               <MeetingAudio
-                key={kept}
+                key={`${id ?? ''}#${soundVersion}`}
                 ref={player}
-                src={audioSource(kept)}
+                src={
+                  soundVersion > 0 ? `${audioSource(kept)}?v=${soundVersion}` : audioSource(kept)
+                }
                 onPosition={setPosition}
               />
             )}
+            {kept &&
+              lastWordsMs !== null &&
+              duration * 1000 > lastWordsMs + SILENT_TAIL_MS &&
+              (cuttingTail ? (
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-text-secondary">
+                  <span>
+                    {t('meeting.cutSilentTailAsk', { time: clock(Math.floor(lastWordsMs / 1000)) })}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-quiet px-2.5 text-error"
+                    onClick={() => {
+                      setCuttingTail(false)
+                      void cutSilentTail()
+                    }}
+                  >
+                    {t('meeting.cutSilentTailConfirm')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-quiet px-2.5"
+                    onClick={() => setCuttingTail(false)}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-quiet w-fit px-2.5 text-[12px]"
+                  onClick={() => setCuttingTail(true)}
+                >
+                  <Scissors size={12} />
+                  {t('meeting.cutSilentTail', {
+                    minutes: Math.round((duration * 1000 - lastWordsMs) / 60_000),
+                  })}
+                </button>
+              ))}
             {kept && stampedNotes(notes).length > 0 && (
               <ul
                 className="m-0 flex list-none flex-col gap-1 border-l-2 border-border p-0 pl-3"
@@ -1984,6 +2143,11 @@ export function MeetingCard() {
               onCut={cut}
               cutLabel={t('meeting.cut')}
               cutConfirmLabel={t('meeting.cutConfirm')}
+              onCutAfter={id ? (line) => void cutAfter(line) : undefined}
+              cutAfterLabel={t('meeting.cutAfter')}
+              cutAfterConfirmLabel={
+                kept ? t('meeting.cutAfterConfirmSound') : t('meeting.cutAfterConfirm')
+              }
             />
           </div>
           <div hidden={tab !== 'overview'}>

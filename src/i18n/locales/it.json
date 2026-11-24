@@ -469,7 +469,10 @@
     "showLogHint": "Solo stati ed errori, mai ciò che è stato detto",
     "dictationPane": "Dettatura",
     "translationPane": "Traduzione",
-    "moreShortcuts": "Altre scorciatoie"
+    "moreShortcuts": "Altre scorciatoie",
+    "meetingQuietPause": "Metti in pausa dopo quanto silenzio",
+    "meetingQuietPauseNever": "Mai",
+    "meetingQuietPauseMinutes": "{{count}} min"
   },
   "contextFamilies": {
     "email": "Email",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "Questa versione del sistema non può registrare l’audio del computer",
       "someFailed": "Alcuni file non sono stati trascritti.",
       "timesDownload": "Impossibile scaricare il modello",
-      "overview": "Impossibile creare la panoramica"
+      "overview": "Impossibile creare la panoramica",
+      "trim": "Non è stato possibile tagliare la registrazione."
     },
     "live": "Testo in diretta",
     "listening": "In ascolto. Il testo arriva circa ogni quindici secondi",
@@ -964,7 +968,14 @@
     "overviewStale": "Il testo è cambiato dopo questa panoramica.",
     "chapters": "Capitoli",
     "speakerSummaries": "Cosa ha detto ciascuno",
-    "playFrom": "Riproduci da {{time}}"
+    "playFrom": "Riproduci da {{time}}",
+    "quietPaused": "Nessuno ha parlato per {{count}} min, la registrazione è in pausa.",
+    "cutAfter": "Taglia da qui alla fine",
+    "cutAfterConfirm": "Rimuovi questo e tutto ciò che segue",
+    "cutAfterConfirmSound": "Rimuovi questo e tutto ciò che segue, con la registrazione; non si può annullare",
+    "cutSilentTail": "Taglia i {{minutes}} min di silenzio finali",
+    "cutSilentTailAsk": "Tagliare la registrazione subito dopo le ultime parole ({{time}})? Non si può annullare.",
+    "cutSilentTailConfirm": "Taglia"
   },
   "whatsNew": {
     "title": "Novità della {{version}}"

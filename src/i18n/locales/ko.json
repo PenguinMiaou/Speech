@@ -469,7 +469,10 @@
     "showLogHint": "상태와 오류만 기록하며 말한 내용은 기록하지 않습니다",
     "dictationPane": "받아쓰기",
     "translationPane": "번역",
-    "moreShortcuts": "추가 단축키"
+    "moreShortcuts": "추가 단축키",
+    "meetingQuietPause": "말이 없을 때 녹음을 일시 정지할 시간",
+    "meetingQuietPauseNever": "안 함",
+    "meetingQuietPauseMinutes": "{{count}}분"
   },
   "contextFamilies": {
     "email": "이메일",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "이 시스템 버전에서는 컴퓨터 소리를 녹음할 수 없습니다",
       "someFailed": "텍스트로 바꾸지 못한 파일이 있습니다.",
       "timesDownload": "모델을 다운로드하지 못했습니다",
-      "overview": "개요를 만들지 못했습니다"
+      "overview": "개요를 만들지 못했습니다",
+      "trim": "녹음을 자르지 못했습니다."
     },
     "live": "실시간 텍스트",
     "listening": "듣는 중입니다. 텍스트는 약 15초마다 나옵니다",
@@ -964,7 +968,14 @@
     "overviewStale": "이 개요를 만든 뒤 텍스트가 바뀌었습니다.",
     "chapters": "챕터",
     "speakerSummaries": "발언자별 요약",
-    "playFrom": "{{time}}부터 재생"
+    "playFrom": "{{time}}부터 재생",
+    "quietPaused": "{{count}}분 동안 말이 없어 녹음을 일시 정지했습니다.",
+    "cutAfter": "여기부터 끝까지 자르기",
+    "cutAfterConfirm": "이 부분과 그 뒤를 모두 삭제",
+    "cutAfterConfirmSound": "이 부분과 그 뒤를 녹음까지 삭제(되돌릴 수 없음)",
+    "cutSilentTail": "끝부분 무음 {{minutes}}분 자르기",
+    "cutSilentTailAsk": "마지막 말 바로 뒤({{time}})에서 녹음을 자를까요? 되돌릴 수 없습니다.",
+    "cutSilentTailConfirm": "자르기"
   },
   "whatsNew": {
     "title": "{{version}} 새로운 기능"

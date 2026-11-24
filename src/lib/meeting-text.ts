@@ -234,6 +234,11 @@ export function stampNote(
   return { value: value.slice(0, start) + stamp + value.slice(start), caret: caret + stamp.length }
 }
 
+/** The seconds from the start a transcript's time, such as 01:05 or 1:02:03, stands for. */
+export function secondsOf(time: string): number {
+  return time.split(':').reduce((total, part) => total * 60 + Number(part), 0)
+}
+
 /** The notes that carry the time they were written at, with that time in seconds. */
 export function stampedNotes(notes: string): { seconds: number; time: string; text: string }[] {
   return notes.split('\n').flatMap((line) => {

@@ -32,3 +32,6 @@ vulkan = ["transcribe-cpp/vulkan"]
 [profile.release]
 opt-level = 3
 lto = "thin"
+# Leaves the debugging symbols out of the shipped worker, a quarter of its size; they are
+# not used while it runs.
+strip = true

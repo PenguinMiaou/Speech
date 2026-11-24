@@ -49,6 +49,12 @@ Copyright (c) 2019-2022 The Project Symphonia Developers
 
 Decodes audio and video files for file transcription. Used unmodified under the Mozilla Public License 2.0. The source is at https://github.com/pdeljanov/Symphonia and the licence text at https://www.mozilla.org/MPL/2.0/.
 
+## flacenc 0.5
+
+Copyright 2022-2024 Google LLC; Copyright 2025- flacenc-rs developers
+
+Packs a meeting's kept recording as FLAC, losing no sample. Used unmodified under the Apache License 2.0. The source is at https://github.com/yotarok/flacenc-rs and the licence text at https://www.apache.org/licenses/LICENSE-2.0.
+
 ## pyannote segmentation 3.0
 
 Copyright (c) 2022 CNRS

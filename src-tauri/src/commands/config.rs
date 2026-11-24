@@ -298,6 +298,7 @@ pub async fn update_config(
     update_runtime_caches(&cache, &ask_cache, &role_cache, &close_tray_cache, &config);
     emit_config_patch(&app, &patch);
     crate::meeting_probe::set_enabled(config.meeting_detect);
+    crate::meeting_record::set_quiet_pause_minutes(config.meeting_quiet_pause_minutes);
     if patch.get("ui_language").is_some() || patch.get("capsule_auto_hide").is_some() {
         crate::refresh_tray(&app);
     }

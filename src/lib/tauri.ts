@@ -894,6 +894,10 @@ export function meetingRecordLevel(): Promise<{
   seconds: number
   volume: number
   waiting: number
+  paused?: boolean
+  /** The minutes with nothing said after which the recording paused itself, while it is
+   * paused for that. */
+  quiet_paused?: number | null
 } | null> {
   return invoke('meeting_record_level')
 }
@@ -915,16 +919,27 @@ export function meetingAudioKeep(id: string): Promise<string | null> {
   return invoke('meeting_audio_keep', { id })
 }
 
+/** Cuts the sound of a meeting off at `endMs` from its start. */
+export function meetingAudioTrim(id: string, endMs: number): Promise<void> {
+  return invoke('meeting_audio_trim', { id, endMs })
+}
+
 export function meetingAudioDelete(id: string): Promise<void> {
   return invoke('meeting_audio_delete', { id })
 }
 
-/** Asks where to put a copy of a meeting's sound and writes it there. */
-export async function saveMeetingAudio(id: string, suggestedName: string): Promise<boolean> {
+/** Asks where to put a copy of a meeting's sound and writes it there, in the kind of file
+ * it is kept as: FLAC once packed, WAV before. */
+export async function saveMeetingAudio(
+  id: string,
+  suggestedName: string,
+  kept: string,
+): Promise<boolean> {
   const { save } = await import('@tauri-apps/plugin-dialog')
+  const extension = kept.toLowerCase().endsWith('.flac') ? 'flac' : 'wav'
   const path = await save({
-    defaultPath: suggestedName,
-    filters: [{ name: 'WAV', extensions: ['wav'] }],
+    defaultPath: `${suggestedName.replace(/\.wav$/i, '')}.${extension}`,
+    filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
   })
   if (!path) return false
   await invoke('meeting_audio_save', { id, path })
@@ -934,6 +949,15 @@ export async function saveMeetingAudio(id: string, suggestedName: string): Promi
 /** The address the page plays a kept sound file from. */
 export function audioSource(path: string): string {
   return convertFileSrc(path)
+}
+
+/** Told when a meeting's sound kept from before has been packed, with where it is now. */
+export function onMeetingAudioPacked(
+  handler: (packed: { id: string; path: string }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ id: string; path: string }>('meeting:audio-packed', (event) =>
+    handler(event.payload),
+  )
 }
 
 export function onMeetingSegment(handler: (segment: MeetingSegment) => void): Promise<UnlistenFn> {

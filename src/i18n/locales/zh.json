@@ -469,7 +469,10 @@
     "showLogHint": "只记状态和错误，不记说话内容",
     "dictationPane": "听写",
     "translationPane": "翻译",
-    "moreShortcuts": "更多快捷键"
+    "moreShortcuts": "更多快捷键",
+    "meetingQuietPause": "多久没人说话就自动暂停录音",
+    "meetingQuietPauseNever": "不暂停",
+    "meetingQuietPauseMinutes": "{{count}} 分钟"
   },
   "contextFamilies": {
     "email": "邮件",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "这台电脑的系统版本录不了电脑声音",
       "someFailed": "有文件没能转成文字。",
       "timesDownload": "模型没有下载成功",
-      "overview": "速览没有生成成功"
+      "overview": "速览没有生成成功",
+      "trim": "录音没剪成功。"
     },
     "live": "实时文字",
     "listening": "正在听，文字每隔十几秒出一段",
@@ -964,7 +968,14 @@
     "overviewStale": "生成速览之后文字有改动。",
     "chapters": "章节",
     "speakerSummaries": "每人发言",
-    "playFrom": "从 {{time}} 开始播放"
+    "playFrom": "从 {{time}} 开始播放",
+    "quietPaused": "已经 {{count}} 分钟没有人说话，录音自动暂停了。",
+    "cutAfter": "从这里剪到结尾",
+    "cutAfterConfirm": "剪掉这段及之后的全部",
+    "cutAfterConfirmSound": "剪掉这段及之后的全部，录音一起剪，无法恢复",
+    "cutSilentTail": "剪掉结尾 {{minutes}} 分钟的静音",
+    "cutSilentTailAsk": "把录音剪到最后一句话之后（{{time}}）？无法恢复。",
+    "cutSilentTailConfirm": "剪掉"
   },
   "whatsNew": {
     "title": "{{version}} 更新了什么"

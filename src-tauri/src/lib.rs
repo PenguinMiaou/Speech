@@ -7,6 +7,7 @@ pub mod dictionary_io;
 pub mod docx;
 pub mod error;
 pub mod file_transcribe;
+mod flac;
 pub mod hotkey;
 #[cfg(target_os = "linux")]
 mod linux_x11;
@@ -939,7 +940,9 @@ pub fn run() {
                 tauri::async_runtime::block_on(config_manager.load()).unwrap_or_default();
             sync_auto_start_preference(&app_handle, &config_manager, &mut initial_config);
             meeting_probe::set_enabled(initial_config.meeting_detect);
+            meeting_record::set_quiet_pause_minutes(initial_config.meeting_quiet_pause_minutes);
             meeting_probe::start_watch(app_handle.clone());
+            commands::meetings::pack_kept_audio(app_handle.clone());
             app.manage(config_manager);
             app.manage(history_store);
             app.manage(dictionary_store);
@@ -1252,6 +1255,7 @@ pub fn run() {
             commands::meetings::meeting_audio_keep,
             commands::meetings::meeting_audio_save,
             commands::meetings::meeting_audio_delete,
+            commands::meetings::meeting_audio_trim,
             commands::minutes::meeting_minutes,
             commands::minutes::meeting_ask,
             commands::minutes::meeting_translate,

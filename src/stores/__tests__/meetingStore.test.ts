@@ -6,6 +6,8 @@ const meetingTitle = vi.fn()
 const meetingSave = vi.fn()
 const meetingRecover = vi.fn()
 const meetingWordTimes = vi.fn()
+const meetingAudioKeep = vi.fn()
+let packedSoFar: (packed: { id: string; path: string }) => void = () => {}
 let translatingSoFar: (text: string) => void = () => {}
 vi.mock('../../lib/tauri', () => ({
   meetingTranslate: (...args: unknown[]) => meetingTranslate(...args),
@@ -13,7 +15,10 @@ vi.mock('../../lib/tauri', () => ({
   meetingSave: (...args: unknown[]) => meetingSave(...args),
   meetingRecover: (...args: unknown[]) => meetingRecover(...args),
   meetingWordTimes: (...args: unknown[]) => meetingWordTimes(...args),
-  meetingAudioKeep: vi.fn(),
+  meetingAudioKeep: (...args: unknown[]) => meetingAudioKeep(...args),
+  onMeetingAudioPacked: (handler: (packed: { id: string; path: string }) => void) => {
+    packedSoFar = handler
+  },
   onFileTranscribeProgress: vi.fn(),
   onFileTranscribeWritten: vi.fn(),
   onMeetingPolishing: vi.fn(),
@@ -35,6 +40,7 @@ import {
   nameMeeting,
   persistMeeting,
   recoverMeeting,
+  soundOf,
   takeSegment,
   timeWords,
   useMeetingStore,
@@ -267,5 +273,44 @@ describe('the times of the words of a meeting just recorded', () => {
     found([[[2, 12000]]])
     await asked
     expect(useMeetingStore.getState().times).toEqual(before)
+  })
+})
+
+describe('the sound of a meeting packed beside the window', () => {
+  const recorded = {
+    ...initialMeeting,
+    id: 'm-7',
+    recorded: true,
+    kept: null,
+    paragraphs: [{ speaker: 1, startMs: 0, text: 'a' }],
+    text: 'Speaker 1  00:00\na',
+  }
+
+  beforeEach(() => {
+    listenToMeeting()
+    meetingSave.mockReset().mockResolvedValue(undefined)
+    useMeetingStore.setState({ ...recorded })
+  })
+
+  it('is played from the packed file even when packing finishes before the WAV is told', async () => {
+    let tell: (path: string) => void = () => {}
+    meetingAudioKeep.mockReturnValueOnce(new Promise<string>((resolve) => (tell = resolve)))
+    const saving = persistMeeting('Speaker')
+    await vi.waitFor(() => expect(meetingAudioKeep).toHaveBeenCalledWith('m-7'))
+    packedSoFar({ id: 'm-7', path: '/data/meetings/m-7.flac' })
+    tell('/data/meetings/m-7.wav')
+    await saving
+    expect(useMeetingStore.getState().kept).toBe('/data/meetings/m-7.flac')
+    expect(soundOf('m-7', '/data/meetings/m-7.wav')).toBe('/data/meetings/m-7.flac')
+    expect(soundOf('m-8', '/data/meetings/m-8.wav')).toBe('/data/meetings/m-8.wav')
+  })
+
+  it('moves the open meeting to the packed file when packing finishes after', async () => {
+    useMeetingStore.setState({ id: 'm-9', kept: '/data/meetings/m-9.wav' })
+    packedSoFar({ id: 'm-9', path: '/data/meetings/m-9.flac' })
+    expect(useMeetingStore.getState().kept).toBe('/data/meetings/m-9.flac')
+    // Another meeting's sound is left alone.
+    packedSoFar({ id: 'm-10', path: '/data/meetings/m-10.flac' })
+    expect(useMeetingStore.getState().kept).toBe('/data/meetings/m-9.flac')
   })
 })

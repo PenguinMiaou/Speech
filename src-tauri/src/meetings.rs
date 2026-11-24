@@ -386,27 +386,148 @@ pub fn search(query: &str) -> Vec<Found> {
     dir().map(|dir| search_in(&dir, query)).unwrap_or_default()
 }
 
-/// Where a meeting's sound is kept, beside its text.
+/// Held while a meeting's sound file is written, moved or taken away, so that keeping,
+/// packing, cutting and deleting it never meet halfway.
+static AUDIO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn audio_lock() -> std::sync::MutexGuard<'static, ()> {
+    AUDIO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Where a meeting's sound is kept, beside its text, as the recording was made.
 fn audio_file(dir: &Path, id: &str) -> Result<PathBuf, String> {
     Ok(file_of(dir, id)?.with_extension("wav"))
 }
 
+/// Where a meeting's sound is kept once packed: the same samples in about half the room.
+fn packed_file(dir: &Path, id: &str) -> Result<PathBuf, String> {
+    Ok(file_of(dir, id)?.with_extension("flac"))
+}
+
+/// A packed file still being written, taken away if it is ever left behind.
+fn packing_file(dir: &Path, id: &str) -> Result<PathBuf, String> {
+    Ok(file_of(dir, id)?.with_extension("flac.part"))
+}
+
 fn audio_in(dir: &Path, id: &str) -> Option<PathBuf> {
-    audio_file(dir, id).ok().filter(|path| path.is_file())
+    let packed = packed_file(dir, id).ok().filter(|path| path.is_file());
+    packed.or_else(|| audio_file(dir, id).ok().filter(|path| path.is_file()))
 }
 
 /// Moves a finished recording to the meeting it belongs to.
 fn keep_audio_in(dir: &Path, id: &str, recording: &Path) -> Result<PathBuf, String> {
+    let _held = audio_lock();
     let kept = audio_file(dir, id)?;
     std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+    // A packed sound from before is not this recording's; it goes first, so that a WAV
+    // beside a packed file is only ever one whose packing was not finished.
+    remove_if_there(&packed_file(dir, id)?)?;
     std::fs::rename(recording, &kept).map_err(|error| error.to_string())?;
     Ok(kept)
 }
 
-fn delete_audio_in(dir: &Path, id: &str) -> Result<(), String> {
-    match std::fs::remove_file(audio_file(dir, id)?) {
+fn remove_if_there(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.to_string()),
         _ => Ok(()),
+    }
+}
+
+fn delete_audio_in(dir: &Path, id: &str) -> Result<(), String> {
+    let _held = audio_lock();
+    remove_if_there(&packing_file(dir, id)?)?;
+    remove_if_there(&packed_file(dir, id)?)?;
+    remove_if_there(&audio_file(dir, id)?)
+}
+
+/// Opens a meeting's WAV sound past its header, checking that it is the app's own
+/// recording: 16 kHz, one channel, 16 bits.
+fn open_wav(path: &Path, write: bool) -> Result<std::fs::File, String> {
+    use std::io::Read;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(write)
+        .open(path)
+        .map_err(|error| error.to_string())?;
+    let mut header = [0_u8; 44];
+    file.read_exact(&mut header)
+        .map_err(|_| "audio_unknown".to_string())?;
+    let ours = crate::meeting_record::wav_header(0);
+    // Bytes 4 to 8 hold the file's length, which differs from file to file.
+    if header[..4] != ours[..4] || header[8..40] != ours[8..40] {
+        return Err("audio_unknown".to_string());
+    }
+    Ok(file)
+}
+
+/// Packs a meeting's WAV sound as FLAC, reads the packed file back whole, and only then
+/// lets the WAV go. Returns the packed file, or None where there was no WAV to pack. A WAV
+/// that is not the app's own recording, or holds no sound, is left as it is.
+fn pack_audio_in(dir: &Path, id: &str) -> Result<Option<PathBuf>, String> {
+    let _held = audio_lock();
+    let wav = audio_file(dir, id)?;
+    let packed = packed_file(dir, id)?;
+    if !wav.is_file() {
+        return Ok(packed.is_file().then_some(packed));
+    }
+    // The WAV of a packed file, left when letting it go failed: the packed file may since
+    // have been cut, and stays as it is.
+    if packed.is_file() {
+        remove_if_there(&wav)?;
+        return Ok(Some(packed));
+    }
+    let packing = packing_file(dir, id)?;
+    let mut body = std::io::BufReader::new(open_wav(&wav, false)?);
+    if let Err(error) = crate::flac::from_wav(&mut body, &packing) {
+        let _ = std::fs::remove_file(&packing);
+        return Err(error);
+    }
+    drop(body);
+    std::fs::rename(&packing, &packed).map_err(|error| error.to_string())?;
+    remove_if_there(&wav)?;
+    Ok(Some(packed))
+}
+
+/// Packs every meeting's sound still kept as WAV, one at a time, and tells `packed` of
+/// each. Waits while a meeting is being recorded, and leaves the rest for another time
+/// where it goes on.
+fn pack_all_in(dir: &Path, mut packed: impl FnMut(&str, &Path)) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut names: Vec<String> = entries
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    for name in &names {
+        // A packed file left half written when the app last ended.
+        if let Some(id) = name.strip_suffix(".flac.part") {
+            if let Ok(path) = packing_file(dir, id) {
+                let _held = audio_lock();
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+    for name in &names {
+        let Some(id) = name.strip_suffix(".wav") else {
+            continue;
+        };
+        if !file_of(dir, id).is_ok_and(|text| text.is_file()) {
+            continue;
+        }
+        if crate::meeting_record::is_recording() {
+            return;
+        }
+        match pack_audio_in(dir, id) {
+            Ok(Some(path)) => packed(id, &path),
+            Ok(None) => {}
+            Err(error) => crate::applog::note(
+                "meeting",
+                &format!("the sound of a meeting could not be packed: {error}"),
+            ),
+        }
     }
 }
 
@@ -451,9 +572,195 @@ pub fn delete_audio(id: &str) -> Result<(), String> {
     delete_audio_in(&dir()?, id)
 }
 
+pub fn trim_audio(id: &str, end_ms: u64) -> Result<(), String> {
+    trim_audio_in(&dir()?, id, end_ms)
+}
+
+pub fn pack_audio(id: &str) -> Result<Option<PathBuf>, String> {
+    pack_audio_in(&dir()?, id)
+}
+
+pub fn pack_all(packed: impl FnMut(&str, &Path)) {
+    if let Ok(dir) = dir() {
+        pack_all_in(&dir, packed);
+    }
+}
+
+/// Cuts a meeting's sound off at `end_ms` from its start. The sound is the app's own
+/// recording, as WAV or packed; any other file is left as it is.
+fn trim_audio_in(dir: &Path, id: &str, end_ms: u64) -> Result<(), String> {
+    use std::io::{Seek, SeekFrom, Write};
+    let _held = audio_lock();
+    // Sixteen samples a millisecond.
+    let keep_samples = end_ms.saturating_mul(16);
+    let packed = packed_file(dir, id)?;
+    if packed.is_file() {
+        let packing = packing_file(dir, id)?;
+        let cut = (|| {
+            let mut encoder = crate::flac::Encoder::create(&packing)?;
+            let mut left = keep_samples;
+            crate::flac::read(&packed, |block| {
+                let take = block.len().min(usize::try_from(left).unwrap_or(usize::MAX));
+                encoder.push(&block[..take])?;
+                left -= take as u64;
+                Ok(left > 0)
+            })?;
+            let written = encoder.finish()?;
+            if written == 0 {
+                return Err("audio_empty".to_string());
+            }
+            let back = crate::flac::read(&packing, |_| Ok(true))?;
+            if back != written {
+                return Err("audio_unreadable".to_string());
+            }
+            std::fs::rename(&packing, &packed).map_err(|error| error.to_string())
+        })();
+        if cut.is_err() {
+            let _ = std::fs::remove_file(&packing);
+        }
+        return cut;
+    }
+    let path = audio_file(dir, id)?;
+    let mut file = open_wav(&path, true)?;
+    let length = file.metadata().map_err(|error| error.to_string())?.len();
+    let held = length.saturating_sub(44);
+    let kept = keep_samples.saturating_mul(2).min(held) & !1;
+    let kept_u32 = u32::try_from(kept).map_err(|_| "audio_too_long".to_string())?;
+    file.set_len(44 + kept).map_err(|error| error.to_string())?;
+    file.seek(SeekFrom::Start(0))
+        .and_then(|_| file.write_all(&crate::meeting_record::wav_header(kept_u32)))
+        .and_then(|_| file.sync_all())
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn recording(dir: &Path, id: &str, samples: usize) -> Vec<i16> {
+        let sound: Vec<i16> = (0..samples)
+            .map(|at| ((at * 37) % 2000) as i16 - 1000)
+            .collect();
+        let body: Vec<u8> = sound.iter().flat_map(|s| s.to_le_bytes()).collect();
+        let mut bytes = crate::meeting_record::wav_header(body.len() as u32).to_vec();
+        bytes.extend(&body);
+        std::fs::write(audio_file(dir, id).unwrap(), bytes).unwrap();
+        sound
+    }
+
+    fn samples_of(path: &Path) -> Vec<i16> {
+        let mut all = Vec::new();
+        crate::flac::read(path, |block| {
+            all.extend_from_slice(block);
+            Ok(true)
+        })
+        .unwrap();
+        all
+    }
+
+    #[test]
+    fn a_meetings_sound_is_packed_without_losing_a_sample_and_cut_when_packed() {
+        let dir = std::env::temp_dir().join(format!("pack-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sound = recording(&dir, "m-1", 3 * 16_000 + 5);
+
+        let packed = pack_audio_in(&dir, "m-1").unwrap().unwrap();
+        assert_eq!(packed, dir.join("m-1.flac"));
+        assert!(!audio_file(&dir, "m-1").unwrap().exists());
+        assert_eq!(audio_in(&dir, "m-1"), Some(packed.clone()));
+        assert_eq!(samples_of(&packed), sound);
+        // Packing again finds nothing more to do.
+        assert_eq!(pack_audio_in(&dir, "m-1").unwrap(), Some(packed.clone()));
+
+        trim_audio_in(&dir, "m-1", 1_250).unwrap();
+        assert_eq!(samples_of(&packed), sound[..20_000]);
+        // A WAV left beside the packed file does not undo the cut.
+        recording(&dir, "m-1", 3 * 16_000);
+        assert_eq!(pack_audio_in(&dir, "m-1").unwrap(), Some(packed.clone()));
+        assert!(!audio_file(&dir, "m-1").unwrap().exists());
+        assert_eq!(samples_of(&packed), sound[..20_000]);
+        assert!(!packing_file(&dir, "m-1").unwrap().exists());
+        // Nothing would be left.
+        assert!(trim_audio_in(&dir, "m-1", 0).is_err());
+        assert_eq!(samples_of(&packed).len(), 20_000);
+
+        // A new recording kept for the meeting replaces the packed sound.
+        let fresh = dir.join("fresh.wav");
+        std::fs::write(&fresh, crate::meeting_record::wav_header(0)).unwrap();
+        keep_audio_in(&dir, "m-1", &fresh).unwrap();
+        assert!(!packed.exists());
+        // One with no sound in it stays as it was made.
+        assert!(pack_audio_in(&dir, "m-1").is_err());
+        assert_eq!(
+            audio_in(&dir, "m-1"),
+            Some(audio_file(&dir, "m-1").unwrap())
+        );
+
+        delete_audio_in(&dir, "m-1").unwrap();
+        assert_eq!(audio_in(&dir, "m-1"), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_sound_of_every_meeting_kept_as_wav_is_packed_once() {
+        let dir = std::env::temp_dir().join(format!("pack-all-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = recording(&dir, "m-1", 16_000);
+        std::fs::write(file_of(&dir, "m-1").unwrap(), "{}").unwrap();
+        recording(&dir, "m-2", 16_000);
+        std::fs::write(file_of(&dir, "m-2").unwrap(), "{}").unwrap();
+        // A sound with no meeting is not the app's to touch.
+        recording(&dir, "stray", 16_000);
+        // A packed file left half written.
+        std::fs::write(packing_file(&dir, "m-9").unwrap(), b"half").unwrap();
+
+        let mut told = Vec::new();
+        pack_all_in(&dir, |id, path| {
+            told.push((id.to_string(), path.to_path_buf()))
+        });
+        assert_eq!(
+            told,
+            vec![
+                ("m-1".to_string(), dir.join("m-1.flac")),
+                ("m-2".to_string(), dir.join("m-2.flac")),
+            ]
+        );
+        assert_eq!(samples_of(&dir.join("m-1.flac")), first);
+        assert!(dir.join("stray.wav").exists());
+        assert!(!packing_file(&dir, "m-9").unwrap().exists());
+        told.clear();
+        pack_all_in(&dir, |id, _| told.push((id.to_string(), PathBuf::new())));
+        assert!(told.is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_meetings_sound_is_cut_off_at_a_time() {
+        let dir = std::env::temp_dir().join(format!("trim-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = audio_file(&dir, "m-1").unwrap();
+        // Three seconds of sound.
+        let data = vec![7_u8; 3 * 32_000];
+        let mut bytes = crate::meeting_record::wav_header(data.len() as u32).to_vec();
+        bytes.extend(&data);
+        std::fs::write(&path, &bytes).unwrap();
+
+        trim_audio_in(&dir, "m-1", 1_250).unwrap();
+        let cut = std::fs::read(&path).unwrap();
+        assert_eq!(cut.len(), 44 + 40_000);
+        assert_eq!(&cut[..44], &crate::meeting_record::wav_header(40_000));
+        // A time past the end keeps it all.
+        trim_audio_in(&dir, "m-1", 60_000).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap().len(), 44 + 40_000);
+
+        // A file that is not the app's own recording is left alone.
+        std::fs::write(&path, b"not a recording at all, just some text here....").unwrap();
+        assert_eq!(
+            trim_audio_in(&dir, "m-1", 10),
+            Err("audio_unknown".to_string())
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn headings_come_in_three_shapes() {

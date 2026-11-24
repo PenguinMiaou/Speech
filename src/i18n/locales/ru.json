@@ -469,7 +469,10 @@
     "showLogHint": "Только состояния и ошибки, без сказанного",
     "dictationPane": "Диктовка",
     "translationPane": "Перевод",
-    "moreShortcuts": "Другие сочетания клавиш"
+    "moreShortcuts": "Другие сочетания клавиш",
+    "meetingQuietPause": "Через сколько тишины ставить запись на паузу",
+    "meetingQuietPauseNever": "Никогда",
+    "meetingQuietPauseMinutes": "{{count}} мин"
   },
   "contextFamilies": {
     "email": "Электронная почта",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "Эта версия системы не может записывать звук компьютера",
       "someFailed": "Некоторые файлы не удалось расшифровать.",
       "timesDownload": "Не удалось загрузить модель",
-      "overview": "Не удалось составить обзор"
+      "overview": "Не удалось составить обзор",
+      "trim": "Не удалось обрезать запись."
     },
     "live": "Текст в реальном времени",
     "listening": "Слушаю. Текст появляется примерно раз в пятнадцать секунд",
@@ -964,7 +968,14 @@
     "overviewStale": "Текст изменился после составления обзора.",
     "chapters": "Главы",
     "speakerSummaries": "Что сказал каждый",
-    "playFrom": "Воспроизвести с {{time}}"
+    "playFrom": "Воспроизвести с {{time}}",
+    "quietPaused": "{{count}} мин никто не говорил, запись приостановлена.",
+    "cutAfter": "Обрезать отсюда до конца",
+    "cutAfterConfirm": "Удалить это и всё после",
+    "cutAfterConfirmSound": "Удалить это и всё после вместе с записью; отменить нельзя",
+    "cutSilentTail": "Обрезать {{minutes}} мин тишины в конце",
+    "cutSilentTailAsk": "Обрезать запись сразу после последних слов ({{time}})? Отменить нельзя.",
+    "cutSilentTailConfirm": "Обрезать"
   },
   "whatsNew": {
     "title": "Что нового в {{version}}"

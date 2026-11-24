@@ -659,6 +659,123 @@ describe('MeetingCard', () => {
     expect(screen.queryByText('private aside')).toBeNull()
   })
 
+  it('cuts the text and the recording off from a section to the end once confirmed', async () => {
+    const transcript =
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point\n\nmeeting.speakerLabel 1  01:30\nlong after, forgotten'
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'forgotten', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript,
+      notes: '',
+      minutes: '',
+      names: {},
+      duration_s: 3600,
+    })
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.wav')
+    vi.mocked(tauri.meetingAudioTrim).mockResolvedValue()
+    await ready()
+    fireEvent.click(await screen.findByText('forgotten'))
+    await screen.findByText('long after, forgotten')
+    // The first section cannot be cut from, which would leave nothing.
+    expect(screen.getAllByRole('button', { name: 'meeting.cutAfter' })).toHaveLength(2)
+    fireEvent.click(screen.getAllByRole('button', { name: 'meeting.cutAfter' })[1])
+    expect(screen.getByText('long after, forgotten')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.cutAfterConfirmSound' }))
+    await waitFor(() =>
+      expect(useMeetingStore.getState().text).toBe(
+        'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point',
+      ),
+    )
+    expect(useMeetingStore.getState().text).toBe(
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point',
+    )
+    expect(useMeetingStore.getState().duration).toBe(90)
+    await waitFor(() => expect(tauri.meetingAudioTrim).toHaveBeenCalledWith('m-1', 90_000))
+    await waitFor(() =>
+      expect(tauri.meetingSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: 'm-1', duration_s: 90 }),
+      ),
+    )
+  })
+
+  it('leaves the text as it is when the recording cannot be cut', async () => {
+    const transcript =
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point\n\nmeeting.speakerLabel 1  01:30\nlong after, forgotten'
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'forgotten', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript,
+      notes: '',
+      minutes: '',
+      names: {},
+      duration_s: 3600,
+    })
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.wav')
+    vi.mocked(tauri.meetingAudioTrim).mockRejectedValue('in use')
+    await ready()
+    fireEvent.click(await screen.findByText('forgotten'))
+    await screen.findByText('long after, forgotten')
+    fireEvent.click(screen.getAllByRole('button', { name: 'meeting.cutAfter' })[1])
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.cutAfterConfirmSound' }))
+    await screen.findByText('meeting.error.trim')
+    expect(useMeetingStore.getState().text).toBe(transcript)
+  })
+
+  it('cuts off the silence a recording ran on after the last words, keeping the text', async () => {
+    const transcript = 'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nbye'
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'bye', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript,
+      notes: '',
+      minutes: '',
+      names: {},
+      duration_s: 3600,
+      times: [
+        { end_ms: 3_000, chars: 5, marks: [] },
+        { end_ms: 7_000, chars: 3, marks: [] },
+      ],
+    })
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.wav')
+    vi.mocked(tauri.meetingAudioTrim).mockResolvedValue()
+    await ready()
+    fireEvent.click(await screen.findByText('bye'))
+    fireEvent.click(await screen.findByRole('button', { name: /meeting.cutSilentTail/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.cutSilentTailConfirm' }))
+    await waitFor(() => expect(tauri.meetingAudioTrim).toHaveBeenCalledWith('m-1', 10_000))
+    await waitFor(() => expect(useMeetingStore.getState().duration).toBe(10))
+    expect(useMeetingStore.getState().text).toBe(transcript)
+    expect(screen.queryByRole('button', { name: /meeting.cutSilentTail/ })).toBeNull()
+  })
+
+  it('shows when the recording paused itself after minutes with nothing said', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordPause).mockResolvedValue(true)
+    const level = { seconds: 9, volume: 0.5, waiting: 0, paused: false, quiet_paused: null }
+    vi.mocked(tauri.meetingRecordLevel).mockImplementation(() => Promise.resolve({ ...level }))
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    expect(screen.queryByText(/meeting.quietPaused/)).toBeNull()
+    // The recording pauses itself, also while this page is not open; the page shows it.
+    Object.assign(level, { paused: true, quiet_paused: 10 })
+    const notice = await screen.findByRole('alert', {}, { timeout: 2000 })
+    expect(notice.textContent).toContain('meeting.quietPaused')
+    Object.assign(level, { paused: false, quiet_paused: null })
+    fireEvent.click(within(notice).getByRole('button', { name: 'meeting.resume' }))
+    expect(tauri.meetingRecordPause).toHaveBeenLastCalledWith(false)
+    expect(screen.queryByText(/meeting.quietPaused/)).toBeNull()
+  })
+
   it('offers the names the meeting gives its speakers and names one only when taken', async () => {
     vi.mocked(tauri.transcribeFile).mockResolvedValue(
       'meeting.speakerLabel 1  00:00\nWang, what do you think?\n\nmeeting.speakerLabel 2  00:04\nfine by me',
@@ -975,6 +1092,7 @@ describe('MeetingCard', () => {
     expect(tauri.saveMeetingAudio).toHaveBeenCalledWith(
       expect.stringMatching(/^m-\d+$/),
       'meeting.audioFileName',
+      expect.any(String),
     )
     fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.again' }))

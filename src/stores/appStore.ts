@@ -241,6 +241,8 @@ export interface AppConfig {
   close_to_tray: boolean
   /** Offer to record when a meeting app is found taking sound from the microphone. */
   meeting_detect: boolean
+  /** Minutes with nothing said after which a meeting recording pauses; 0 never. */
+  meeting_quiet_pause_minutes: number
   start_minimized: boolean
   recording_limit_mode: 'auto' | 'custom'
   custom_recording_limit_seconds: number
@@ -811,6 +813,7 @@ const defaultConfig: AppConfig = {
   auto_start: true,
   close_to_tray: true,
   meeting_detect: true,
+  meeting_quiet_pause_minutes: 10,
   start_minimized: false,
   recording_limit_mode: 'auto',
   custom_recording_limit_seconds: 600,

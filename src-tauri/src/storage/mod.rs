@@ -405,6 +405,9 @@ pub struct AppConfig {
     /// Offer to write a meeting down when a meeting app starts taking sound from the
     /// microphone.
     pub meeting_detect: bool,
+    /// Pause a meeting recording after this many minutes in which nothing was said, so
+    /// that one left running is not kept going; 0 never pauses it.
+    pub meeting_quiet_pause_minutes: u32,
 }
 
 impl Default for AppConfig {
@@ -475,6 +478,7 @@ impl Default for AppConfig {
             meeting_llm_model: String::new(),
             voice_isolation_enabled: false,
             meeting_detect: true,
+            meeting_quiet_pause_minutes: 10,
         }
     }
 }
@@ -1356,7 +1360,9 @@ pub struct HistoryStore {
 impl HistoryStore {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let conn = Connection::open(&db_path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+        // The write-ahead log is cut back to 1 MB once written into the database, instead of
+        // staying as large as it ever grew.
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=1048576;")?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1920,7 +1926,9 @@ fn layout_habit_is_established(changed: u32, kept: u32) -> bool {
 impl DictionaryStore {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let conn = Connection::open(&db_path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+        // The write-ahead log is cut back to 1 MB once written into the database, instead of
+        // staying as large as it ever grew.
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA journal_size_limit=1048576;")?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS dictionary (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

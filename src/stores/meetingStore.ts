@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import i18n from 'i18next'
 import {
   meetingAudioKeep,
+  onMeetingAudioPacked,
   meetingLearn,
   meetingRecover,
   meetingSave,
@@ -233,7 +234,8 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
       // The recording that has just ended goes with the meeting written from it.
       if (!state.recorded) return
       return Promise.resolve(meetingAudioKeep(id)).then((kept) => {
-        if (kept && useMeetingStore.getState().id === id) useMeetingStore.setState({ kept })
+        const path = soundOf(id, kept)
+        if (path && useMeetingStore.getState().id === id) useMeetingStore.setState({ kept: path })
       })
     })
     .catch(() => {})
@@ -444,6 +446,18 @@ export function editParagraph(index: number, text: string) {
   }
 }
 
+/** Where each meeting's sound went once packed. Packing runs beside the window and can
+ * finish before or after the WAV path is told, and while no meeting page is open; a WAV
+ * path told for a packed meeting is gone. */
+const packedSound = new Map<string, string>()
+
+/** The path to read a meeting's sound from: the packed file where `path` is the WAV it
+ * was packed from. */
+export function soundOf(id: string, path: string | null | undefined): string | null {
+  if (!path) return null
+  return /\.wav$/i.test(path) ? (packedSound.get(id) ?? path) : path
+}
+
 let listening = false
 
 /** Starts taking in what the recorder reports. Once is enough for the life of the window. */
@@ -451,6 +465,13 @@ export function listenToMeeting() {
   if (listening) return
   listening = true
   void Promise.resolve(onMeetingSegment((segment) => void takeSegment(segment))).catch(() => {})
+  void Promise.resolve(
+    onMeetingAudioPacked((packed) => {
+      packedSound.set(packed.id, packed.path)
+      const now = useMeetingStore.getState()
+      if (now.id === packed.id && now.kept) useMeetingStore.setState({ kept: packed.path })
+    }),
+  ).catch(() => {})
   void Promise.resolve(
     onMeetingInterim((interim) => {
       // A guess that arrives after the recording has ended has nothing left to stand in for.

@@ -469,7 +469,10 @@
     "showLogHint": "Nur Zustände und Fehler, nie das Gesagte",
     "dictationPane": "Diktat",
     "translationPane": "Übersetzung",
-    "moreShortcuts": "Weitere Tastenkürzel"
+    "moreShortcuts": "Weitere Tastenkürzel",
+    "meetingQuietPause": "Pause nach wie langer Stille",
+    "meetingQuietPauseNever": "Nie",
+    "meetingQuietPauseMinutes": "{{count}} Min."
   },
   "contextFamilies": {
     "email": "E-Mail",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "Diese Systemversion kann den Computerton nicht aufnehmen",
       "someFailed": "Einige Dateien konnten nicht in Text umgewandelt werden.",
       "timesDownload": "Das Modell konnte nicht geladen werden",
-      "overview": "Der Überblick konnte nicht erstellt werden"
+      "overview": "Der Überblick konnte nicht erstellt werden",
+      "trim": "Die Aufnahme konnte nicht gekürzt werden."
     },
     "live": "Live-Text",
     "listening": "Hört zu. Text erscheint etwa alle fünfzehn Sekunden",
@@ -964,7 +968,14 @@
     "overviewStale": "Der Text wurde nach diesem Überblick geändert.",
     "chapters": "Kapitel",
     "speakerSummaries": "Was jede Person sagte",
-    "playFrom": "Ab {{time}} abspielen"
+    "playFrom": "Ab {{time}} abspielen",
+    "quietPaused": "{{count}} Min. lang wurde nichts gesagt, die Aufnahme wurde pausiert.",
+    "cutAfter": "Ab hier alles abschneiden",
+    "cutAfterConfirm": "Diesen Teil und alles danach entfernen",
+    "cutAfterConfirmSound": "Diesen Teil und alles danach samt Aufnahme entfernen; nicht rückgängig zu machen",
+    "cutSilentTail": "Die {{minutes}} Min. Stille am Ende entfernen",
+    "cutSilentTailAsk": "Aufnahme kurz nach den letzten Worten ({{time}}) abschneiden? Nicht rückgängig zu machen.",
+    "cutSilentTailConfirm": "Abschneiden"
   },
   "whatsNew": {
     "title": "Neu in {{version}}"

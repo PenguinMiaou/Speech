@@ -407,6 +407,7 @@ pub async fn meeting_record_start(
             languages.len()
         ),
     );
+    let watcher = app.clone();
     let started = crate::meeting_record::start(
         input_device,
         by_speaker,
@@ -417,10 +418,18 @@ pub async fn meeting_record_start(
         move |outcome| {
             let _ = match outcome {
                 Ok(crate::meeting_record::Heard::Said(segment)) => {
+                    if !segment.text.trim().is_empty() {
+                        crate::meeting_record::heard_words();
+                    }
                     let _ = app.emit("meeting:names", crate::voiceprints::names());
                     app.emit("meeting:segment", segment)
                 }
-                Ok(crate::meeting_record::Heard::Guess(text)) => app.emit("meeting:interim", text),
+                Ok(crate::meeting_record::Heard::Guess(text)) => {
+                    if !text.trim().is_empty() {
+                        crate::meeting_record::heard_words();
+                    }
+                    app.emit("meeting:interim", text)
+                }
                 Err(error) => app.emit("meeting:error", error),
             };
         },
@@ -428,7 +437,36 @@ pub async fn meeting_record_start(
     .await;
     // A meeting the app records itself is not offered again.
     crate::meeting_probe::set_busy(started.is_ok());
+    if started.is_ok() {
+        watch_quiet(watcher);
+    }
     started
+}
+
+/// The recording each quiet watch belongs to, so that one left from an earlier recording
+/// ends instead of watching the next.
+static QUIET_WATCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Pauses the running recording once nothing was said in it for the minutes set, wherever
+/// the window is, and tells the window with a `meeting:quiet-paused` event.
+fn watch_quiet(app: tauri::AppHandle) {
+    let mine = QUIET_WATCH.fetch_add(1, Ordering::SeqCst) + 1;
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            if QUIET_WATCH.load(Ordering::SeqCst) != mine || !crate::meeting_record::is_recording()
+            {
+                return;
+            }
+            if let Some(minutes) = crate::meeting_record::pause_if_quiet() {
+                crate::applog::note(
+                    "meeting",
+                    &format!("recording paused after {minutes} minutes with nothing said"),
+                );
+                let _ = app.emit("meeting:quiet-paused", minutes);
+            }
+        }
+    });
 }
 
 /// Pauses the meeting recording or goes on with it. What is said during a pause is not
@@ -467,15 +505,22 @@ pub struct MeetingLevel {
     pub volume: f32,
     /// Seconds recorded and not yet recognized.
     pub waiting: u64,
+    pub paused: bool,
+    /// The minutes with nothing said after which the recording paused itself, while it
+    /// is paused for that.
+    pub quiet_paused: Option<u32>,
 }
 
 /// The running meeting recording's length and microphone level, if one runs.
 #[tauri::command]
 pub fn meeting_record_level() -> Option<MeetingLevel> {
+    let (paused, quiet_paused) = crate::meeting_record::paused()?;
     crate::meeting_record::level().map(|(seconds, volume, waiting)| MeetingLevel {
         seconds,
         volume,
         waiting,
+        paused,
+        quiet_paused,
     })
 }
 

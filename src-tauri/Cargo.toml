@@ -1,6 +1,6 @@
 [package]
 name = "opentypeless"
-version = "1.2.13"
+version = "1.2.14"
 description = "AI-powered speech-to-text and text polishing desktop app"
 authors = ["OpenTypeless Contributors"]
 license = "MIT"
@@ -60,6 +60,7 @@ tauri-plugin-dialog = "2"
 rmcp = { version = "3.11", default-features = false, features = ["server", "macros", "transport-io"] }
 schemars = "1"
 dirs = "6"
+flacenc = { version = "0.5.1", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }

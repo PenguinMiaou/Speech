@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '../../stores/appStore'
 import { Toggle } from './shared/Toggle'
 import { LlmConnectionForm } from './LlmConnectionForm'
+import { LogoSelect } from './shared/LogoSelect'
 
 /** Meetings: being asked to record when one starts, and the model that writes the minutes. */
 export function MeetingsPane() {
@@ -16,6 +17,24 @@ export function MeetingsPane() {
         onChange={(checked) => updateConfig({ meeting_detect: checked })}
         label={t('settings.meetingDetect')}
       />
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] text-text-primary">{t('settings.meetingQuietPause')}</span>
+        <div className="w-44 shrink-0">
+          <LogoSelect
+            compact
+            label={t('settings.meetingQuietPause')}
+            value={String(config.meeting_quiet_pause_minutes)}
+            options={[5, 10, 15, 30, 0].map((minutes) => ({
+              value: String(minutes),
+              label:
+                minutes === 0
+                  ? t('settings.meetingQuietPauseNever')
+                  : t('settings.meetingQuietPauseMinutes', { count: minutes }),
+            }))}
+            onChange={(value) => updateConfig({ meeting_quiet_pause_minutes: Number(value) })}
+          />
+        </div>
+      </div>
       <section
         aria-label={t('settings.meetingModel')}
         className="space-y-3 border-t border-border pt-4"

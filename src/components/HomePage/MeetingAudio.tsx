@@ -24,6 +24,15 @@ export const MeetingAudio = forwardRef<AudioHandle, Props>(function MeetingAudio
   const [playing, setPlaying] = useState(false)
   const [at, setPosition] = useState(0)
   const [length, setLength] = useState(0)
+  /** Where the sound was, and whether it played, when the same sound came to be read from
+   * another file (once packed): it goes on from there. */
+  const resume = useRef<{ at: number; playing: boolean } | null>(null)
+  const shown = useRef(src)
+  if (shown.current !== src) {
+    const player = audio.current
+    resume.current = player ? { at: player.currentTime, playing: !player.paused } : null
+    shown.current = src
+  }
   const setAt = (seconds: number) => {
     setPosition(seconds)
     onPosition?.(seconds)
@@ -56,11 +65,15 @@ export const MeetingAudio = forwardRef<AudioHandle, Props>(function MeetingAudio
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
         onTimeUpdate={(event) => setAt(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) =>
-          setLength(
-            Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0,
-          )
-        }
+        onLoadedMetadata={(event) => {
+          const player = event.currentTarget
+          setLength(Number.isFinite(player.duration) ? player.duration : 0)
+          const from = resume.current
+          resume.current = null
+          if (!from) return
+          player.currentTime = from.at
+          if (from.playing) void Promise.resolve(player.play()).catch(() => {})
+        }}
       />
       <button
         type="button"

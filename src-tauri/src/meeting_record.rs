@@ -69,6 +69,37 @@ struct Waiting {
     paused: bool,
     /// Set when the recording pauses: what waits is recognized without waiting for more.
     settle: bool,
+    /// When words were last heard, or the recording began or went on again; None before
+    /// the recording begins.
+    said_at: Option<std::time::Instant>,
+    /// The minutes with nothing said after which the recording paused itself, while it is
+    /// paused for that.
+    quiet_paused: Option<u32>,
+}
+
+/// Minutes with nothing said after which a meeting recording pauses itself; 0 never.
+static QUIET_PAUSE_MINUTES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(10);
+
+pub fn set_quiet_pause_minutes(minutes: u32) {
+    QUIET_PAUSE_MINUTES.store(minutes, std::sync::atomic::Ordering::Relaxed);
+}
+
+impl Waiting {
+    /// Pauses the recording when nothing was said for `minutes` (never for 0) by `now`.
+    /// Returns whether it did.
+    fn pause_if_quiet(&mut self, minutes: u32, now: std::time::Instant) -> bool {
+        let quiet = self.said_at.is_some_and(|said| {
+            now.saturating_duration_since(said)
+                >= std::time::Duration::from_secs(u64::from(minutes) * 60)
+        });
+        if minutes == 0 || self.paused || self.finishing || !quiet {
+            return false;
+        }
+        self.paused = true;
+        self.settle = true;
+        self.quiet_paused = Some(minutes);
+        true
+    }
 }
 
 static DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -851,7 +882,37 @@ pub fn pause(paused: bool) -> bool {
     let mut waiting = locked(&recording.waiting);
     waiting.paused = paused;
     waiting.settle = paused;
+    waiting.quiet_paused = None;
+    if !paused {
+        waiting.said_at = Some(std::time::Instant::now());
+    }
     true
+}
+
+/// Notes that words were heard in the running recording.
+pub fn heard_words() {
+    if let Some(recording) = active().as_ref() {
+        locked(&recording.waiting).said_at = Some(std::time::Instant::now());
+    }
+}
+
+/// Pauses the running recording when nothing was said in it for the minutes set. Returns
+/// those minutes when it paused it now.
+pub fn pause_if_quiet() -> Option<u32> {
+    let active = active();
+    let recording = active.as_ref()?;
+    let minutes = QUIET_PAUSE_MINUTES.load(std::sync::atomic::Ordering::Relaxed);
+    let paused = locked(&recording.waiting).pause_if_quiet(minutes, std::time::Instant::now());
+    paused.then_some(minutes)
+}
+
+/// Whether the running recording is paused, and the minutes with nothing said after which
+/// it paused itself where it did.
+pub fn paused() -> Option<(bool, Option<u32>)> {
+    let active = active();
+    let recording = active.as_ref()?;
+    let waiting = locked(&recording.waiting);
+    Some((waiting.paused, waiting.quiet_paused))
 }
 
 /// Changes the languages the running recording is held in.
@@ -937,7 +998,10 @@ pub async fn start(
     } else {
         None
     };
-    let waiting = Arc::new(Mutex::new(Waiting::default()));
+    let waiting = Arc::new(Mutex::new(Waiting {
+        said_at: Some(std::time::Instant::now()),
+        ..Waiting::default()
+    }));
     let sink = waiting.clone();
     // A recording that cannot be kept on disk is still written out as text.
     let mut file = recording_path().and_then(|path| {
@@ -1087,6 +1151,34 @@ pub async fn stop(discard: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_recording_pauses_itself_only_after_the_minutes_with_nothing_said() {
+        let began = std::time::Instant::now();
+        let mut waiting = Waiting {
+            said_at: Some(began),
+            ..Waiting::default()
+        };
+        let minute = std::time::Duration::from_secs(60);
+        assert!(!waiting.pause_if_quiet(10, began + 9 * minute));
+        // Never, where it is set to never.
+        assert!(!waiting.pause_if_quiet(0, began + 600 * minute));
+        assert!(waiting.pause_if_quiet(10, began + 10 * minute));
+        assert!(waiting.paused && waiting.settle);
+        assert_eq!(waiting.quiet_paused, Some(10));
+        // Once paused, it is not paused again.
+        assert!(!waiting.pause_if_quiet(10, began + 20 * minute));
+
+        // Words heard later put the time off.
+        let mut waiting = Waiting {
+            said_at: Some(began + 5 * minute),
+            ..Waiting::default()
+        };
+        assert!(!waiting.pause_if_quiet(10, began + 14 * minute));
+        // A recording being finished is left alone.
+        waiting.finishing = true;
+        assert!(!waiting.pause_if_quiet(10, began + 60 * minute));
+    }
 
     #[test]
     fn guesses_come_as_the_unsettled_audio_grows() {

@@ -469,7 +469,10 @@
     "showLogHint": "状態とエラーのみ。話した内容は記録しません",
     "dictationPane": "音声入力",
     "translationPane": "翻訳",
-    "moreShortcuts": "その他のショートカット"
+    "moreShortcuts": "その他のショートカット",
+    "meetingQuietPause": "無音が続いたら録音を一時停止するまでの時間",
+    "meetingQuietPauseNever": "しない",
+    "meetingQuietPauseMinutes": "{{count}} 分"
   },
   "contextFamilies": {
     "email": "メールアドレス",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "このシステムのバージョンではパソコンの音を録音できません",
       "someFailed": "文字にできなかったファイルがあります。",
       "timesDownload": "モデルをダウンロードできませんでした",
-      "overview": "概要を作成できませんでした"
+      "overview": "概要を作成できませんでした",
+      "trim": "録音をカットできませんでした。"
     },
     "live": "リアルタイムの文字",
     "listening": "聞き取り中。文字は約15秒ごとに出ます",
@@ -964,7 +968,14 @@
     "overviewStale": "この概要の作成後にテキストが変更されました。",
     "chapters": "章",
     "speakerSummaries": "各発言者のまとめ",
-    "playFrom": "{{time}} から再生"
+    "playFrom": "{{time}} から再生",
+    "quietPaused": "{{count}} 分間だれも話さなかったので、録音を一時停止しました。",
+    "cutAfter": "ここから最後までカット",
+    "cutAfterConfirm": "ここから後をすべて削除",
+    "cutAfterConfirmSound": "ここから後を録音ごと削除（元に戻せません）",
+    "cutSilentTail": "最後の {{minutes}} 分の無音をカット",
+    "cutSilentTailAsk": "最後の発言の直後（{{time}}）で録音をカットしますか？元に戻せません。",
+    "cutSilentTailConfirm": "カット"
   },
   "whatsNew": {
     "title": "{{version}} の新機能"

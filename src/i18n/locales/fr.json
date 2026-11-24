@@ -469,7 +469,10 @@
     "showLogHint": "États et erreurs uniquement, jamais ce qui a été dit",
     "dictationPane": "Dictée",
     "translationPane": "Traduction",
-    "moreShortcuts": "Autres raccourcis"
+    "moreShortcuts": "Autres raccourcis",
+    "meetingQuietPause": "Mettre en pause après combien de silence",
+    "meetingQuietPauseNever": "Jamais",
+    "meetingQuietPauseMinutes": "{{count}} min"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "Cette version du système ne peut pas enregistrer le son de l’ordinateur",
       "someFailed": "Certains fichiers n’ont pas pu être transcrits.",
       "timesDownload": "Le modèle n’a pas pu être téléchargé",
-      "overview": "L’aperçu n’a pas pu être créé"
+      "overview": "L’aperçu n’a pas pu être créé",
+      "trim": "L’enregistrement n’a pas pu être coupé."
     },
     "live": "Texte en direct",
     "listening": "À l’écoute. Le texte arrive environ toutes les quinze secondes",
@@ -964,7 +968,14 @@
     "overviewStale": "Le texte a changé depuis cet aperçu.",
     "chapters": "Chapitres",
     "speakerSummaries": "Ce que chacun a dit",
-    "playFrom": "Lire à partir de {{time}}"
+    "playFrom": "Lire à partir de {{time}}",
+    "quietPaused": "Rien n’a été dit pendant {{count}} min, l’enregistrement est en pause.",
+    "cutAfter": "Couper d’ici à la fin",
+    "cutAfterConfirm": "Supprimer ceci et tout ce qui suit",
+    "cutAfterConfirmSound": "Supprimer ceci et tout ce qui suit, avec l’enregistrement ; irréversible",
+    "cutSilentTail": "Couper les {{minutes}} min de silence à la fin",
+    "cutSilentTailAsk": "Couper l’enregistrement juste après les derniers mots ({{time}}) ? Irréversible.",
+    "cutSilentTailConfirm": "Couper"
   },
   "whatsNew": {
     "title": "Nouveautés de {{version}}"

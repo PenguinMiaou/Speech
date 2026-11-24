@@ -9,6 +9,18 @@ export interface Notes {
 }
 
 export const WHATS_NEW: Record<string, Notes> = {
+  '1.2.14': {
+    zh: [
+      '会议录音一段时间没人说话会自动暂停（默认 10 分钟，可在 设置 → 会议 里改或关掉），回来点“继续”或“结束录音”。',
+      '会议文字每段标题旁多了剪刀：从这里剪到结尾，录音一起剪掉；录音最后一句话后面还有长段静音时，播放器下面可以一键剪掉。',
+      '会议录音改成无损的 FLAC 保存，占用空间减半、音质不变；已有的录音会在更新后自动转换。',
+    ],
+    en: [
+      'A meeting recording pauses by itself after a while with nothing said (10 minutes, changeable or off in Settings → Meetings); come back and continue or stop it.',
+      "Each section of a meeting's text has scissors that cut it off from there to the end, recording included; a long silence after the last words can be cut off from below the player.",
+      'Meeting recordings are kept as lossless FLAC, half the space with the same sound; recordings you already have are converted after the update.',
+    ],
+  },
   '1.2.13': {
     zh: [
       '会议新增“速览”：按时间分好的章节，点时间就从那里播放录音；还有每个人说了什么的摘要。',

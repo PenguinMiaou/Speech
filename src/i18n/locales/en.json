@@ -469,7 +469,10 @@
     "showLogHint": "States and errors only, never what was said",
     "dictationPane": "Dictation",
     "translationPane": "Translation",
-    "moreShortcuts": "More shortcuts"
+    "moreShortcuts": "More shortcuts",
+    "meetingQuietPause": "After how long with nothing said a recording pauses",
+    "meetingQuietPauseNever": "Never",
+    "meetingQuietPauseMinutes": "{{count}} min"
   },
   "contextFamilies": {
     "email": "Email",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "This system version cannot record the computer's sound",
       "someFailed": "Some files could not be turned into text.",
       "timesDownload": "The model could not be downloaded",
-      "overview": "No overview was made"
+      "overview": "No overview was made",
+      "trim": "The recording could not be cut."
     },
     "live": "Live text",
     "listening": "Listening. Text arrives every fifteen seconds or so",
@@ -964,7 +968,14 @@
     "overviewStale": "The text changed after this overview was made.",
     "chapters": "Chapters",
     "speakerSummaries": "What each person said",
-    "playFrom": "Play from {{time}}"
+    "playFrom": "Play from {{time}}",
+    "quietPaused": "Nothing was said for {{count}} min, so the recording paused.",
+    "cutAfter": "Cut from here to the end",
+    "cutAfterConfirm": "Cut this and everything after it",
+    "cutAfterConfirmSound": "Cut this and everything after it, with the recording; this cannot be undone",
+    "cutSilentTail": "Cut the {{minutes}} min of silence at the end",
+    "cutSilentTailAsk": "Cut the recording off just after the last words ({{time}})? This cannot be undone.",
+    "cutSilentTailConfirm": "Cut"
   },
   "whatsNew": {
     "title": "What’s new in {{version}}"

@@ -753,6 +753,7 @@ describe('Settings tab 切换', () => {
     window.location.hash = '#/settings?pane=meetings'
     const view = renderSettings()
     expect(screen.getByText('settings.meetingDetect')).toBeDefined()
+    expect(screen.getByText('settings.meetingQuietPause')).toBeDefined()
     view.unmount()
 
     window.location.hash = '#/settings?pane=language'

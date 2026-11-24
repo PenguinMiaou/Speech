@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Scissors, Trash2 } from 'lucide-react'
 import { changes } from '../../lib/word-diff'
 import { formatted, hasFormat, plainOf } from '../../lib/meeting-format'
 import {
   charsSaid,
   secondsAt,
+  secondsOf,
   speakerColor,
   transcriptLines,
   type Times,
@@ -42,6 +43,11 @@ interface Props {
   onCut?: (line: number) => void
   cutLabel?: string
   cutConfirmLabel?: string
+  /** Given when the text, and the sound with it, can be cut off from a section to the end:
+   * called with that section's heading's line once the user has clicked twice. */
+  onCutAfter?: (line: number) => void
+  cutAfterLabel?: string
+  cutAfterConfirmLabel?: string
 }
 
 /** The place in words set out in several pieces that was clicked, counted in their
@@ -64,10 +70,6 @@ function clickedAt(event: { clientX: number; clientY: number }, words: Node): nu
   return at && words.contains(at.startContainer) ? at.startOffset : null
 }
 
-function seconds(time: string): number {
-  return time.split(':').reduce((total, part) => total * 60 + Number(part), 0)
-}
-
 /** A meeting's text with each speaker's name in that speaker's colour, so that who speaks
  * stands apart from what is said. Selecting and copying gives the plain text. */
 export function Transcript({
@@ -85,6 +87,9 @@ export function Transcript({
   onName,
   nameLabel,
   onCut,
+  onCutAfter,
+  cutAfterLabel,
+  cutAfterConfirmLabel,
   cutLabel,
   cutConfirmLabel,
 }: Props) {
@@ -104,6 +109,10 @@ export function Transcript({
   const [all, setAll] = useState(false)
   // The heading whose section is to be taken out once the user confirms.
   const [cutting, setCutting] = useState<number | null>(null)
+  const [cuttingAfter, setCuttingAfter] = useState<number | null>(null)
+  /** The first heading's line: the text cannot be cut off from there, which would leave
+   * nothing. */
+  const firstHeading = lines.findIndex((line) => !('text' in line))
   const numbers = [
     ...new Set(lines.flatMap((line) => ('text' in line || !line.speaker ? [] : [line.speaker]))),
   ].sort((a, b) => a - b)
@@ -173,7 +182,7 @@ export function Transcript({
   // When each line was said: the time in the heading above it.
   let said: number | null = null
   const starts = lines.map((line) => {
-    if (!('text' in line)) said = seconds(line.time)
+    if (!('text' in line)) said = secondsOf(line.time)
     return said
   })
   const words = (line: { text: string }, index: number) => {
@@ -370,7 +379,7 @@ export function Transcript({
               {onSeek ? (
                 <button
                   type="button"
-                  onClick={() => onSeek(seconds(line.time), true)}
+                  onClick={() => onSeek(secondsOf(line.time), true)}
                   className="cursor-pointer border-none bg-transparent p-0 text-[12px] tabular-nums text-text-tertiary hover:text-accent"
                 >
                   {line.time}
@@ -397,6 +406,27 @@ export function Transcript({
                 >
                   <Trash2 size={12} />
                   {cutting === index && cutConfirmLabel}
+                </button>
+              )}
+              {onCutAfter && index !== firstHeading && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (cuttingAfter !== index) return setCuttingAfter(index)
+                    setCuttingAfter(null)
+                    onCutAfter(index)
+                  }}
+                  onBlur={() => setCuttingAfter((now) => (now === index ? null : now))}
+                  aria-label={cuttingAfter === index ? cutAfterConfirmLabel : cutAfterLabel}
+                  title={cuttingAfter === index ? cutAfterConfirmLabel : cutAfterLabel}
+                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border-none bg-transparent p-0 align-middle text-[12px] ${
+                    cuttingAfter === index
+                      ? 'text-error'
+                      : 'text-text-tertiary opacity-0 hover:text-error focus:opacity-100 group-hover/section:opacity-100'
+                  }`}
+                >
+                  <Scissors size={12} />
+                  {cuttingAfter === index && cutAfterConfirmLabel}
                 </button>
               )}
             </span>

@@ -469,7 +469,10 @@
     "showLogHint": "Apenas estados e erros, nunca o que foi dito",
     "dictationPane": "Ditado",
     "translationPane": "Tradução",
-    "moreShortcuts": "Mais atalhos"
+    "moreShortcuts": "Mais atalhos",
+    "meetingQuietPause": "Pausar a gravação após quanto silêncio",
+    "meetingQuietPauseNever": "Nunca",
+    "meetingQuietPauseMinutes": "{{count}} min"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -830,7 +833,8 @@
       "system_audio_unsupported": "Esta versão do sistema não consegue gravar o som do computador",
       "someFailed": "Alguns arquivos não puderam ser transcritos.",
       "timesDownload": "Não foi possível baixar o modelo",
-      "overview": "Não foi possível criar a visão geral"
+      "overview": "Não foi possível criar a visão geral",
+      "trim": "Não foi possível cortar a gravação."
     },
     "live": "Texto ao vivo",
     "listening": "A ouvir. O texto chega a cada quinze segundos, aproximadamente",
@@ -964,7 +968,14 @@
     "overviewStale": "O texto mudou depois desta visão geral.",
     "chapters": "Capítulos",
     "speakerSummaries": "O que cada pessoa disse",
-    "playFrom": "Reproduzir a partir de {{time}}"
+    "playFrom": "Reproduzir a partir de {{time}}",
+    "quietPaused": "Ninguém falou por {{count}} min, então a gravação foi pausada.",
+    "cutAfter": "Cortar daqui até o fim",
+    "cutAfterConfirm": "Remover isto e tudo o que vem depois",
+    "cutAfterConfirmSound": "Remover isto e tudo o que vem depois, com a gravação; não pode ser desfeito",
+    "cutSilentTail": "Cortar os {{minutes}} min de silêncio no fim",
+    "cutSilentTailAsk": "Cortar a gravação logo após as últimas palavras ({{time}})? Não pode ser desfeito.",
+    "cutSilentTailConfirm": "Cortar"
   },
   "whatsNew": {
     "title": "Novidades da {{version}}"
