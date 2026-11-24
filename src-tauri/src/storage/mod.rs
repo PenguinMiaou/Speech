@@ -408,6 +408,8 @@ pub struct AppConfig {
     /// Pause a meeting recording after this many minutes in which nothing was said, so
     /// that one left running is not kept going; 0 never pauses it.
     pub meeting_quiet_pause_minutes: u32,
+    /// After a meeting, ask whether to put it in the folder the language model picks for it.
+    pub meeting_folder_suggest: bool,
 }
 
 impl Default for AppConfig {
@@ -479,6 +481,7 @@ impl Default for AppConfig {
             voice_isolation_enabled: false,
             meeting_detect: true,
             meeting_quiet_pause_minutes: 10,
+            meeting_folder_suggest: true,
         }
     }
 }

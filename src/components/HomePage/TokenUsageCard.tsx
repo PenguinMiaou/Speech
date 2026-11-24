@@ -45,7 +45,7 @@ export function TokenUsageCard() {
           <div key={label}>
             <p className="mb-1 text-[12px] text-text-tertiary">{t(label)}</p>
             <p
-              className="text-[18px] font-semibold tabular-nums"
+              className="text-[17px] font-semibold tabular-nums"
               title={`${span.input.toLocaleString('en-US')} + ${span.output.toLocaleString('en-US')}`}
             >
               {formatTokens(used(span))}

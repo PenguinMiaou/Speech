@@ -44,7 +44,7 @@ export function MeetingTerms({
         event.preventDefault()
         onSettle(spellings)
       }}
-      className="flex flex-col gap-2.5 rounded-[10px] border border-border bg-bg-secondary px-3 py-2.5"
+      className="flex flex-col gap-2.5 rounded-lg border border-border bg-bg-secondary px-3 py-2.5"
     >
       <div className="flex items-center gap-2 text-[12px] text-text-secondary">
         <SpellCheck size={13} />
@@ -53,7 +53,7 @@ export function MeetingTerms({
         <button
           type="submit"
           aria-label={t('meeting.termsApply')}
-          className="flex h-6 cursor-pointer items-center gap-1 rounded-[6px] border-none bg-accent px-2 text-[12px] text-white"
+          className="flex h-6 cursor-pointer items-center gap-1 rounded-sm border-none bg-accent px-2 text-[12px] text-white"
         >
           <Check size={13} />
           <span aria-hidden>{t('meeting.termsApply')}</span>
@@ -63,7 +63,7 @@ export function MeetingTerms({
           aria-label={t('meeting.termsSkip')}
           title={t('meeting.termsSkip')}
           onClick={onSkip}
-          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:text-text-primary"
+          className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-text-tertiary hover:text-text-primary"
         >
           <X size={13} />
         </button>
@@ -82,7 +82,7 @@ export function MeetingTerms({
                   value={spellings[index] ?? ''}
                   onChange={(event) => write(index, event.target.value)}
                   aria-label={term.others.join(', ')}
-                  className="h-7 w-[170px] shrink-0 rounded-[7px] border border-border bg-bg-primary px-2 text-[12px] font-medium outline-none focus:border-accent"
+                  className="h-7 w-[170px] shrink-0 rounded-md border border-border bg-bg-primary px-2 text-[12px] font-medium outline-none focus:border-accent"
                 />
                 {ways.map((way) => (
                   <button
@@ -90,7 +90,7 @@ export function MeetingTerms({
                     type="button"
                     aria-pressed={spellings[index] === way}
                     onClick={() => write(index, way)}
-                    className="flex h-7 cursor-pointer items-center gap-1 rounded-[7px] border border-border bg-transparent px-2 text-[12px] text-text-secondary hover:text-text-primary aria-pressed:border-accent aria-pressed:text-accent"
+                    className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-transparent px-2 text-[12px] text-text-secondary hover:text-text-primary aria-pressed:border-accent aria-pressed:text-accent"
                   >
                     {own.includes(way) && <BookOpen size={11} aria-hidden />}
                     {way}

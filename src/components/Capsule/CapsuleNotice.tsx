@@ -1,3 +1,4 @@
+import { timed } from '../../lib/animations'
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useAppStore } from '../../stores/appStore'
@@ -19,7 +20,7 @@ export function CapsuleNotice() {
       className="relative z-10 flex h-9 items-center px-3"
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      transition={timed()}
     >
       <p role="status" className="flex-1 truncate text-[11px] text-white">
         {notice}

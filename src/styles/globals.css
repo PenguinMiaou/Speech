@@ -7,9 +7,10 @@
   --color-bg-tertiary: #e5e7eb;
   --color-bg-elevated: #ffffff;
 
+  /* Text colours read at 4.5:1 or more on both page backgrounds. */
   --color-text-primary: #17191c;
-  --color-text-secondary: #596068;
-  --color-text-tertiary: #8a9199;
+  --color-text-secondary: #4d545c;
+  --color-text-tertiary: #676e76;
 
   /* One colour a speaker in a meeting, so a name never reads as part of the words. */
   --speaker-1: #0b7d70;
@@ -18,16 +19,18 @@
   --speaker-4: #b0387a;
   --speaker-5: #6b4fc4;
   --speaker-6: #4d7c0f;
-  --color-accent: #0e9384;
-  --color-accent-hover: #0b7d70;
+  --color-accent: #0b7d70;
+  --color-accent-hover: #096b60;
   --color-accent-light: #e2f4f1;
 
-  --color-success: #34c759;
-  --color-warning: #ff9500;
-  --color-error: #e5484d;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-error: #d1242f;
+  /* Red filled behind white text, as a record or delete button. */
+  --color-error-fill: #d1242f;
 
   --color-border: rgba(23, 25, 28, 0.1);
-  --color-border-focus: #0e9384;
+  --color-border-focus: #0b7d70;
 
   /* Jelly palette tokens */
   --color-jelly-primary: rgba(42, 187, 167, 0.2);
@@ -46,11 +49,11 @@
   --text-headline: 17px;
   --text-title: 22px;
 
-  /* Border radius */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 22px;
+  /* Border radius: four steps, from small marks to dialogs. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --radius-full: 9999px;
 
   /* Shadows - neutral */
@@ -59,9 +62,15 @@
   --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
   --shadow-float: 0 16px 48px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
 
-  /* Easing */
-  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Motion: one curve and three lengths, the same as src/lib/animations.ts. Things come
+     in quickly and settle softly; nothing overshoots. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Base styles */
@@ -106,7 +115,12 @@ body,
   --speaker-6: #a3d15c;
   --color-text-primary: #eceef0;
   --color-text-secondary: #a4aab1;
-  --color-text-tertiary: #737a82;
+  --color-text-tertiary: #8b9199;
+
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-error: #ff6369;
+  --color-error-fill: #d33a40;
 
   --color-accent: #2cc4b0;
   --color-accent-hover: #43d3c0;
@@ -161,29 +175,6 @@ body,
     rgba(255, 255, 255, 0.05) 0%,
     rgba(255, 255, 255, 0.01) 40%,
     transparent 70%
-  );
-}
-
-.dark .capsule-shimmer::after {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.06) 40%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0.06) 60%,
-    transparent 100%
-  );
-}
-
-.dark .capsule-progress-bar {
-  background: rgba(255, 255, 255, 0.04);
-}
-.dark .capsule-progress-bar::after {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    transparent 100%
   );
 }
 
@@ -319,101 +310,13 @@ body,
 }
 
 /* ─── Shimmer sweep — left-to-right loading bar ─── */
-@keyframes shimmer-sweep {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-.capsule-shimmer {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 2;
-}
-.capsule-shimmer::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.12) 40%,
-    rgba(255, 255, 255, 0.2) 50%,
-    rgba(255, 255, 255, 0.12) 60%,
-    transparent 100%
-  );
-  animation: shimmer-sweep 1.5s ease-in-out infinite;
-}
 
-/* ─── Polishing progress bar — bottom sweep ─── */
 @keyframes progress-sweep {
   0% {
     transform: translateX(-100%);
   }
   100% {
     transform: translateX(200%);
-  }
-}
-.capsule-progress-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  overflow: hidden;
-  border-radius: 0 0 9999px 9999px;
-  pointer-events: none;
-  z-index: 3;
-  background: rgba(255, 255, 255, 0.08);
-}
-.capsule-progress-bar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.7) 50%,
-    transparent 100%
-  );
-  animation: progress-sweep 1.2s ease-in-out infinite;
-}
-
-/* ─── Jelly Keyframes ─── */
-@keyframes jelly-wobble {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  25% {
-    transform: scaleX(1.05) scaleY(0.95);
-  }
-  50% {
-    transform: scaleX(0.97) scaleY(1.03);
-  }
-  75% {
-    transform: scaleX(1.02) scaleY(0.98);
-  }
-}
-
-@keyframes jelly-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.04) scaleX(1.02);
   }
 }
 
@@ -452,7 +355,7 @@ body,
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-text-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-secondary);
@@ -584,7 +487,7 @@ body,
 }
 
 .btn-record {
-  background: var(--color-error);
+  background: var(--color-error-fill);
   border: none;
   border-radius: 8px;
   color: #ffffff;
@@ -755,4 +658,52 @@ body,
   .going-sweep {
     animation: none;
   }
+}
+
+/* ─── Focus ───
+   Every control that takes the keyboard shows where it is, in the accent colour, only
+   when reached by the keyboard. Outside any layer, so a field's own outline-none does not
+   hide it. */
+:where(button, a, [role='menuitem'], [role='tab'], [role='switch'], summary):focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+:where(input, textarea, select, [contenteditable='true']):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-border-focus) 40%, transparent);
+}
+
+/* A recording going on: a slow, soft breath, only while it lasts. */
+@keyframes recording-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.recording-dot {
+  animation: recording-breathe 1.8s var(--ease-in-out) infinite;
+}
+
+/* ─── Reduced motion ───
+   With less motion asked for in the system, changes happen at once. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Words found in a meeting's text, and the one in view. */
+::highlight(find) {
+  background-color: color-mix(in srgb, var(--color-warning) 28%, transparent);
+}
+::highlight(find-current) {
+  background-color: color-mix(in srgb, var(--color-warning) 60%, transparent);
 }

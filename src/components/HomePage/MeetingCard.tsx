@@ -1,16 +1,18 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AudioLines,
+  ArrowDownUp,
   ArrowLeft,
   Cloud,
-  Copy,
   Download,
   Files,
   Ellipsis,
   Folder,
   FolderInput,
+  FolderMinus,
   FolderOpen,
+  Pencil,
   Mic,
   Pause,
   Scissors,
@@ -22,18 +24,19 @@ import {
   SpellCheck,
   Diff,
   Type,
-  Sparkles,
   Square,
   Trash2,
   Users,
   Search,
   MessageCircleQuestion,
+  MousePointerClick,
+  X,
   LayoutTemplate,
   ScrollText,
+  PenLine,
 } from 'lucide-react'
 import {
   addDictionaryEntry,
-  copyText,
   minutesTemplates,
   type MinutesTemplate,
   forgetSpeaker,
@@ -44,8 +47,11 @@ import {
   meetingAudio,
   meetingAudioDelete,
   meetingAudioTrim,
+  meetingAudioCutUndo,
+  meetingAudioCutKeep,
   meetingDelete,
   meetingFolder,
+  meetingFolderPick,
   meetingGet,
   meetingSave,
   meetingLanguages,
@@ -73,6 +79,8 @@ import {
   type TranscribeOptions,
 } from '../../lib/tauri'
 import { useAppStore } from '../../stores/appStore'
+import { NAV_AGAIN } from '../../lib/router'
+import { openContextMenu } from '../ContextMenu'
 import { localModelName } from '../../lib/local-model-names'
 import { plainOf } from '../../lib/meeting-format'
 import { BUILT_IN, TemplateGallery, templateText } from './TemplateGallery'
@@ -92,7 +100,8 @@ import {
   saidBy,
   speakerColor,
   speakersIn,
-  stampNote,
+  notesShown,
+  withNotesTyped,
   stampedNotes,
   withLines,
   withRunsJoined,
@@ -122,6 +131,13 @@ import {
 import { MeetingMinutes } from './MeetingMinutes'
 import { MeetingOverviewPanel } from './MeetingOverviewPanel'
 import { MinutesForm } from './MinutesForm'
+import { CopyButton } from '../CopyButton'
+import { useDismiss } from '../../hooks/useDismiss'
+import { create } from 'zustand'
+import { forgetPacked } from '../../stores/meetingStore'
+import { toast } from '../toast-service'
+import { byDay, dayName, MEETING_ORDERS, ordered, type MeetingOrder } from '../../lib/meeting-list'
+import { FindInText, type FindHandle } from './FindInText'
 import { MeetingLanguages, MOST_LANGUAGES } from './MeetingLanguages'
 
 const KNOWN_ERRORS = [
@@ -261,12 +277,36 @@ function Going({
   )
 }
 
+/** How many lines of the list of meetings are shown at a time. */
+const PAGE = 60
+
+function timeOf(time: number): string {
+  return new Date(time).toLocaleTimeString(undefined, { timeStyle: 'short' })
+}
+
 function when(time: number): string {
   return new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+/** Meetings and sounds deleted and waiting out the time to undo it, hidden meanwhile.
+ * Kept outside the page, so that they stay hidden when it is left and come back to. */
+export const useGoing = create<{ meetings: string[]; sounds: string[] }>(() => ({
+  meetings: [],
+  sounds: [],
+}))
+const markGoing = (key: 'meetings' | 'sounds', id: string, on: boolean) =>
+  useGoing.setState((state) => ({
+    [key]: on ? [...state[key], id] : state[key].filter((each) => each !== id),
+  }))
+
+/** A meeting's text, times and length, as they were before a cut, to put back. */
+type BeforeCut = Pick<
+  ReturnType<typeof useMeetingStore.getState>,
+  'text' | 'times' | 'duration' | 'unpolished'
+>
+
 export function MeetingCard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const inputDevice = useAppStore((s) => s.config.input_device)
   const dictationModel = useAppStore((s) => s.config.stt_local_model)
   /** Whether the recognizer chosen in the settings is away from this machine: meetings
@@ -313,14 +353,40 @@ export function MeetingCard() {
       return ''
     }
   })
+  /** The order the list is read in, kept for the next time. */
+  const [order, setOrder] = useState<MeetingOrder>(() => {
+    try {
+      const kept = window.localStorage.getItem('meeting.order') as MeetingOrder | null
+      return kept && MEETING_ORDERS.includes(kept) ? kept : 'newest'
+    } catch {
+      return 'newest'
+    }
+  })
+  const chooseOrder = (next: MeetingOrder) => {
+    setOrder(next)
+    setShownCount(PAGE)
+    try {
+      window.localStorage.setItem('meeting.order', next)
+    } catch {
+      // The choice then lasts only for this run.
+    }
+  }
+  /** How many lines of the list are shown; more are shown on asking. */
+  const [shownCount, setShownCount] = useState(PAGE)
+  /** The folder being renamed, and the name typed for it. */
+  const [renaming, setRenaming] = useState<string | null>(null)
   /** The meeting whose folder is being chosen. */
   const [moving, setMoving] = useState<string | null>(null)
+  const movingRef = useRef<HTMLDivElement>(null)
+  const closeMoving = useCallback(() => setMoving(null), [])
+  useDismiss(moving !== null, closeMoving, movingRef)
   const folders = [...new Set(past.map((each) => each.folder?.trim() ?? ''))]
     .filter((name) => name !== '')
     .sort((a, b) => a.localeCompare(b))
   const inFolder = folders.includes(picked) ? picked : ''
   const pickFolder = (name: string) => {
     setPicked(name)
+    setShownCount(PAGE)
     try {
       window.localStorage.setItem('meeting.folder', name)
     } catch {
@@ -378,7 +444,29 @@ export function MeetingCard() {
     }
   }, [query])
   const [showOptions, setShowOptions] = useState(false)
+  const goingMeetings = useGoing((state) => state.meetings)
+  const finder = useRef<FindHandle>(null)
+  const textBox = useRef<HTMLDivElement>(null)
+  /** Whether the user has seen and put away the hint on changing words and speakers. */
+  const [editHintSeen, setEditHintSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem('meeting.editHintSeen') === '1'
+    } catch {
+      return false
+    }
+  })
+  const seeEditHint = () => {
+    setEditHintSeen(true)
+    try {
+      window.localStorage.setItem('meeting.editHintSeen', '1')
+    } catch {
+      // Shown again next time.
+    }
+  }
   const [showMore, setShowMore] = useState(false)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const closeMore = useCallback(() => setShowMore(false), [])
+  useDismiss(showMore, closeMore, moreRef)
   const [counting, setCounting] = useState(false)
   // The templates laid out to pick from: for the kept meeting minutes are to be made of,
   // or with no meeting, only to look at, add to or take from.
@@ -402,8 +490,61 @@ export function MeetingCard() {
   const named = useRef<Promise<void>>(Promise.resolve())
   const keep = () => {
     const kept = persistMeeting(label)
-    named.current = kept.then(() => nameMeeting(label)).then(refreshPast)
+    named.current = kept
+      .then(() => nameMeeting(label))
+      .then(refreshPast)
+      .then(() => offerFolder(useMeetingStore.getState().id))
     return kept
+  }
+  /** The folder the meeting just kept may go in, waiting for the user to say yes or no. */
+  const [folderOffer, setFolderOffer] = useState<{
+    id: string
+    title: string
+    folder: string
+  } | null>(null)
+  /** Asks the language model which of the user's folders a meeting just kept belongs in,
+   * where it is in none, and offers that folder. */
+  const offerFolder = (id: string | null) => {
+    if (!id) return Promise.resolve()
+    return Promise.resolve(meetingsList())
+      .then((all) => {
+        const list = all ?? []
+        const meeting = list.find((each) => each.id === id)
+        if (!meeting || meeting.folder?.trim()) return
+        const held = new Map<string, string[]>()
+        for (const each of list) {
+          const folder = each.folder?.trim()
+          if (!folder || each.id === id) continue
+          held.set(folder, [
+            ...(held.get(folder) ?? []),
+            each.title?.trim() || plainOf(each.preview),
+          ])
+        }
+        if (held.size === 0) return
+        const state = useMeetingStore.getState()
+        const title = meeting.title?.trim() || (state.id === id ? state.title.trim() : '')
+        const transcript = state.id === id ? (state.text ?? '') : meeting.preview
+        return Promise.resolve(
+          meetingFolderPick(
+            title,
+            transcript,
+            [...held].map(([name, titles]) => ({ name, titles })),
+          ),
+        ).then((folder) => {
+          if (folder && held.has(folder))
+            setFolderOffer({ id, title: title || plainOf(meeting.preview), folder })
+        })
+      })
+      .catch(() => {})
+  }
+  const acceptFolder = (offer: { id: string; folder: string }) => {
+    setFolderOffer(null)
+    void Promise.resolve(meetingFolder(offer.id, offer.folder))
+      .then(() => {
+        if (useMeetingStore.getState().id === offer.id) set({ folder: offer.folder })
+        refreshPast()
+      })
+      .catch(() => toast.error(t('meeting.error.folder')))
   }
   /** The files to be turned into text after the one in hand. */
   const [waiting, setWaiting] = useState<string[]>([])
@@ -444,6 +585,8 @@ export function MeetingCard() {
   /** Bumped when the kept sound is cut in place, so the player reads it afresh. */
   const [soundVersion, setSoundVersion] = useState(0)
   const [cuttingTail, setCuttingTail] = useState(false)
+  /** The second the user asked to cut the meeting off at, waiting to be confirmed. */
+  const [cuttingAt, setCuttingAt] = useState<number | null>(null)
   /** Pause requests not answered yet: until they are, the paused state the recording
    * reports may be older than the user's click. */
   const pausing = useRef(0)
@@ -458,7 +601,7 @@ export function MeetingCard() {
   /** After a recording: the time of each word, where the model for that is installed. */
   const hearAgain = () => (exactTimes.current ? timeWords(label) : Promise.resolve())
   const [voices, setVoices] = useState<string[]>([])
-  const [tab, setTab] = useState('text')
+  const [tab, setTab] = useState<'text' | 'overview' | 'minutes'>('text')
   const [models, setModels] = useState<string[]>([])
   /** How many of the settings a recording needs, read when the page opens, are in. */
   const [prepared, setPrepared] = useState(0)
@@ -730,7 +873,10 @@ export function MeetingCard() {
     setLanguages(next)
     rememberChoice(LANGUAGES_KEY, next.join(','))
     // A meeting being recorded goes on in the languages now named.
-    if (now() === 'recording') void Promise.resolve(meetingLanguages(next)).catch(() => {})
+    if (now() === 'recording')
+      void Promise.resolve(meetingLanguages(next)).catch(() =>
+        toast.error(t('meeting.error.languages')),
+      )
   }
 
   const bySpeaker = speakers && speakersInstalled
@@ -823,15 +969,30 @@ export function MeetingCard() {
     finish(Promise.resolve(transcribeFile(kept, optionsRef.current)), true)
   }
 
-  const forget = () =>
-    void Promise.resolve(id ? meetingAudioDelete(id) : undefined)
-      .catch(() => {})
-      .finally(() => setKept(null))
+  /** Deletes the kept sound of the open meeting, after a time in which it can be undone. */
+  const forget = () => {
+    if (!id) return
+    const forId = id
+    const was = kept
+    setKept(null)
+    markGoing('sounds', forId, true)
+    toast.undoable(t('meeting.audioDeleted'), {
+      label: t('common.undo'),
+      undo: () => {
+        markGoing('sounds', forId, false)
+        if (useMeetingStore.getState().id === forId) setKept(was)
+      },
+      commit: () =>
+        void Promise.resolve(meetingAudioDelete(forId))
+          .catch(() => toast.error(t('meeting.error.audioDelete')))
+          .finally(() => markGoing('sounds', forId, false)),
+    })
+  }
 
   const choose = () =>
     void Promise.resolve(pickMediaFile())
       .then((paths) => transcribeAll(paths ?? []))
-      .catch(() => {})
+      .catch(() => toast.error(t('meeting.error.pick')))
 
   const percent =
     progress && progress.stage === 'text' && progress.total > 0
@@ -952,11 +1113,13 @@ export function MeetingCard() {
         void Promise.resolve(meetingAudio(meeting.id))
           .then(
             (kept) =>
-              useMeetingStore.getState().id === meeting.id && setKept(soundOf(meeting.id, kept)),
+              useMeetingStore.getState().id === meeting.id &&
+              !useGoing.getState().sounds.includes(meeting.id) &&
+              setKept(soundOf(meeting.id, kept)),
           )
           .catch(() => {})
       })
-      .catch(() => {})
+      .catch(() => toast.error(t('meeting.error.open')))
 
   /** Puts a meeting in a folder, or in none where `name` is empty. */
   const moveTo = (summary: MeetingSummary, name: string) => {
@@ -967,16 +1130,63 @@ export function MeetingCard() {
         if (useMeetingStore.getState().id === summary.id) set({ folder })
         refreshPast()
       })
-      .catch(() => {})
+      .catch(() => toast.error(t('meeting.error.folder')))
   }
 
-  const removePast = (summary: MeetingSummary) =>
-    void Promise.resolve(meetingDelete(summary.id))
+  /** Deletes a meeting, after a time in which it can be undone; hidden meanwhile. */
+  const deleteMeeting = (meetingId: string, title: string) => {
+    if (useMeetingStore.getState().id === meetingId) closeRef.current()
+    markGoing('meetings', meetingId, true)
+    toast.undoable(t('meeting.deleted', { title }), {
+      label: t('common.undo'),
+      undo: () => markGoing('meetings', meetingId, false),
+      // Stays hidden once deleted, so that a list read before that does not show it again.
+      commit: () =>
+        void Promise.resolve(meetingDelete(meetingId))
+          .then(refreshPast)
+          .catch(() => {
+            markGoing('meetings', meetingId, false)
+            toast.error(t('meeting.error.delete'))
+          }),
+    })
+  }
+  /** Gives every meeting in folder `from` the folder `to`; none where `to` is empty. */
+  const refile = (from: string, to: string) =>
+    Promise.all(
+      past
+        .filter((each) => (each.folder ?? '') === from)
+        .map((each) => Promise.resolve(meetingFolder(each.id, to))),
+    )
       .then(() => {
-        if (useMeetingStore.getState().id === summary.id) set({ id: null })
+        if (useMeetingStore.getState().folder === from) set({ folder: to })
         refreshPast()
       })
-      .catch(() => {})
+      .catch(() => toast.error(t('meeting.error.folder')))
+  const renameFolder = (from: string, to: string) => {
+    setRenaming(null)
+    const name = to.trim()
+    if (!name || name === from) return
+    void refile(from, name).then(() => pickFolder(name))
+  }
+  /** Takes a folder away, its meetings kept and in no folder, with a way to undo it. */
+  const removeFolder = (name: string) => {
+    const held = past.filter((each) => (each.folder ?? '') === name).map((each) => each.id)
+    pickFolder('')
+    void refile(name, '')
+    toast.undoable(t('meeting.folderRemoved', { folder: name }), {
+      label: t('common.undo'),
+      commit: () => {},
+      undo: () =>
+        void Promise.all(held.map((id) => Promise.resolve(meetingFolder(id, name))))
+          .then(() => {
+            refreshPast()
+            pickFolder(name)
+          })
+          .catch(() => toast.error(t('meeting.error.folder'))),
+    })
+  }
+  const removePast = (summary: MeetingSummary) =>
+    deleteMeeting(summary.id, summary.title?.trim() || plainOf(summary.preview))
 
   const written = text ?? (recorded ? meetingText(paragraphs, label) : null)
   const speakerNumbers = written ? speakersIn(written, label) : []
@@ -995,31 +1205,23 @@ export function MeetingCard() {
   const notesBox = (
     <textarea
       ref={notesRef}
-      value={notes}
-      onChange={(event) => {
-        if (now() !== 'recording') {
-          set({ notes: event.target.value })
-          return
-        }
-        // A note taken while the meeting runs carries the moment it was begun at.
-        const typed = stampNote(
-          event.target.value,
-          event.target.selectionStart,
-          level.seconds,
-          notes,
-        )
-        set({ notes: typed.value })
-        if (typed.value !== event.target.value) {
-          window.requestAnimationFrame(() =>
-            notesRef.current?.setSelectionRange(typed.caret, typed.caret),
-          )
-        }
-      }}
+      value={notesShown(notes)}
+      // A note taken while the meeting runs keeps the moment its line was begun at, out of
+      // sight, so that it can be found in the recording.
+      onChange={(event) =>
+        set({
+          notes: withNotesTyped(
+            notes,
+            event.target.value,
+            now() === 'recording' ? level.seconds : null,
+          ),
+        })
+      }
       onBlur={persist}
       rows={3}
       aria-label={t('meeting.notes')}
       placeholder={t('meeting.notesPlaceholder')}
-      className="mt-3 w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none placeholder:text-text-tertiary"
+      className="mt-3 w-full resize-y rounded-md border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none placeholder:text-text-tertiary"
     />
   )
   const polish = (source: string | null = written) =>
@@ -1064,7 +1266,9 @@ export function MeetingCard() {
       terms: { ...terms, list, open: false },
     })
     for (const term of settled)
-      void Promise.resolve(addDictionaryEntry(term.spelling, null)).catch(() => {})
+      void Promise.resolve(addDictionaryEntry(term.spelling, null)).catch(() =>
+        toast.error(t('meeting.error.dictionary')),
+      )
     persist()
   }
   /** Takes the surplus speakers for the most alike of the `most` who said the most. */
@@ -1083,9 +1287,11 @@ export function MeetingCard() {
    * the tidy-up loses the section too where it still lines up with the text, and is let go
    * otherwise, so that the words taken out are not kept there. */
   const cut = (line: number) => {
-    if (written === null) return
+    if (written === null || !id) return
     const left = withoutSection(written, label, line)
     if (!left) return
+    settleLastCut()
+    const before = beforeCut()
     const keptTimes =
       times.length > left.heading ? times.filter((_, at) => at !== left.heading) : times
     const lines = written.split('\n').length
@@ -1105,11 +1311,83 @@ export function MeetingCard() {
         : null
     set({ text: left.text, times: keptTimes, ...(heard ? { unpolished: stillHeard } : {}) })
     persist()
+    offerUndo(id, before, false)
   }
   /** Cuts the kept sound off at `endMs` from its start, before anything else is cut, so
    * that the text is not cut where the sound could not be. Whether it was, or there is no
    * sound; shows why where it could not be. */
+  /** The undo of the last cut, while it can still be asked for. */
+  const lastCut = useRef<{
+    forId: string
+    sound: boolean
+    now: () => void
+    superseded: boolean
+  } | null>(null)
+  const beforeCut = (): BeforeCut => {
+    const { text, times, duration, unpolished } = useMeetingStore.getState()
+    return { text, times, duration, unpolished }
+  }
+  /** Says a cut was made, with a way to undo it for a while: the text, times and length
+   * as they were, and the sound where it was cut too. */
+  const offerUndo = (forId: string, before: BeforeCut, sound: boolean) => {
+    const cut = { forId, sound, now: () => {}, superseded: false }
+    cut.now = toast.undoable(t('meeting.cutDone'), {
+      label: t('common.undo'),
+      // A cut after this one has already let this one's sound go.
+      commit: () => {
+        if (sound && !cut.superseded)
+          void Promise.resolve(meetingAudioCutKeep(forId)).catch(() => {})
+      },
+      undo: () =>
+        void (async () => {
+          try {
+            if (sound && !(await meetingAudioCutUndo(forId))) throw new Error('nothing kept')
+            if (sound) forgetPacked(forId)
+            if (useMeetingStore.getState().id === forId) {
+              set(before)
+              if (sound) {
+                // Put back in the form it had before the cut, which may not be the one shown.
+                const back = await meetingAudio(forId)
+                if (useMeetingStore.getState().id === forId) setKept(soundOf(forId, back))
+                setSoundVersion((version) => version + 1)
+              }
+              persist()
+              return
+            }
+            const record = await meetingGet(forId)
+            await meetingSave({
+              ...record,
+              transcript: before.text ?? record.transcript,
+              times: before.times,
+              duration_s: before.duration,
+              unpolished: before.unpolished
+                ? {
+                    text: before.unpolished.text,
+                    shaped: before.unpolished.shaped,
+                    times: before.unpolished.times,
+                  }
+                : null,
+            })
+            refreshPast()
+          } catch {
+            toast.error(t('meeting.error.undo'))
+          }
+        })(),
+    })
+    lastCut.current = cut
+  }
+  /** A new cut lets the one before stand: only the last can be undone. A new cut of the
+   * same meeting's sound lets the sound kept aside go itself; any other leaves that to the
+   * one before. */
+  const settleLastCut = (forId?: string, sound = false) => {
+    const cut = lastCut.current
+    lastCut.current = null
+    if (!cut) return
+    cut.superseded = sound && cut.sound && cut.forId === forId
+    cut.now()
+  }
   const trimSound = async (forId: string, endMs: number) => {
+    settleLastCut(forId, Boolean(kept))
     if (!kept) return true
     try {
       await meetingAudioTrim(forId, endMs)
@@ -1125,15 +1403,17 @@ export function MeetingCard() {
    * sound from that section's time on, then its text and the times of that text. The text
    * as it was before the tidy-up is cut the same where it still lines up, and let go
    * otherwise. */
-  const cutAfter = async (line: number) => {
+  const cutAfter = async (line: number, cutMs?: number) => {
     if (written === null || !id) return
     const parsed = transcriptLines(written, label)
     const at = parsed[line]
     if (!at || 'text' in at) return
     const forId = id
     const forText = written
-    const endMs = secondsOf(at.time) * 1000
+    const endMs = cutMs ?? secondsOf(at.time) * 1000
     setError(null)
+    const before = beforeCut()
+    const sound = Boolean(kept)
     if (!(await trimSound(forId, endMs))) return
     const now = useMeetingStore.getState()
     if (now.id !== forId || now.text !== forText) return
@@ -1163,6 +1443,40 @@ export function MeetingCard() {
       ...(heard ? { unpolished: stillHeard } : {}),
     })
     persist()
+    offerUndo(forId, before, sound)
+  }
+  /** Each section's line and the moment it begins, read once per text. */
+  const sectionStarts = useMemo(
+    () =>
+      written === null
+        ? []
+        : transcriptLines(written, label).flatMap((line, index) =>
+            'text' in line ? [] : [{ line: index, ms: secondsOf(line.time) * 1000 }],
+          ),
+    [written, label],
+  )
+  /** Where the meeting can be cut off at `ms`: the first section that begins there or
+   * later, -1 where none does, and null where the cut would leave no text (at or before
+   * the first section). */
+  const cutLineAt = (ms: number): number | null => {
+    if (sectionStarts.length === 0 || ms <= sectionStarts[0].ms) return null
+    return sectionStarts.find((section) => section.ms >= ms)?.line ?? -1
+  }
+  /** Cuts the meeting off where the player stands: the sound from there on, and the
+   * sections that begin there or later. */
+  const cutAtPlayer = async (ms: number) => {
+    const line = cutLineAt(ms)
+    if (line === null || !id) return
+    if (line >= 0) return cutAfter(line, ms)
+    const forId = id
+    setError(null)
+    const before = beforeCut()
+    const sound = Boolean(kept)
+    if (!(await trimSound(forId, ms))) return
+    if (useMeetingStore.getState().id !== forId) return
+    set({ duration: Math.floor(ms / 1000) })
+    persist()
+    offerUndo(forId, before, sound)
   }
   /** Where the last words end, with a moment after them; null where that is not known. */
   const lastWordsMs = times.length > 0 ? times[times.length - 1].end_ms + TAIL_KEPT_MS : null
@@ -1172,10 +1486,13 @@ export function MeetingCard() {
     if (!id || lastWordsMs === null) return
     const forId = id
     setError(null)
+    const before = beforeCut()
+    const sound = Boolean(kept)
     if (!(await trimSound(forId, lastWordsMs))) return
     if (useMeetingStore.getState().id !== forId) return
     set({ duration: Math.floor(lastWordsMs / 1000) })
     persist()
+    offerUndo(forId, before, sound)
   }
   const giveTo = (line: number, speaker: number, all: boolean) => {
     if (written === null) return
@@ -1209,23 +1526,218 @@ export function MeetingCard() {
       times: [],
     })
   }
+  // Ctrl or Cmd with F finds in the text of the meeting open, in place of the web view's
+  // own find.
+  useEffect(() => {
+    const press = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'f') return
+      if (!finder.current) return
+      event.preventDefault()
+      event.stopPropagation()
+      setTab('text')
+      finder.current.focus()
+    }
+    window.addEventListener('keydown', press, true)
+    return () => window.removeEventListener('keydown', press, true)
+  }, [])
+  const closeRef = useRef(close)
+  closeRef.current = close
+  const detailRef = useRef(false)
+  // The meetings page chosen again in the sidebar: an open meeting is closed, back to the
+  // list, unless it is being recorded or worked on.
+  useEffect(() => {
+    const again = (event: Event) => {
+      if ((event as CustomEvent).detail !== 'meeting') return
+      if (now() === 'idle' && detailRef.current) closeRef.current()
+    }
+    window.addEventListener(NAV_AGAIN, again)
+    return () => window.removeEventListener(NAV_AGAIN, again)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const removeThis = () => {
-    const open = id
-    close()
-    if (open)
-      void Promise.resolve(meetingDelete(open))
-        .then(refreshPast)
-        .catch(() => {})
+    if (id) deleteMeeting(id, title.trim() || plainOf(written ?? '').slice(0, 40))
   }
   const busy = phase === 'recording' || phase === 'finishing'
   const detail = phase === 'idle' && result !== null
+  detailRef.current = detail
   const list = phase === 'idle' && result === null
+  // Found meetings stay in the order they were found in; the others in the order chosen,
+  // under the day they were held on where read by time.
+  const inView = (
+    found ??
+    ordered(
+      past.filter((each) => inFolder === '' || (each.folder ?? '') === inFolder),
+      order,
+    )
+  ).filter((summary) => !goingMeetings.includes(summary.id))
+  const grouped = !found && (order === 'newest' || order === 'oldest')
+  const visible: (
+    | { kind: 'day'; day: string; label: string }
+    | { kind: 'meeting'; summary: MeetingSummary }
+  )[] = grouped
+    ? byDay(inView).flatMap((run) => [
+        {
+          kind: 'day' as const,
+          day: run.day,
+          label: dayName(run.day, Date.now(), i18n?.language ?? navigator.language, {
+            today: t('meeting.today'),
+            yesterday: t('meeting.yesterday'),
+          }),
+        },
+        ...run.meetings.map((summary) => ({ kind: 'meeting' as const, summary })),
+      ])
+    : inView.map((summary) => ({ kind: 'meeting' as const, summary }))
   const startedAt = useMeetingStore.getState().startedAt
   const duration = useMeetingStore.getState().duration
   const item =
     'cursor-pointer border-none bg-transparent px-3 py-1.5 text-left text-[13px] text-text-primary hover:bg-bg-secondary'
+  const meetingRow = (summary: MeetingSummary) => (
+    <li
+      key={summary.id}
+      className="group flex items-center gap-3 py-3"
+      onContextMenu={(event) =>
+        openContextMenu(event, [
+          { label: t('contextMenu.open'), onSelect: () => open(summary) },
+          {
+            label: t('meeting.minutes'),
+            disabled: making !== null || tidying !== null,
+            onSelect: () => pickTemplate(summary),
+          },
+          { label: t('meeting.folder'), onSelect: () => setMoving(summary.id) },
+          {
+            label: t('meeting.deleteMeeting'),
+            danger: true,
+            onSelect: () => removePast(summary),
+          },
+        ])
+      }
+    >
+      <button
+        type="button"
+        onClick={() => open(summary)}
+        className="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 border-none bg-transparent p-0 text-left"
+      >
+        <span className="truncate text-[13px] font-medium text-text-primary">
+          {summary.title?.trim() || plainOf(summary.preview)}
+        </span>
+        {found && summary.title?.trim() && (
+          <span className="truncate text-[12px] text-text-secondary">{summary.preview}</span>
+        )}
+        <span className="text-[12px] tabular-nums text-text-tertiary">
+          {grouped ? timeOf(summary.started_at) : when(summary.started_at)}
+          {(summary.duration_s ?? 0) > 0 && (
+            <span className="ml-4">{clock(summary.duration_s ?? 0)}</span>
+          )}
+          {inFolder === '' && summary.folder && (
+            <span className="ml-4 inline-flex items-center gap-1">
+              <Folder size={11} aria-hidden />
+              {summary.folder}
+            </span>
+          )}
+        </span>
+        {tidying?.id === summary.id && tidyingBar}
+        {making?.id === summary.id && makingBar}
+      </button>
+      {summary.has_minutes && (
+        <span className="text-[12px] text-text-tertiary">{t('meeting.tabMinutes')}</span>
+      )}
+      <button
+        type="button"
+        aria-label={t('meeting.minutes')}
+        title={t('meeting.minutes')}
+        disabled={making !== null || tidying !== null}
+        onClick={() => pickTemplate(summary)}
+        className="btn-quiet px-2.5 disabled:opacity-50"
+      >
+        <ScrollText size={15} className={making?.id === summary.id ? 'animate-pulse' : undefined} />
+      </button>
+      <div ref={moving === summary.id ? movingRef : undefined} className="relative flex">
+        <button
+          type="button"
+          aria-label={t('meeting.folder')}
+          title={t('meeting.folder')}
+          aria-expanded={moving === summary.id}
+          onClick={() => setMoving(moving === summary.id ? null : summary.id)}
+          className="cursor-pointer border-none bg-transparent p-1 text-text-tertiary opacity-50 transition-opacity hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
+        >
+          <FolderInput size={14} />
+        </button>
+        {moving === summary.id && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-20 mt-1 flex min-w-[180px] flex-col rounded-md border border-border bg-bg-elevated py-1 shadow-lg"
+          >
+            {folders
+              .filter((name) => name !== (summary.folder ?? ''))
+              .map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => moveTo(summary, name)}
+                  className={item}
+                >
+                  {name}
+                </button>
+              ))}
+            {summary.folder && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => moveTo(summary, '')}
+                className={item}
+              >
+                {t('meeting.noFolder')}
+              </button>
+            )}
+            <input
+              aria-label={t('meeting.newFolder')}
+              placeholder={t('meeting.newFolder')}
+              maxLength={40}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && event.currentTarget.value.trim())
+                  moveTo(summary, event.currentTarget.value)
+                if (event.key === 'Escape') setMoving(null)
+              }}
+              className="mx-2 my-1 h-7 rounded-sm border border-border bg-bg-primary px-2 text-[12px] outline-none focus:border-accent"
+            />
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label={t('meeting.deleteMeeting')}
+        onClick={() => removePast(summary)}
+        className="cursor-pointer border-none bg-transparent p-1 text-text-tertiary opacity-50 transition-opacity hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
+      >
+        <Trash2 size={14} />
+      </button>
+    </li>
+  )
   return (
     <section className="flex flex-col gap-5">
+      {folderOffer && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px]"
+        >
+          <FolderInput size={14} className="text-text-tertiary" aria-hidden />
+          <span className="min-w-0 flex-1">
+            {t('meeting.folderOffer', { title: folderOffer.title, folder: folderOffer.folder })}
+          </span>
+          <button
+            type="button"
+            className="btn-quiet px-2.5 text-accent"
+            onClick={() => acceptFolder(folderOffer)}
+          >
+            {t('meeting.folderOfferYes')}
+          </button>
+          <button type="button" className="btn-quiet px-2.5" onClick={() => setFolderOffer(null)}>
+            {t('meeting.folderOfferNo')}
+          </button>
+        </div>
+      )}
       {detail && (
         <div>
           <button
@@ -1270,7 +1782,7 @@ export function MeetingCard() {
                           if (event.key === 'Enter') fewer(Number(event.currentTarget.value))
                           if (event.key === 'Escape') setCounting(false)
                         }}
-                        className="h-[18px] w-10 rounded-[4px] border border-border bg-bg-primary px-1 text-[12px] tabular-nums outline-none"
+                        className="h-[18px] w-10 rounded-xs border border-border bg-bg-primary px-1 text-[12px] tabular-nums outline-none"
                       />
                     ) : (
                       <button
@@ -1338,7 +1850,7 @@ export function MeetingCard() {
         )}
         {busy && (
           <div className="flex flex-wrap items-center gap-3">
-            <span className="flex items-center gap-2 text-[20px] font-semibold tabular-nums">
+            <span className="flex items-center gap-2 text-[22px] font-semibold tabular-nums">
               <span
                 className={`h-2.5 w-2.5 rounded-full transition-transform ${
                   paused ? 'bg-text-tertiary' : 'bg-error'
@@ -1422,17 +1934,9 @@ export function MeetingCard() {
               title={t('meeting.polish')}
               className="btn-quiet px-2.5 disabled:opacity-50"
             >
-              <Sparkles size={16} className={going ? 'animate-pulse' : undefined} />
+              <PenLine size={16} className={going ? 'animate-pulse' : undefined} />
             </button>
-            <button
-              type="button"
-              onClick={() => void copyText(plainOf(shared))}
-              aria-label={t('meeting.copy')}
-              title={t('meeting.copy')}
-              className="btn-quiet px-2.5"
-            >
-              <Copy size={16} />
-            </button>
+            <CopyButton text={() => plainOf(shared)} label={t('meeting.copy')} size={16} />
             <button
               type="button"
               onClick={() =>
@@ -1444,55 +1948,57 @@ export function MeetingCard() {
             >
               <Download size={16} />
             </button>
-            <button
-              type="button"
-              aria-label={t('meeting.more')}
-              title={t('meeting.more')}
-              aria-expanded={showMore}
-              onClick={() => setShowMore(!showMore)}
-              className="btn-quiet px-2.5"
-            >
-              <Ellipsis size={16} />
-            </button>
-            {showMore && (
-              <div
-                role="menu"
-                onClick={() => setShowMore(false)}
-                className="absolute right-0 top-full z-20 mt-1 flex min-w-[168px] flex-col rounded-[8px] border border-border bg-bg-elevated py-1 shadow-lg"
+            <div ref={moreRef} className="relative flex">
+              <button
+                type="button"
+                aria-label={t('meeting.more')}
+                title={t('meeting.more')}
+                aria-expanded={showMore}
+                onClick={() => setShowMore(!showMore)}
+                className="btn-quiet px-2.5"
               >
-                {before !== undefined && (
-                  <button type="button" role="menuitem" onClick={unpolish} className={item}>
-                    {t('meeting.unpolish')}
-                  </button>
-                )}
-                {kept && id && (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => void saveMeetingAudio(id, t('meeting.audioFileName'), kept)}
-                      className={item}
-                    >
-                      {t('meeting.saveAudio')}
-                    </button>
-                    <button type="button" role="menuitem" onClick={again} className={item}>
-                      {t('meeting.again')}
-                    </button>
-                    <button type="button" role="menuitem" onClick={forget} className={item}>
-                      {t('meeting.deleteAudio')}
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={removeThis}
-                  className={`${item} text-error`}
+                <Ellipsis size={16} />
+              </button>
+              {showMore && (
+                <div
+                  role="menu"
+                  onClick={() => setShowMore(false)}
+                  className="absolute right-0 top-full z-20 mt-1 flex min-w-[168px] flex-col rounded-md border border-border bg-bg-elevated py-1 shadow-lg"
                 >
-                  {t('meeting.deleteThis')}
-                </button>
-              </div>
-            )}
+                  {before !== undefined && (
+                    <button type="button" role="menuitem" onClick={unpolish} className={item}>
+                      {t('meeting.unpolish')}
+                    </button>
+                  )}
+                  {kept && id && (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void saveMeetingAudio(id, t('meeting.audioFileName'), kept)}
+                        className={item}
+                      >
+                        {t('meeting.saveAudio')}
+                      </button>
+                      <button type="button" role="menuitem" onClick={again} className={item}>
+                        {t('meeting.again')}
+                      </button>
+                      <button type="button" role="menuitem" onClick={forget} className={item}>
+                        {t('meeting.deleteAudio')}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={removeThis}
+                    className={`${item} text-error`}
+                  >
+                    {t('meeting.deleteThis')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </header>
@@ -1526,7 +2032,7 @@ export function MeetingCard() {
                   setTarget(event.target.value)
                   rememberChoice(TRANSLATE_TO_KEY, event.target.value)
                 }}
-                className="h-8 rounded-[8px] border border-border bg-bg-primary px-2 text-[12px] text-text-primary outline-none"
+                className="h-8 rounded-md border border-border bg-bg-primary px-2 text-[12px] text-text-primary outline-none"
               >
                 {TARGET_LANGUAGES.map((language) => (
                   <option key={language.value} value={language.value}>
@@ -1583,7 +2089,7 @@ export function MeetingCard() {
                 {voices.map((name) => (
                   <li
                     key={name}
-                    className="flex items-center gap-1.5 rounded-[8px] border border-border px-2.5 py-1 text-[12px]"
+                    className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[12px]"
                   >
                     {name}
                     <button
@@ -1592,7 +2098,7 @@ export function MeetingCard() {
                       onClick={() =>
                         void Promise.resolve(forgetSpeaker(name))
                           .then((all) => setVoices(all ?? []))
-                          .catch(() => {})
+                          .catch(() => toast.error(t('meeting.error.voice')))
                       }
                       className="cursor-pointer border-none bg-transparent p-0 text-text-tertiary hover:text-error"
                     >
@@ -1652,7 +2158,7 @@ export function MeetingCard() {
                       else event.currentTarget.textContent = paragraph.text
                       set({ editing: null })
                     }}
-                    className="rounded-[3px] outline-none focus:bg-bg-secondary"
+                    className="rounded-xs outline-none focus:bg-bg-secondary"
                   >
                     {paragraph.text}
                   </p>
@@ -1672,7 +2178,7 @@ export function MeetingCard() {
           {phase === 'recording' && paused && quietPaused !== null && (
             <div
               role="alert"
-              className="mt-3 flex flex-wrap items-center gap-2 rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] text-text-primary"
+              className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] text-text-primary"
             >
               <span className="flex-1">{t('meeting.quietPaused', { count: quietPaused })}</span>
               <button type="button" className="btn-quiet px-2.5" onClick={pause}>
@@ -1717,7 +2223,7 @@ export function MeetingCard() {
                 disabled={stopping}
                 aria-label={t('meeting.stopFile')}
                 title={t('meeting.stopFile')}
-                className="ml-3 inline-flex h-6 w-6 items-center justify-center rounded-[6px] align-middle text-text-secondary hover:bg-bg-secondary hover:text-text-primary disabled:opacity-40"
+                className="ml-3 inline-flex h-6 w-6 items-center justify-center rounded-sm align-middle text-text-secondary hover:bg-bg-secondary hover:text-text-primary disabled:opacity-40"
               >
                 <Square size={12} />
               </button>
@@ -1777,20 +2283,93 @@ export function MeetingCard() {
           </button>
         </label>
       )}
-      {list && folders.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {['', ...folders].map((name) => (
-            <button
-              key={name}
-              type="button"
-              aria-pressed={inFolder === name}
-              onClick={() => pickFolder(name)}
-              className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-transparent px-3 text-[12px] text-text-secondary hover:text-text-primary aria-pressed:border-accent aria-pressed:text-accent"
+      {list && past.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {folders.length > 0 &&
+            ['', ...folders].map((name) =>
+              renaming === name && name !== '' ? (
+                <input
+                  key={name}
+                  autoFocus
+                  defaultValue={name}
+                  maxLength={40}
+                  aria-label={t('meeting.renameFolder')}
+                  onBlur={(event) => {
+                    if (event.currentTarget.dataset.cancelled !== '1')
+                      renameFolder(name, event.currentTarget.value)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') renameFolder(name, event.currentTarget.value)
+                    if (event.key === 'Escape') {
+                      // Leaving the field as it goes would otherwise take the name typed.
+                      event.currentTarget.dataset.cancelled = '1'
+                      setRenaming(null)
+                    }
+                  }}
+                  className="h-7 w-36 rounded-full border border-accent bg-transparent px-3 text-[12px] text-text-primary outline-none"
+                />
+              ) : (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed={inFolder === name}
+                  onClick={() => pickFolder(name)}
+                  onDoubleClick={() => name !== '' && setRenaming(name)}
+                  onContextMenu={(event) =>
+                    name !== '' &&
+                    openContextMenu(event, [
+                      { label: t('meeting.renameFolder'), onSelect: () => setRenaming(name) },
+                      {
+                        label: t('meeting.removeFolder'),
+                        danger: true,
+                        onSelect: () => removeFolder(name),
+                      },
+                    ])
+                  }
+                  className="flex h-7 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-transparent px-3 text-[12px] text-text-secondary hover:text-text-primary aria-pressed:border-accent aria-pressed:text-accent"
+                >
+                  {name !== '' && <Folder size={12} aria-hidden />}
+                  {name === '' ? t('meeting.allFolders') : name}
+                </button>
+              ),
+            )}
+          {inFolder !== '' && renaming === null && (
+            <>
+              <button
+                type="button"
+                aria-label={t('meeting.renameFolder')}
+                title={t('meeting.renameFolder')}
+                onClick={() => setRenaming(inFolder)}
+                className="btn-quiet px-1.5"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label={t('meeting.removeFolder')}
+                title={t('meeting.removeFolder')}
+                onClick={() => removeFolder(inFolder)}
+                className="btn-quiet px-1.5 hover:text-error"
+              >
+                <FolderMinus size={13} />
+              </button>
+            </>
+          )}
+          <label className="ml-auto flex items-center gap-1.5 text-[12px] text-text-tertiary">
+            <ArrowDownUp size={12} aria-hidden />
+            <select
+              aria-label={t('meeting.order')}
+              value={order}
+              onChange={(event) => chooseOrder(event.target.value as MeetingOrder)}
+              className="cursor-pointer border-none bg-transparent text-[12px] text-text-secondary outline-none"
             >
-              {name !== '' && <Folder size={12} aria-hidden />}
-              {name === '' ? t('meeting.allFolders') : name}
-            </button>
-          ))}
+              {MEETING_ORDERS.map((each) => (
+                <option key={each} value={each}>
+                  {t(`meeting.orderBy.${each}`)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       )}
       {list && answer !== null && (
@@ -1831,117 +2410,37 @@ export function MeetingCard() {
             className="m-0 list-none divide-y divide-border border-y border-border p-0"
             aria-label={t('meeting.pastList')}
           >
-            {(
-              found ?? past.filter((each) => inFolder === '' || (each.folder ?? '') === inFolder)
-            ).map((summary) => (
-              <li key={summary.id} className="group flex items-center gap-3 py-3">
+            {visible.slice(0, shownCount).map((entry) =>
+              entry.kind === 'day' ? (
+                <li
+                  key={`day-${entry.day}`}
+                  className="pb-1.5 pt-4 text-[11px] font-medium text-text-tertiary first:pt-1"
+                >
+                  {entry.label}
+                </li>
+              ) : (
+                meetingRow(entry.summary)
+              ),
+            )}
+            {inView.length === 0 && (
+              <li className="py-10 text-center text-[13px] text-text-tertiary">
+                {t('meeting.noMatches')}
+              </li>
+            )}
+            {visible.length > shownCount && (
+              <li className="flex justify-center py-3">
                 <button
                   type="button"
-                  onClick={() => open(summary)}
-                  className="flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 border-none bg-transparent p-0 text-left"
+                  onClick={() => setShownCount((count) => count + PAGE)}
+                  className="btn-quiet px-3 text-[12px]"
                 >
-                  <span className="truncate text-[13px] font-medium text-text-primary">
-                    {summary.title?.trim() || plainOf(summary.preview)}
-                  </span>
-                  {found && summary.title?.trim() && (
-                    <span className="truncate text-[12px] text-text-secondary">
-                      {summary.preview}
-                    </span>
-                  )}
-                  <span className="text-[12px] tabular-nums text-text-tertiary">
-                    {when(summary.started_at)}
-                    {(summary.duration_s ?? 0) > 0 && (
-                      <span className="ml-4">{clock(summary.duration_s ?? 0)}</span>
-                    )}
-                    {inFolder === '' && summary.folder && (
-                      <span className="ml-4 inline-flex items-center gap-1">
-                        <Folder size={11} aria-hidden />
-                        {summary.folder}
-                      </span>
-                    )}
-                  </span>
-                  {tidying?.id === summary.id && tidyingBar}
-                  {making?.id === summary.id && makingBar}
-                </button>
-                {summary.has_minutes && (
-                  <span className="text-[12px] text-text-tertiary">{t('meeting.tabMinutes')}</span>
-                )}
-                <button
-                  type="button"
-                  aria-label={t('meeting.minutes')}
-                  title={t('meeting.minutes')}
-                  disabled={making !== null || tidying !== null}
-                  onClick={() => pickTemplate(summary)}
-                  className="btn-quiet px-2.5 disabled:opacity-50"
-                >
-                  <ScrollText
-                    size={15}
-                    className={making?.id === summary.id ? 'animate-pulse' : undefined}
-                  />
-                </button>
-                <div className="relative flex">
-                  <button
-                    type="button"
-                    aria-label={t('meeting.folder')}
-                    title={t('meeting.folder')}
-                    aria-expanded={moving === summary.id}
-                    onClick={() => setMoving(moving === summary.id ? null : summary.id)}
-                    className="cursor-pointer border-none bg-transparent p-1 text-text-tertiary opacity-0 transition-opacity hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100 aria-expanded:opacity-100"
-                  >
-                    <FolderInput size={14} />
-                  </button>
-                  {moving === summary.id && (
-                    <div
-                      role="menu"
-                      className="absolute right-0 top-full z-20 mt-1 flex min-w-[180px] flex-col rounded-[8px] border border-border bg-bg-elevated py-1 shadow-lg"
-                    >
-                      {folders
-                        .filter((name) => name !== (summary.folder ?? ''))
-                        .map((name) => (
-                          <button
-                            key={name}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => moveTo(summary, name)}
-                            className={item}
-                          >
-                            {name}
-                          </button>
-                        ))}
-                      {summary.folder && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => moveTo(summary, '')}
-                          className={item}
-                        >
-                          {t('meeting.noFolder')}
-                        </button>
-                      )}
-                      <input
-                        aria-label={t('meeting.newFolder')}
-                        placeholder={t('meeting.newFolder')}
-                        maxLength={40}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && event.currentTarget.value.trim())
-                            moveTo(summary, event.currentTarget.value)
-                          if (event.key === 'Escape') setMoving(null)
-                        }}
-                        className="mx-2 my-1 h-7 rounded-[6px] border border-border bg-bg-primary px-2 text-[12px] outline-none focus:border-accent"
-                      />
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  aria-label={t('meeting.deleteMeeting')}
-                  onClick={() => removePast(summary)}
-                  className="cursor-pointer border-none bg-transparent p-1 text-text-tertiary opacity-0 transition-opacity hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
-                >
-                  <Trash2 size={14} />
+                  {t('meeting.showMore', {
+                    count: visible.slice(shownCount).filter((each) => each.kind === 'meeting')
+                      .length,
+                  })}
                 </button>
               </li>
-            ))}
+            )}
           </ul>
         ) : (
           <div className="flex flex-col items-center gap-2 border-y border-border py-14 text-center">
@@ -1954,12 +2453,26 @@ export function MeetingCard() {
 
       {detail && result !== null && (
         <>
-          <div role="tablist" className="-mb-1 flex gap-6 border-b border-border">
+          <div
+            role="tablist"
+            className="-mb-1 flex gap-6 border-b border-border"
+            onKeyDown={(event) => {
+              const all = ['text', 'overview', 'minutes'] as const
+              const by = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+              if (!by) return
+              event.preventDefault()
+              const next = all[(all.indexOf(tab) + by + all.length) % all.length]
+              setTab(next)
+              event.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus()
+            }}
+          >
             {(['text', 'overview', 'minutes'] as const).map((each) => (
               <button
                 key={each}
                 type="button"
                 role="tab"
+                data-tab={each}
+                tabIndex={tab === each ? 0 : -1}
                 aria-selected={tab === each}
                 onClick={() => setTab(each)}
                 className={`-mb-px cursor-pointer border-0 border-b-2 border-solid bg-transparent px-0 pb-2 text-[13px] ${
@@ -1989,6 +2502,42 @@ export function MeetingCard() {
                 onPosition={setPosition}
               />
             )}
+            {kept &&
+              id &&
+              (cuttingAt !== null ? (
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-text-secondary">
+                  <span>{t('meeting.cutFromHereAsk', { time: clock(cuttingAt) })}</span>
+                  <button
+                    type="button"
+                    className="btn-quiet px-2.5 text-error"
+                    onClick={() => {
+                      const at = cuttingAt
+                      setCuttingAt(null)
+                      void cutAtPlayer(at * 1000)
+                    }}
+                  >
+                    {t('meeting.cutFromHereConfirm')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-quiet px-2.5"
+                    onClick={() => setCuttingAt(null)}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-quiet w-fit px-2.5 text-[12px] disabled:opacity-50"
+                  disabled={cutLineAt(Math.floor(position) * 1000) === null}
+                  title={t('meeting.cutFromHereHint')}
+                  onClick={() => setCuttingAt(Math.floor(position))}
+                >
+                  <Scissors size={12} />
+                  {t('meeting.cutFromHere', { time: clock(Math.floor(position)) })}
+                </button>
+              ))}
             {kept &&
               lastWordsMs !== null &&
               duration * 1000 > lastWordsMs + SILENT_TAIL_MS &&
@@ -2063,7 +2612,7 @@ export function MeetingCard() {
               <div
                 role="group"
                 aria-label={t('meeting.namesFound')}
-                className="space-y-1.5 rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2.5 text-[12px]"
+                className="space-y-1.5 rounded-md border border-border bg-bg-secondary/40 px-3 py-2.5 text-[12px]"
               >
                 <div className="text-text-secondary">{t('meeting.namesFound')}</div>
                 {namesFound.list.map((found) => {
@@ -2118,37 +2667,62 @@ export function MeetingCard() {
                     aria-label={`${label} ${number}`}
                     placeholder={`${label} ${number}`}
                     style={{ color: speakerColor(number) }}
-                    className="h-8 w-[130px] rounded-[8px] border border-border bg-bg-primary px-2.5 text-[12px] font-medium outline-none placeholder:font-normal placeholder:text-text-tertiary"
+                    className="h-8 w-[130px] rounded-md border border-border bg-bg-primary px-2.5 text-[12px] font-medium outline-none placeholder:font-normal placeholder:text-text-tertiary"
                   />
                 ))}
               </div>
             )}
-            <Transcript
-              text={written ?? ''}
-              names={names}
-              speakerLabel={label}
-              label={t('meeting.result')}
-              onSeek={kept ? (seconds, play) => player.current?.seek(seconds, play) : undefined}
-              position={kept ? position : undefined}
-              times={times}
-              onEdit={correct}
-              before={comparing ? before : undefined}
-              onSpeaker={giveTo}
-              allLabel={t('meeting.allOfSpeaker')}
-              onName={(number, name) => {
-                set({ names: { ...names, [number]: name } })
-                nameKept(number, name)
-              }}
-              nameLabel={t('meeting.speakerName')}
-              onCut={cut}
-              cutLabel={t('meeting.cut')}
-              cutConfirmLabel={t('meeting.cutConfirm')}
-              onCutAfter={id ? (line) => void cutAfter(line) : undefined}
-              cutAfterLabel={t('meeting.cutAfter')}
-              cutAfterConfirmLabel={
-                kept ? t('meeting.cutAfterConfirmSound') : t('meeting.cutAfterConfirm')
-              }
+            <FindInText
+              ref={finder}
+              within={textBox}
+              version={written ?? ''}
+              speakers={speakerNumbers.map((number) => ({
+                number,
+                name: names[number]?.trim() || `${label} ${number}`,
+              }))}
             />
+            {!editHintSeen && (
+              <p className="m-0 flex items-center gap-2 text-[12px] text-text-tertiary">
+                <MousePointerClick size={13} aria-hidden />
+                <span className="flex-1">{t('meeting.editHint')}</span>
+                <button
+                  type="button"
+                  aria-label={t('common.close')}
+                  onClick={seeEditHint}
+                  className="btn-quiet px-1"
+                >
+                  <X size={12} />
+                </button>
+              </p>
+            )}
+            <div ref={textBox}>
+              <Transcript
+                text={written ?? ''}
+                names={names}
+                speakerLabel={label}
+                label={t('meeting.result')}
+                onSeek={kept ? (seconds, play) => player.current?.seek(seconds, play) : undefined}
+                position={kept ? position : undefined}
+                times={times}
+                onEdit={correct}
+                before={comparing ? before : undefined}
+                onSpeaker={giveTo}
+                allLabel={t('meeting.allOfSpeaker')}
+                onName={(number, name) => {
+                  set({ names: { ...names, [number]: name } })
+                  nameKept(number, name)
+                }}
+                nameLabel={t('meeting.speakerName')}
+                onCut={cut}
+                cutLabel={t('meeting.cut')}
+                cutConfirmLabel={t('meeting.cutConfirm')}
+                onCutAfter={id ? (line) => void cutAfter(line) : undefined}
+                cutAfterLabel={t('meeting.cutAfter')}
+                cutAfterConfirmLabel={
+                  kept ? t('meeting.cutAfterConfirmSound') : t('meeting.cutAfterConfirm')
+                }
+              />
+            </div>
           </div>
           <div hidden={tab !== 'overview'}>
             {written !== null && written.trim() !== '' && (

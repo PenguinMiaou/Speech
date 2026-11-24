@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Speech",
-    "tagline": "Saisie vocale IA"
+    "tagline": "Saisie vocale"
   },
   "nav": {
     "home": "Accueil",
@@ -9,7 +9,10 @@
     "ask": "Demander",
     "settings": "Paramètres",
     "history": "Historique",
-    "mainNavigation": "Navigation principale"
+    "mainNavigation": "Navigation principale",
+    "toTop": "Haut de page",
+    "meetingRecording": "Réunion en cours d’enregistrement",
+    "meetingPaused": "Enregistrement en pause"
   },
   "ask": {
     "title": "Demander",
@@ -67,7 +70,13 @@
     "wordsDictated": "Mots dictés",
     "timeSaved": "Gagné par rapport à la frappe",
     "speakWith": "Appuyez sur {{hotkey}} et parlez",
-    "figures": "Vos chiffres"
+    "figures": "Vos chiffres",
+    "shortcuts": "Raccourcis",
+    "recentMeetings": "Réunions récentes",
+    "startMeeting": "Démarrer une réunion",
+    "noMeetings": "Aucune réunion enregistrée pour l'instant.",
+    "untitledMeeting": "Réunion sans titre",
+    "meetingMinutes": "{{count}} min"
   },
   "onboarding": {
     "speakToWrite": "Parlez pour écrire — transformez votre voix en texte amélioré en temps réel",
@@ -109,7 +118,9 @@
       "permissionsSub": "Autorisez seulement ce que votre configuration utilise",
       "getStarted": "Commencer",
       "tryIt": "Try it",
-      "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
+      "tryItSub": "Read one sentence and see how slips and lists get cleaned up",
+      "more": "Réunions et questions",
+      "moreSub": "Deux autres choses que Speech fait en plus de la dictée"
     },
     "permissions": {
       "subtitle": "Speech demande l’accès seulement quand une fonction en a besoin.",
@@ -158,6 +169,16 @@
       "again": "Réessayer",
       "nameExample": "Momo",
       "nameHint": "Dites d’abord « {{name}} », la suite est une instruction. « {{name}}, traduis ça en anglais » modifie le texte qui vient d’être saisi. Laissez vide pour ne pas l’utiliser"
+    },
+    "more": {
+      "meetingTitle": "Enregistrer des réunions",
+      "meetingDesc": "Enregistrez une réunion ou un appel : la transcription s'affiche au fil de la parole, puis un compte rendu en est tiré. Commencez depuis Réunions dans la barre latérale. Quand un appel démarre, Speech peut aussi proposer de l'enregistrer.",
+      "record": "Enregistrer",
+      "transcript": "Transcription",
+      "minutes": "Compte rendu",
+      "askTitle": "Poser une question à voix haute",
+      "askDesc": "Appuyez sur le raccourci des questions et posez votre question ; la réponse s'ouvre dans un petit panneau.",
+      "askNoHotkey": "Définissez un raccourci pour les questions dans Paramètres, section Dictée."
     }
   },
   "capsule": {
@@ -472,7 +493,16 @@
     "moreShortcuts": "Autres raccourcis",
     "meetingQuietPause": "Mettre en pause après combien de silence",
     "meetingQuietPauseNever": "Jamais",
-    "meetingQuietPauseMinutes": "{{count}} min"
+    "meetingQuietPauseMinutes": "{{count}} min",
+    "meetingFolderSuggest": "Proposer un dossier après chaque réunion",
+    "meetingFolderSuggestHint": "Le modèle de révision choisit l’un de vos dossiers d’après le titre et le début de la réunion, et quelques titres de chaque dossier ; on vous demande d’abord.",
+    "searchPlaceholder": "Rechercher dans les réglages",
+    "searchNoResults": "Aucun réglage correspondant",
+    "leaveTitle": "Enregistrer les modifications ?",
+    "leaveBody": "Certains réglages ont été modifiés sans être enregistrés. Enregistrez-les avant de partir, ou abandonnez-les.",
+    "leaveSave": "Enregistrer et quitter",
+    "leaveDiscard": "Abandonner",
+    "leaveStay": "Rester"
   },
   "contextFamilies": {
     "email": "E-mail",
@@ -672,7 +702,14 @@
       "partial": "Résultat partiel",
       "fallback": "Sortie de secours",
       "clipboardFallback": "Copié dans le presse-papiers"
-    }
+    },
+    "copyEntry": "Copier le texte : {{text}}",
+    "filterByApp": "Filtrer par application",
+    "allApps": "Toutes les applications",
+    "loadMore": "Charger plus",
+    "loadingMore": "Chargement…",
+    "failedToLoadMore": "Impossible de charger plus d'historique",
+    "clearFilters": "Effacer la recherche et le filtre"
   },
   "error": {
     "somethingWentWrong": "Un problème est survenu",
@@ -686,7 +723,10 @@
     "cancel": "Annuler",
     "reset": "Réinitialiser",
     "connectionFail": "Échec de la connexion",
-    "saveFailed": "Impossible d’enregistrer les paramètres. Veuillez réessayer."
+    "saveFailed": "Impossible d’enregistrer les paramètres. Veuillez réessayer.",
+    "undo": "Annuler",
+    "copied": "Copié",
+    "copyFailed": "Copie impossible"
   },
   "recordingLimits": {
     "auto": "Automatique (recommandé, jusqu’à {{duration}})",
@@ -834,7 +874,19 @@
       "someFailed": "Certains fichiers n’ont pas pu être transcrits.",
       "timesDownload": "Le modèle n’a pas pu être téléchargé",
       "overview": "L’aperçu n’a pas pu être créé",
-      "trim": "L’enregistrement n’a pas pu être coupé."
+      "trim": "L’enregistrement n’a pas pu être coupé.",
+      "delete": "Impossible de supprimer la réunion",
+      "audioDelete": "Impossible de supprimer l’enregistrement",
+      "undo": "Impossible d’annuler",
+      "folder": "Impossible de le placer dans le dossier",
+      "languages": "Impossible de changer les langues",
+      "pick": "Impossible d’ouvrir le fichier",
+      "open": "Impossible d’ouvrir la réunion",
+      "dictionary": "Impossible d’ajouter le mot au dictionnaire",
+      "voice": "Impossible d’oublier la voix",
+      "save": "Impossible d’enregistrer la réunion",
+      "style": "Impossible de retirer la règle",
+      "questions": "Impossible d’enregistrer les questions"
     },
     "live": "Texte en direct",
     "listening": "À l’écoute. Le texte arrive environ toutes les quinze secondes",
@@ -972,12 +1024,59 @@
     "quietPaused": "Rien n’a été dit pendant {{count}} min, l’enregistrement est en pause.",
     "cutAfter": "Couper d’ici à la fin",
     "cutAfterConfirm": "Supprimer ceci et tout ce qui suit",
-    "cutAfterConfirmSound": "Supprimer ceci et tout ce qui suit, avec l’enregistrement ; irréversible",
+    "cutAfterConfirmSound": "Supprimer ceci et tout ce qui suit, avec l’enregistrement",
     "cutSilentTail": "Couper les {{minutes}} min de silence à la fin",
-    "cutSilentTailAsk": "Couper l’enregistrement juste après les derniers mots ({{time}}) ? Irréversible.",
-    "cutSilentTailConfirm": "Couper"
+    "cutSilentTailAsk": "Couper l’enregistrement juste après les derniers mots ({{time}}) ?",
+    "cutSilentTailConfirm": "Couper",
+    "cutFromHere": "Couper de {{time}} à la fin",
+    "cutFromHereAsk": "Supprimer l’enregistrement et le texte à partir de {{time}} ?",
+    "cutFromHereConfirm": "Couper",
+    "cutFromHereHint": "Lisez ou faites glisser jusqu’à la fin de la réunion, puis coupez à partir de là",
+    "folderOffer": "Mettre « {{title}} » dans le dossier « {{folder}} » ?",
+    "folderOfferYes": "L’y mettre",
+    "folderOfferNo": "Non",
+    "deleted": "« {{title}} » supprimé",
+    "audioDeleted": "Enregistrement supprimé",
+    "cutDone": "Coupé",
+    "today": "Aujourd’hui",
+    "yesterday": "Hier",
+    "noMatches": "Aucune réunion ne correspond",
+    "showMore": "Afficher {{count}} de plus",
+    "renameFolder": "Renommer le dossier",
+    "removeFolder": "Retirer le dossier",
+    "folderRemoved": "Dossier « {{folder}} » retiré ; ses réunions sont conservées",
+    "order": "Ordre",
+    "orderBy": {
+      "newest": "Plus récentes",
+      "oldest": "Plus anciennes",
+      "longest": "Plus longues",
+      "title": "Par titre"
+    },
+    "skipBack": "Reculer de {{seconds}} secondes",
+    "skipOn": "Avancer de {{seconds}} secondes",
+    "rate": "Vitesse {{rate}}×",
+    "findInText": "Rechercher dans le texte",
+    "foundAt": "{{at}} sur {{count}}",
+    "foundNone": "Introuvable",
+    "findPrevious": "Précédent",
+    "findNext": "Suivant",
+    "jumpToSpeaker": "Aller à un intervenant",
+    "previousTurn": "Intervention précédente",
+    "nextTurn": "Intervention suivante",
+    "editHint": "Double-cliquez sur des mots pour les modifier, ou sur un intervenant pour attribuer la section à quelqu’un d’autre ou le nommer"
   },
   "whatsNew": {
     "title": "Nouveautés de {{version}}"
+  },
+  "contextMenu": {
+    "cut": "Couper",
+    "copy": "Copier",
+    "paste": "Coller",
+    "selectAll": "Tout sélectionner",
+    "open": "Ouvrir",
+    "copyAll": "Copier le texte"
+  },
+  "offer": {
+    "closesByItself": "Sans réponse, ce message se ferme tout seul au bout d'une minute."
   }
 }

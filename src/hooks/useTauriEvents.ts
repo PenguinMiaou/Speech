@@ -111,8 +111,13 @@ export function useTauriEvents() {
         // Don't clear pipelineError here — CapsuleError auto-resets after 2.5s.
         // Clearing here would swallow errors from failed start() calls that
         // transition Recording → Idle in rapid succession.
+        // The newest entries are read again; older ones loaded with "load more" stay.
         getHistory(200, 0)
-          .then(setHistory)
+          .then((newest) => {
+            const shown = useAppStore.getState().history
+            const seen = new Set(newest.map((entry) => entry.id))
+            setHistory([...newest, ...shown.filter((entry) => !seen.has(entry.id))])
+          })
           .catch((err) => {
             console.error('Failed to refresh history:', err)
           })

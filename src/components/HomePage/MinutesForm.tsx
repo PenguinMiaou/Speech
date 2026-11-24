@@ -19,7 +19,7 @@ export function MinutesForm() {
       <div
         role="radiogroup"
         aria-label={t('meeting.length')}
-        className="flex rounded-[8px] border border-border p-0.5 text-[12px]"
+        className="flex rounded-md border border-border p-0.5 text-[12px]"
       >
         {[false, true].map((value) => (
           <button
@@ -31,7 +31,7 @@ export function MinutesForm() {
               setFull(value)
               setMinutesFull(value)
             }}
-            className={`rounded-[6px] px-2 py-1 ${full === value ? 'bg-bg-secondary text-text-primary' : 'text-text-tertiary'}`}
+            className={`rounded-sm px-2 py-1 ${full === value ? 'bg-bg-secondary text-text-primary' : 'text-text-tertiary'}`}
           >
             {t(value ? 'meeting.lengthFull' : 'meeting.lengthBrief')}
           </button>
@@ -45,7 +45,7 @@ export function MinutesForm() {
           setLanguage(event.target.value)
           setMinutesLanguage(event.target.value)
         }}
-        className="h-[30px] rounded-[8px] border border-border bg-bg-primary px-2 text-[12px] text-text-primary outline-none"
+        className="h-[30px] rounded-md border border-border bg-bg-primary px-2 text-[12px] text-text-primary outline-none"
       >
         <option value="">{t('meeting.minutesLanguageSame')}</option>
         {TARGET_LANGUAGES.map((option) => (

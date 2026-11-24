@@ -9,6 +9,7 @@ import { SttSetupStep } from './SttSetupStep'
 import { LlmConnectionForm } from '../Settings/LlmConnectionForm'
 import { PermissionsStep } from './PermissionsStep'
 import { TryItStep } from './TryItStep'
+import { MoreStep } from './MoreStep'
 import { slideRight } from '../../lib/animations'
 
 const STEPS = [
@@ -37,6 +38,11 @@ const STEPS = [
     subtitleKey: 'onboarding.steps.tryItSub',
     Body: TryItStep,
     wide: true,
+  },
+  {
+    titleKey: 'onboarding.steps.more',
+    subtitleKey: 'onboarding.steps.moreSub',
+    Body: MoreStep,
   },
 ]
 

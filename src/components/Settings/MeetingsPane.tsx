@@ -17,6 +17,16 @@ export function MeetingsPane() {
         onChange={(checked) => updateConfig({ meeting_detect: checked })}
         label={t('settings.meetingDetect')}
       />
+      <div className="space-y-1">
+        <Toggle
+          checked={config.meeting_folder_suggest}
+          onChange={(checked) => updateConfig({ meeting_folder_suggest: checked })}
+          label={t('settings.meetingFolderSuggest')}
+        />
+        <p className="m-0 text-[12px] text-text-tertiary">
+          {t('settings.meetingFolderSuggestHint')}
+        </p>
+      </div>
       <div className="flex items-center justify-between gap-3">
         <span className="text-[13px] text-text-primary">{t('settings.meetingQuietPause')}</span>
         <div className="w-44 shrink-0">

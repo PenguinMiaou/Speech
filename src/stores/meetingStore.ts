@@ -36,6 +36,7 @@ import {
   type MeetingSegment,
   type SpeakerNameFound,
 } from '../lib/tauri'
+import { toast } from '../components/toast-service'
 import {
   renameSpeakers,
   saidBy,
@@ -205,40 +206,45 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
   if (state.voicesAtHand && Object.keys(named).length > 0) {
     void Promise.resolve(speakerConfirm(named)).catch(() => {})
   }
-  return Promise.resolve(
-    meetingSave({
-      id,
-      started_at: startedAt,
-      transcript,
-      notes: state.notes,
-      minutes: state.minutes ?? '',
-      answers: state.answers,
-      overview: state.overview,
-      names: state.names,
-      title: state.title.trim(),
-      folder: state.folder,
-      duration_s: state.duration,
-      times: state.times,
-      terms: state.terms?.id === id ? state.terms.list : [],
-      unpolished:
-        state.unpolished?.id === id
-          ? {
-              text: state.unpolished.text,
-              shaped: state.unpolished.shaped,
-              times: state.unpolished.times,
-            }
-          : null,
-    }),
-  )
-    .then(() => {
-      // The recording that has just ended goes with the meeting written from it.
-      if (!state.recorded) return
-      return Promise.resolve(meetingAudioKeep(id)).then((kept) => {
-        const path = soundOf(id, kept)
-        if (path && useMeetingStore.getState().id === id) useMeetingStore.setState({ kept: path })
+  return (
+    Promise.resolve(
+      meetingSave({
+        id,
+        started_at: startedAt,
+        transcript,
+        notes: state.notes,
+        minutes: state.minutes ?? '',
+        answers: state.answers,
+        overview: state.overview,
+        names: state.names,
+        title: state.title.trim(),
+        folder: state.folder,
+        duration_s: state.duration,
+        times: state.times,
+        terms: state.terms?.id === id ? state.terms.list : [],
+        unpolished:
+          state.unpolished?.id === id
+            ? {
+                text: state.unpolished.text,
+                shaped: state.unpolished.shaped,
+                times: state.unpolished.times,
+              }
+            : null,
+      }),
+    )
+      .then(() => {
+        // The recording that has just ended goes with the meeting written from it.
+        if (!state.recorded) return
+        return Promise.resolve(meetingAudioKeep(id)).then((kept) => {
+          const path = soundOf(id, kept)
+          if (path && useMeetingStore.getState().id === id) useMeetingStore.setState({ kept: path })
+        })
       })
-    })
-    .catch(() => {})
+      // What could not be kept is said, so that it is not taken for kept.
+      .catch(() => {
+        toast.error(i18n.t('meeting.error.save'))
+      })
+  )
 }
 
 /** Names the meeting in hand after what was said in it, unless it has a name already.
@@ -453,6 +459,11 @@ const packedSound = new Map<string, string>()
 
 /** The path to read a meeting's sound from: the packed file where `path` is the WAV it
  * was packed from. */
+/** Forgets that a meeting's sound was packed, once it is a WAV again (a cut undone). */
+export function forgetPacked(id: string) {
+  packedSound.delete(id)
+}
+
 export function soundOf(id: string, path: string | null | undefined): string | null {
   if (!path) return null
   return /\.wav$/i.test(path) ? (packedSound.get(id) ?? path) : path

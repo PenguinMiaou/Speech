@@ -1,0 +1,53 @@
+import type { PaneId } from './SettingsSidebar'
+
+const ADVANCED_POLISH = 'settings.advancedPolishSettings'
+
+/** The labels each settings pane shows, by i18n key, so a search can find a setting and the
+ * pane that holds it. `inside` names the folded section a setting sits in; that section's
+ * button is pointed at, since the setting itself shows only once it is opened. */
+export const SETTINGS_SEARCH_INDEX: readonly { pane: PaneId; key: string; inside?: string }[] = [
+  { pane: 'general', key: 'settings.language' },
+  { pane: 'general', key: 'settings.launchAtStartup' },
+  { pane: 'general', key: 'settings.startMinimized' },
+  { pane: 'general', key: 'settings.hideCapsuleWhenIdle' },
+  { pane: 'general', key: 'settings.saveHistory' },
+  { pane: 'general', key: 'settings.historyPrivacy' },
+  { pane: 'general', key: 'settings.historyMaxEntries' },
+  { pane: 'general', key: 'settings.historyRetentionDays' },
+  { pane: 'dictation', key: 'settings.hotkey' },
+  { pane: 'dictation', key: 'settings.dictationHotkey' },
+  { pane: 'dictation', key: 'settings.askHotkey' },
+  { pane: 'dictation', key: 'settings.translateHotkey' },
+  { pane: 'dictation', key: 'settings.dictationMode' },
+  { pane: 'dictation', key: 'settings.outputMode' },
+  { pane: 'dictation', key: 'settings.streamingInsert' },
+  { pane: 'stt', key: 'settings.provider' },
+  { pane: 'stt', key: 'settings.sttLanguage' },
+  { pane: 'stt', key: 'settings.maxRecordingDuration' },
+  { pane: 'stt', key: 'settings.microphoneInput' },
+  { pane: 'stt', key: 'settings.voiceIsolation.title' },
+  { pane: 'llm', key: 'settings.enableAiPolish' },
+  { pane: 'llm', key: 'settings.polishStyle' },
+  { pane: 'llm', key: 'settings.assistantName' },
+  { pane: 'llm', key: 'settings.customPolishInstructions', inside: ADVANCED_POLISH },
+  { pane: 'llm', key: 'settings.punctuationMode', inside: ADVANCED_POLISH },
+  { pane: 'llm', key: 'settings.chineseScript', inside: ADVANCED_POLISH },
+  { pane: 'llm', key: 'settings.contextAdaptation' },
+  { pane: 'llm', key: 'settings.selectedTextContext', inside: ADVANCED_POLISH },
+  { pane: 'translation', key: 'settings.translationMode' },
+  { pane: 'translation', key: 'settings.targetLanguage' },
+  { pane: 'meetings', key: 'settings.meetingDetect' },
+  { pane: 'meetings', key: 'settings.meetingModel' },
+  { pane: 'meetings', key: 'settings.meetingQuietPause' },
+  { pane: 'meetings', key: 'settings.meetingFolderSuggest' },
+  { pane: 'dictionary', key: 'dictionary.words' },
+  { pane: 'dictionary', key: 'dictionary.corrections' },
+  { pane: 'dictionary', key: 'snippets.title' },
+  { pane: 'scenes', key: 'scenes.appWritingModes' },
+  { pane: 'scenes', key: 'scenes.myScenes' },
+  { pane: 'about', key: 'settings.update.title' },
+  { pane: 'about', key: 'settings.diagnostics' },
+  { pane: 'about', key: 'settings.showLog' },
+  { pane: 'about', key: 'settings.setupGuide' },
+  { pane: 'about', key: 'settings.openSource' },
+]

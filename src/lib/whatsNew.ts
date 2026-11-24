@@ -9,6 +9,30 @@ export interface Notes {
 }
 
 export const WHATS_NEW: Record<string, Notes> = {
+  '1.2.15': {
+    zh: [
+      '删除会议、删除录音、剪切会议后，几秒内都能撤销。',
+      '播放器下面多了“从 mm:ss 剪到结尾”，还加了后退 5 秒、前进 15 秒和倍速。',
+      '会议文字可以用 Ctrl/Cmd+F 搜索，也能按发言人逐段跳。',
+      '会议列表按日期分组，可以排序，文件夹可以改名和移除。会议结束后会建议放进哪个文件夹，你点了才放。',
+      '会议录音时，切到别的页面也能在侧边栏看到红点和时长。',
+      '会议笔记不再显示时间，点笔记照样跳到录音里对应的位置。',
+      '右键有了自己的菜单，Ctrl/Cmd+1～4 切换页面，长页面右下角有“回到顶部”。',
+      '设置可以搜索，没保存就离开会先问。动效、颜色和焦点框也统一了一遍。',
+      '中英文界面的文字重新校过一遍，说法统一了；每个窗口只加载自己用到的部分，打开更轻。',
+    ],
+    en: [
+      'Deleting a meeting or its recording, or cutting a meeting, can be undone for a few seconds.',
+      'Below the player: Cut from mm:ss to the end. The player also skips back 5 s and forward 15 s, and changes speed.',
+      "Search a meeting's text with Ctrl/Cmd+F, or step through one speaker's turns.",
+      'Meetings are grouped by day and can be sorted, and folders can be renamed or removed. After a meeting, the app suggests a folder and moves it only if you agree.',
+      'While a meeting is recorded, the sidebar shows a red dot and the time on every page.',
+      'Meeting notes no longer show timestamps. Clicking a note still jumps to that point in the recording.',
+      "Right-click opens the app's own menu, Ctrl/Cmd+1–4 switch pages, and long pages have a Back to top button.",
+      'Settings can be searched, and ask before you leave unsaved changes. Motion, colours and focus rings are more consistent.',
+      'The Chinese and English wording was gone over and made consistent, and each window now loads only what it shows.',
+    ],
+  },
   '1.2.14': {
     zh: [
       '会议录音一段时间没人说话会自动暂停（默认 10 分钟，可在 设置 → 会议 里改或关掉），回来点“继续”或“结束录音”。',

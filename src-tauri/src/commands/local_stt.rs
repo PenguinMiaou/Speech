@@ -438,8 +438,9 @@ pub async fn meeting_record_start(
     // A meeting the app records itself is not offered again.
     crate::meeting_probe::set_busy(started.is_ok());
     if started.is_ok() {
-        watch_quiet(watcher);
+        watch_quiet(watcher.clone());
     }
+    crate::tray::refresh_tray(&watcher);
     started
 }
 
@@ -528,9 +529,13 @@ pub fn meeting_record_level() -> Option<MeetingLevel> {
 /// the audio still waiting is dropped.
 /// The latest meeting's audio stays on disk; its path comes back unless it was discarded.
 #[tauri::command]
-pub async fn meeting_record_stop(discard: bool) -> Result<Option<String>, String> {
+pub async fn meeting_record_stop(
+    app: tauri::AppHandle,
+    discard: bool,
+) -> Result<Option<String>, String> {
     let stopped = crate::meeting_record::stop(discard).await;
     crate::meeting_probe::set_busy(false);
+    crate::tray::refresh_tray(&app);
     crate::applog::note(
         "meeting",
         &format!(

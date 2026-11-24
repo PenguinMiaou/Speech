@@ -119,7 +119,7 @@ export function AppStyleMappingDialog({
         role="dialog"
         aria-modal="true"
         aria-label={t(editing ? 'settings.editAppMappingTitle' : 'settings.appStyleDialogTitle')}
-        className="relative z-10 w-full max-w-[420px] rounded-[8px] border border-border bg-bg-primary shadow-float"
+        className="relative z-10 w-full max-w-[420px] rounded-md border border-border bg-bg-primary shadow-float"
       >
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-[14px] font-medium text-text-primary">
@@ -150,7 +150,7 @@ export function AppStyleMappingDialog({
               ref={labelRef}
               value={label}
               onChange={(event) => setLabel(clampLabel(event.target.value))}
-              className="mt-1 w-full rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="mt-1 w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
           </label>
 
@@ -188,7 +188,7 @@ export function AppStyleMappingDialog({
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
+            className="rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
           >
             {t('settings.mappingCancel')}
           </button>
@@ -196,7 +196,7 @@ export function AppStyleMappingDialog({
             type="button"
             onClick={() => void save()}
             disabled={!canSave}
-            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
+            className="rounded-md border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
           >
             {t('settings.mappingSave')}
           </button>

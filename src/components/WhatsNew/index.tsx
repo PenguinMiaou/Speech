@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Sparkles, X } from 'lucide-react'
+import { Megaphone, X } from 'lucide-react'
 import { version as currentVersion } from '../../../package.json'
 import { WHATS_NEW, versionsToShow } from '../../lib/whatsNew'
 
@@ -41,11 +41,11 @@ export function WhatsNew() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="whats-new-title"
-        className="relative w-full max-w-[460px] rounded-[12px] border border-border bg-bg-primary shadow-float"
+        className="relative w-full max-w-[460px] rounded-lg border border-border bg-bg-primary shadow-float"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-5 py-3.5">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-accent/10 text-accent">
-            <Sparkles size={16} />
+            <Megaphone size={16} />
           </span>
           <h2 id="whats-new-title" className="flex-1 text-[15px] font-semibold text-text-primary">
             {t('whatsNew.title', { version: currentVersion })}
@@ -54,7 +54,7 @@ export function WhatsNew() {
             type="button"
             aria-label={t('common.close')}
             onClick={close}
-            className="grid h-7 w-7 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+            className="grid h-7 w-7 place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
           >
             <X size={16} />
           </button>

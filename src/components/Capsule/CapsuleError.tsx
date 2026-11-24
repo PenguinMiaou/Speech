@@ -1,3 +1,4 @@
+import { timed } from '../../lib/animations'
 import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
@@ -28,7 +29,7 @@ export function CapsuleError() {
       className="relative z-10 flex items-center gap-2 h-9 px-3"
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      transition={timed()}
     >
       {/* White dot */}
       <motion.div className="w-2 h-2 rounded-full bg-white/80 flex-shrink-0" />

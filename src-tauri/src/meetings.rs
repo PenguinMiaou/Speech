@@ -411,6 +411,57 @@ fn packing_file(dir: &Path, id: &str) -> Result<PathBuf, String> {
     Ok(file_of(dir, id)?.with_extension("flac.part"))
 }
 
+/// The sound as it was before its last cut, as `ext` (wav or flac), kept aside until the
+/// cut can no longer be undone.
+fn before_cut_file(dir: &Path, id: &str, ext: &str) -> Result<PathBuf, String> {
+    Ok(file_of(dir, id)?.with_extension(format!("{ext}.before-cut")))
+}
+
+fn drop_before_cut(dir: &Path, id: &str) -> Result<(), String> {
+    remove_if_there(&before_cut_file(dir, id, "wav")?)?;
+    remove_if_there(&before_cut_file(dir, id, "flac")?)
+}
+
+/// Puts back the sound a meeting had before its last cut. False where none is kept.
+fn undo_cut_in(dir: &Path, id: &str) -> Result<bool, String> {
+    let _held = audio_lock();
+    for ext in ["flac", "wav"] {
+        let before = before_cut_file(dir, id, ext)?;
+        if !before.is_file() {
+            continue;
+        }
+        // The cut sound goes, in whatever form it was packed into since.
+        remove_if_there(&packing_file(dir, id)?)?;
+        remove_if_there(&packed_file(dir, id)?)?;
+        remove_if_there(&audio_file(dir, id)?)?;
+        let back = file_of(dir, id)?.with_extension(ext);
+        std::fs::rename(&before, &back).map_err(|error| error.to_string())?;
+        drop_before_cut(dir, id)?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// Lets the sound from before a meeting's last cut go: the cut stands.
+fn keep_cut_in(dir: &Path, id: &str) -> Result<(), String> {
+    let _held = audio_lock();
+    drop_before_cut(dir, id)
+}
+
+/// Lets go of every sound kept aside for an undo that can no longer be asked for, as when
+/// the app last ended within the time to undo.
+fn drop_cuts_in(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let _held = audio_lock();
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().ends_with(".before-cut") {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 fn audio_in(dir: &Path, id: &str) -> Option<PathBuf> {
     let packed = packed_file(dir, id).ok().filter(|path| path.is_file());
     packed.or_else(|| audio_file(dir, id).ok().filter(|path| path.is_file()))
@@ -437,6 +488,7 @@ fn remove_if_there(path: &Path) -> Result<(), String> {
 
 fn delete_audio_in(dir: &Path, id: &str) -> Result<(), String> {
     let _held = audio_lock();
+    drop_before_cut(dir, id)?;
     remove_if_there(&packing_file(dir, id)?)?;
     remove_if_there(&packed_file(dir, id)?)?;
     remove_if_there(&audio_file(dir, id)?)
@@ -576,6 +628,20 @@ pub fn trim_audio(id: &str, end_ms: u64) -> Result<(), String> {
     trim_audio_in(&dir()?, id, end_ms)
 }
 
+pub fn undo_cut(id: &str) -> Result<bool, String> {
+    undo_cut_in(&dir()?, id)
+}
+
+pub fn keep_cut(id: &str) -> Result<(), String> {
+    keep_cut_in(&dir()?, id)
+}
+
+pub fn drop_cuts() {
+    if let Ok(dir) = dir() {
+        drop_cuts_in(&dir);
+    }
+}
+
 pub fn pack_audio(id: &str) -> Result<Option<PathBuf>, String> {
     pack_audio_in(&dir()?, id)
 }
@@ -587,7 +653,8 @@ pub fn pack_all(packed: impl FnMut(&str, &Path)) {
 }
 
 /// Cuts a meeting's sound off at `end_ms` from its start. The sound is the app's own
-/// recording, as WAV or packed; any other file is left as it is.
+/// recording, as WAV or packed; any other file is left as it is. The sound from before is
+/// kept aside, for the cut to be undone, until `keep_cut` or the next cut.
 fn trim_audio_in(dir: &Path, id: &str, end_ms: u64) -> Result<(), String> {
     use std::io::{Seek, SeekFrom, Write};
     let _held = audio_lock();
@@ -613,7 +680,14 @@ fn trim_audio_in(dir: &Path, id: &str, end_ms: u64) -> Result<(), String> {
             if back != written {
                 return Err("audio_unreadable".to_string());
             }
-            std::fs::rename(&packing, &packed).map_err(|error| error.to_string())
+            drop_before_cut(dir, id)?;
+            let before = before_cut_file(dir, id, "flac")?;
+            std::fs::rename(&packed, &before).map_err(|error| error.to_string())?;
+            std::fs::rename(&packing, &packed).map_err(|error| {
+                // The sound stays as it was where the cut one cannot take its place.
+                let _ = std::fs::rename(&before, &packed);
+                error.to_string()
+            })
         })();
         if cut.is_err() {
             let _ = std::fs::remove_file(&packing);
@@ -622,6 +696,8 @@ fn trim_audio_in(dir: &Path, id: &str, end_ms: u64) -> Result<(), String> {
     }
     let path = audio_file(dir, id)?;
     let mut file = open_wav(&path, true)?;
+    drop_before_cut(dir, id)?;
+    std::fs::copy(&path, before_cut_file(dir, id, "wav")?).map_err(|error| error.to_string())?;
     let length = file.metadata().map_err(|error| error.to_string())?.len();
     let held = length.saturating_sub(44);
     let kept = keep_samples.saturating_mul(2).min(held) & !1;
@@ -636,6 +712,50 @@ fn trim_audio_in(dir: &Path, id: &str, end_ms: u64) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cut_can_be_undone_until_it_is_kept_packed_or_not() {
+        let dir = std::env::temp_dir().join(format!("undo-cut-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(file_of(&dir, "m-1").unwrap(), "{}").unwrap();
+
+        // Cut as WAV, packed in the meantime, then undone: the whole WAV is back.
+        let sound = recording(&dir, "m-1", 2 * 16_000);
+        let whole = std::fs::read(audio_file(&dir, "m-1").unwrap()).unwrap();
+        trim_audio_in(&dir, "m-1", 500).unwrap();
+        pack_audio_in(&dir, "m-1").unwrap();
+        assert!(undo_cut_in(&dir, "m-1").unwrap());
+        assert_eq!(
+            std::fs::read(audio_file(&dir, "m-1").unwrap()).unwrap(),
+            whole
+        );
+        assert!(!packed_file(&dir, "m-1").unwrap().exists());
+        assert!(!undo_cut_in(&dir, "m-1").unwrap());
+
+        // Cut when packed, then undone: every sample is back.
+        let packed = pack_audio_in(&dir, "m-1").unwrap().unwrap();
+        trim_audio_in(&dir, "m-1", 500).unwrap();
+        assert_eq!(samples_of(&packed).len(), 8_000);
+        assert!(undo_cut_in(&dir, "m-1").unwrap());
+        assert_eq!(samples_of(&packed), sound);
+
+        // Kept: nothing is left aside, and there is nothing to undo.
+        trim_audio_in(&dir, "m-1", 500).unwrap();
+        keep_cut_in(&dir, "m-1").unwrap();
+        assert!(!undo_cut_in(&dir, "m-1").unwrap());
+        assert_eq!(samples_of(&packed).len(), 8_000);
+
+        // Left aside when the app ended, or when the meeting goes: let go.
+        trim_audio_in(&dir, "m-1", 250).unwrap();
+        assert!(before_cut_file(&dir, "m-1", "flac").unwrap().exists());
+        drop_cuts_in(&dir);
+        assert!(!before_cut_file(&dir, "m-1", "flac").unwrap().exists());
+        trim_audio_in(&dir, "m-1", 100).unwrap();
+        delete_in(&dir, "m-1").unwrap();
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().collect();
+        assert!(left.is_empty(), "{left:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     fn recording(dir: &Path, id: &str, samples: usize) -> Vec<i16> {
         let sound: Vec<i16> = (0..samples)

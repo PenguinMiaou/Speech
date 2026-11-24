@@ -25,7 +25,7 @@ export function LanguagePane() {
           type="button"
           aria-pressed={currentLang === lang.value}
           onClick={() => handleSelectLanguage(lang.value)}
-          className={`px-4 py-3 rounded-[8px] text-[13px] font-medium border cursor-pointer transition-all ${
+          className={`px-4 py-3 rounded-md text-[13px] font-medium border cursor-pointer transition-all ${
             currentLang === lang.value
               ? 'bg-accent/10 border-accent text-accent'
               : 'bg-bg-secondary border-border text-text-primary hover:border-text-tertiary'

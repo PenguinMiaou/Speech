@@ -1,11 +1,36 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MeetingCard } from '../MeetingCard'
+import { MeetingCard, useGoing } from '../MeetingCard'
+import { toast } from '../../toast-service'
 import { useAppStore } from '../../../stores/appStore'
 import * as tauri from '../../../lib/tauri'
 import { initialMeeting, useMeetingStore } from '../../../stores/meetingStore'
 
 vi.mock('../../../lib/tauri')
+/** The changes offered to be undone, newest last, to undo or let stand. */
+const undoables = vi.hoisted(() => [] as { text: string; undo: () => void; commit: () => void }[])
+vi.mock('../../toast-service', () => {
+  const toast = Object.assign(vi.fn(), {
+    success: vi.fn(),
+    error: vi.fn(),
+    undoable: vi.fn((text: string, options: { undo: () => void; commit: () => void }) => {
+      let settled = false
+      const once = (then: () => void) => () => {
+        if (settled) return
+        settled = true
+        then()
+      }
+      const entry = { text, undo: once(options.undo), commit: once(options.commit) }
+      undoables.push(entry)
+      return entry.commit
+    }),
+  })
+  return { toast, UNDO_MS: 7000 }
+})
+beforeEach(() => {
+  undoables.length = 0
+  useGoing.setState({ meetings: [], sounds: [] })
+})
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) =>
@@ -117,6 +142,54 @@ describe('MeetingCard', () => {
     )
     expect(tauri.meetingTitle).toHaveBeenCalledWith('we went through the budget')
     expect(vi.mocked(tauri.meetingSave).mock.calls.slice(-1)[0]?.[0].title).toBe('Budget review')
+  })
+
+  it('offers the folder the model picks for a meeting just kept, and puts it there on yes', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('the weekly plan')
+    vi.mocked(tauri.meetingTitle).mockResolvedValue('Plan for June')
+    vi.mocked(tauri.meetingsList).mockImplementation(async () => [
+      ...(useMeetingStore.getState().id
+        ? [
+            {
+              id: useMeetingStore.getState().id as string,
+              started_at: 1_700_000_100_000,
+              preview: 'the weekly plan',
+              title: 'Plan for June',
+              has_minutes: false,
+            },
+          ]
+        : []),
+      {
+        id: 'm-old',
+        started_at: 1_700_000_000_000,
+        preview: 'may',
+        title: 'Plan for May',
+        folder: 'Weekly',
+        has_minutes: false,
+      },
+    ])
+    vi.mocked(tauri.meetingFolderPick).mockResolvedValue('Weekly')
+    vi.mocked(tauri.meetingFolder).mockResolvedValue()
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    const offer = await screen.findByRole('status')
+    expect(offer.textContent).toContain('meeting.folderOffer Plan for June Weekly')
+    expect(tauri.meetingFolderPick).toHaveBeenCalledWith('Plan for June', 'the weekly plan', [
+      { name: 'Weekly', titles: ['Plan for May'] },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.folderOfferYes' }))
+    const id = useMeetingStore.getState().id
+    await waitFor(() => expect(tauri.meetingFolder).toHaveBeenCalledWith(id, 'Weekly'))
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('says so when a meeting could not be saved or moved, instead of saying nothing', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('the plan')
+    vi.mocked(tauri.meetingSave).mockRejectedValue(new Error('disk full'))
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('the plan')
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
   })
 
   it('shows the text of a file as far as it is written out', async () => {
@@ -393,7 +466,7 @@ describe('MeetingCard', () => {
     expect(screen.getByRole('button', { name: 'meeting.pauseRecording' })).toBeTruthy()
   })
 
-  it('marks a note taken during the meeting with its moment, to find it in the sound', async () => {
+  it('keeps the moment of a note taken during the meeting out of sight, to find it in the sound', async () => {
     vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
     vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 65, volume: 0, waiting: 0 })
     vi.mocked(tauri.meetingRecordStop).mockResolvedValue('/data/meeting-recording.wav')
@@ -403,15 +476,9 @@ describe('MeetingCard', () => {
     await screen.findByText('01:05')
     act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
     fireEvent.change(screen.getByLabelText('meeting.notes'), { target: { value: 'budget' } })
-    expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe(
-      '[01:05] budget',
-    )
-    // Deleting the time leaves it deleted.
-    fireEvent.change(screen.getByLabelText('meeting.notes'), { target: { value: '[01:0' } })
-    expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe('[01:0')
-    fireEvent.change(screen.getByLabelText('meeting.notes'), {
-      target: { value: '[01:05] budget' },
-    })
+    // The note shows as typed; its moment is kept with it.
+    expect((screen.getByLabelText('meeting.notes') as HTMLTextAreaElement).value).toBe('budget')
+    expect(useMeetingStore.getState().notes).toBe('[01:05] budget')
     fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
     fireEvent.click(await screen.findByRole('button', { name: /budget/ }))
     expect(container.querySelector('audio')?.currentTime).toBe(65)
@@ -483,8 +550,8 @@ describe('MeetingCard', () => {
   })
 
   const two = [
-    { id: 'm-1', started_at: 1, preview: 'first words', has_minutes: false },
-    { id: 'm-2', started_at: 2, preview: 'other words', has_minutes: true },
+    { id: 'm-1', started_at: 2, preview: 'first words', has_minutes: false },
+    { id: 'm-2', started_at: 1, preview: 'other words', has_minutes: true },
   ]
   const record = {
     id: 'm-1',
@@ -546,6 +613,71 @@ describe('MeetingCard', () => {
     await waitFor(() => expect(tauri.meetingMinutes).toHaveBeenCalled())
     expect(vi.mocked(tauri.transcribeFile).mock.calls[0][0]).toBe('/data/meetings/m-1.wav')
     expect(vi.mocked(tauri.meetingMinutes).mock.calls[0][0]).toBe('Heard anew.')
+  })
+
+  it('reads the list in the order chosen, and renames or removes a folder', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      {
+        id: 'm-1',
+        started_at: 2,
+        preview: 'short one',
+        has_minutes: false,
+        duration_s: 60,
+        folder: 'Weekly',
+      },
+      {
+        id: 'm-2',
+        started_at: 1,
+        preview: 'long one',
+        has_minutes: false,
+        duration_s: 600,
+        folder: 'Weekly',
+      },
+    ])
+    vi.mocked(tauri.meetingFolder).mockResolvedValue()
+    await ready()
+    await screen.findByText('short one')
+    const titles = () =>
+      (screen.getByRole('list', { name: 'meeting.pastList' }).textContent ?? '').match(
+        /(short|long) one/g,
+      )
+    expect(titles()).toEqual(['short one', 'long one'])
+    fireEvent.change(screen.getByLabelText('meeting.order'), { target: { value: 'longest' } })
+    expect(titles()).toEqual(['long one', 'short one'])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly' }))
+    // Escape leaves the name as it was, though the field loses focus as it goes.
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.renameFolder' }))
+    const dropped = screen.getByLabelText('meeting.renameFolder')
+    fireEvent.change(dropped, { target: { value: 'Dropped' } })
+    // Chromium blurs the field as it is taken away, after the key is handled.
+    const blurAfter = () => dropped.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    document.addEventListener('keydown', blurAfter, { once: true })
+    fireEvent.keyDown(dropped, { key: 'Escape' })
+    expect(tauri.meetingFolder).not.toHaveBeenCalledWith('m-1', 'Dropped')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.renameFolder' }))
+    const name = screen.getByLabelText('meeting.renameFolder')
+    fireEvent.change(name, { target: { value: 'Planning' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    await waitFor(() => expect(tauri.meetingFolder).toHaveBeenCalledWith('m-1', 'Planning'))
+    expect(tauri.meetingFolder).toHaveBeenCalledWith('m-2', 'Planning')
+
+    // The list read back still has the old name here; it is chosen again to remove it.
+    vi.mocked(tauri.meetingFolder).mockClear()
+    fireEvent.click(await screen.findByRole('button', { name: 'Weekly' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.removeFolder' }))
+    await waitFor(() => expect(tauri.meetingFolder).toHaveBeenCalledWith('m-1', ''))
+    act(() => undoables[undoables.length - 1].undo())
+    await waitFor(() => expect(tauri.meetingFolder).toHaveBeenCalledWith('m-1', 'Weekly'))
+  })
+
+  it('says when no meeting matches the search', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue(two)
+    vi.mocked(tauri.meetingsSearch).mockResolvedValue([])
+    await ready()
+    await screen.findByText('first words')
+    fireEvent.change(screen.getByLabelText('meeting.search'), { target: { value: 'nothing' } })
+    expect(await screen.findByText('meeting.noMatches')).toBeTruthy()
   })
 
   it('shows in the list which step of making minutes a meeting is at', async () => {
@@ -699,6 +831,97 @@ describe('MeetingCard', () => {
         expect.objectContaining({ id: 'm-1', duration_s: 90 }),
       ),
     )
+  })
+
+  it('cuts the meeting off where the player stands, once confirmed', async () => {
+    const transcript =
+      'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point\n\nmeeting.speakerLabel 1  01:30\nlong after, forgotten'
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'forgotten', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript,
+      notes: '',
+      minutes: '',
+      names: {},
+      duration_s: 3600,
+    })
+    vi.mocked(tauri.meetingAudio).mockResolvedValue('/data/meetings/m-1.flac')
+    vi.mocked(tauri.meetingAudioTrim).mockResolvedValue()
+    const { container } = render(<MeetingCard />)
+    fireEvent.click(await screen.findByText('forgotten'))
+    await screen.findByText('long after, forgotten')
+    // At the start there is nothing to cut from: it would leave no text.
+    const cutHere = await screen.findByRole('button', { name: /meeting.cutFromHere/ })
+    expect((cutHere as HTMLButtonElement).disabled).toBe(true)
+    const player = container.querySelector('audio') as HTMLAudioElement
+    Object.defineProperty(player, 'currentTime', { value: 70, configurable: true })
+    fireEvent.timeUpdate(player)
+    await waitFor(() =>
+      expect(
+        (screen.getByRole('button', { name: /meeting.cutFromHere/ }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /meeting.cutFromHere/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.cutFromHereConfirm' }))
+    await waitFor(() => expect(tauri.meetingAudioTrim).toHaveBeenCalledWith('m-1', 70_000))
+    await waitFor(() =>
+      expect(useMeetingStore.getState().text).toBe(
+        'meeting.speakerLabel 1  00:00\nhello\n\nmeeting.speakerLabel 2  00:04\nthe point',
+      ),
+    )
+    expect(useMeetingStore.getState().duration).toBe(70)
+
+    // Undone: the sound, the text and the length are as they were.
+    vi.mocked(tauri.meetingAudioCutUndo).mockResolvedValue(true)
+    act(() => undoables[undoables.length - 1].undo())
+    await waitFor(() => expect(useMeetingStore.getState().text).toBe(transcript))
+    expect(tauri.meetingAudioCutUndo).toHaveBeenCalledWith('m-1')
+    expect(useMeetingStore.getState().duration).toBe(3600)
+    expect(tauri.meetingAudioCutKeep).not.toHaveBeenCalled()
+  })
+
+  it('goes back to the list when the meetings page is chosen again in the sidebar', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'the plan', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nthe plan',
+      notes: '',
+      minutes: '',
+      names: {},
+    })
+    await ready()
+    fireEvent.click(await screen.findByText('the plan'))
+    await screen.findByRole('button', { name: 'meeting.all' })
+    act(() => {
+      window.dispatchEvent(new CustomEvent('nav:again', { detail: 'meeting' }))
+    })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'meeting.all' })).toBeNull())
+    expect(useMeetingStore.getState().id).toBeNull()
+  })
+
+  it('closes its menus on Escape or a press outside, and shows a tick once copied', async () => {
+    vi.mocked(tauri.transcribeFile).mockResolvedValue('the plan')
+    vi.mocked(tauri.copyText).mockResolvedValue()
+    await ready()
+    act(() => drop(['/tmp/a.mp3']))
+    await screen.findByText('the plan')
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
+    expect(screen.getByRole('menu')).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.copy' }))
+    await screen.findByRole('button', { name: 'common.copied' })
+    expect(tauri.copyText).toHaveBeenCalledWith('the plan')
   })
 
   it('leaves the text as it is when the recording cannot be cut', async () => {
@@ -1183,8 +1406,12 @@ describe('MeetingCard', () => {
       'Ann  00:00\nhello\n\nTyped  00:04\nhi',
     )
     // A name is set in its speaker's colour, apart from the words.
-    expect(screen.getByText('Ann').style.color).toBe('var(--speaker-1)')
-    expect(screen.getByText('Typed').style.color).toBe('var(--speaker-2)')
+    expect(within(screen.getByLabelText('meeting.result')).getByText('Ann').style.color).toBe(
+      'var(--speaker-1)',
+    )
+    expect(within(screen.getByLabelText('meeting.result')).getByText('Typed').style.color).toBe(
+      'var(--speaker-2)',
+    )
   })
 
   it('learns the names a meeting ends with, but not from a past meeting', async () => {
@@ -1383,6 +1610,9 @@ describe('MeetingCard', () => {
     // Back at the list, the meeting can be deleted.
     fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.deleteMeeting' }))
+    // Hidden at once, deleted for good once the time to undo is up.
+    expect(tauri.meetingDelete).not.toHaveBeenCalled()
+    act(() => undoables[undoables.length - 1].commit())
     await waitFor(() => expect(tauri.meetingDelete).toHaveBeenCalledWith('m-1'))
   })
 
@@ -1546,7 +1776,16 @@ describe('MeetingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.deleteAudio' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'meeting.play' })).toBeNull())
-    expect(tauri.meetingAudioDelete).toHaveBeenCalledWith(expect.stringMatching(/^m-\d+$/))
+    expect(tauri.meetingAudioDelete).not.toHaveBeenCalled()
+    // Undone, the player is back; deleted again and let stand, the sound goes.
+    act(() => undoables[0].undo())
+    await screen.findByRole('button', { name: 'meeting.play' })
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.more' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.deleteAudio' }))
+    act(() => undoables[1].commit())
+    await waitFor(() =>
+      expect(tauri.meetingAudioDelete).toHaveBeenCalledWith(expect.stringMatching(/^m-\d+$/)),
+    )
   })
 
   it('drops a recording that is discarded', async () => {
@@ -1729,7 +1968,12 @@ describe('a meeting that is open', () => {
     fireEvent.click(await screen.findByText('budget talk'))
     fireEvent.click(await screen.findByRole('button', { name: 'meeting.more' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'meeting.deleteThis' }))
-    expect(tauri.meetingDelete).toHaveBeenCalledWith('m-1')
     await screen.findByRole('button', { name: 'meeting.record' })
+    // Gone from the list until undone.
+    expect(screen.queryByText('budget talk')).toBeNull()
+    expect(undoables[0].text).toBe('meeting.deleted Budget')
+    act(() => undoables[0].undo())
+    await screen.findByText('budget talk')
+    expect(tauri.meetingDelete).not.toHaveBeenCalled()
   })
 })

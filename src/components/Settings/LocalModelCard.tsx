@@ -67,9 +67,9 @@ const ERROR_KEYS: Record<string, string> = {
 }
 
 const BUTTON_PRIMARY =
-  'rounded-[8px] border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover cursor-pointer'
+  'rounded-md border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:bg-accent-hover cursor-pointer'
 const BUTTON_QUIET =
-  'rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary cursor-pointer'
+  'rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary cursor-pointer'
 
 type RowState =
   | 'missing'
@@ -168,7 +168,7 @@ export function LocalModelCard() {
   const hidden = models.length - shown.length
 
   return (
-    <div className="rounded-[12px] border border-border p-4 space-y-3">
+    <div className="rounded-lg border border-border p-4 space-y-3">
       <div className="flex items-center gap-2 text-[13px] font-medium text-text-primary">
         <Cpu size={15} />
         {t('localStt.title')}
@@ -337,7 +337,7 @@ export function LocalModelCard() {
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-[8px] border-none bg-transparent py-1 text-[12px] text-text-secondary hover:text-text-primary"
+          className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-md border-none bg-transparent py-1 text-[12px] text-text-secondary hover:text-text-primary"
         >
           {t('localStt.moreModels')} ({hidden})
           <ChevronDown size={13} />

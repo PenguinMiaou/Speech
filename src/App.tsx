@@ -1,5 +1,5 @@
 import { WhatsNew, markWhatsNewSeen } from './components/WhatsNew'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import i18n from './i18n'
 import { useTauriEvents } from './hooks/useTauriEvents'
 import { useTheme } from './hooks/useTheme'
@@ -20,16 +20,33 @@ import {
   onMeetingRecordAsked,
 } from './lib/tauri'
 import { autoCheckEnabled } from './lib/update'
-import { Capsule } from './components/Capsule'
-import { Settings } from './components/Settings'
-import { History } from './components/History'
-import { Onboarding } from './components/Onboarding'
 import { MainLayout } from './components/MainLayout'
-import { HomePage } from './components/HomePage'
-import { MeetingPage } from './components/HomePage/MeetingPage'
-import { AskPanel } from './components/AskPanel'
-import { MeetingOffer } from './components/MeetingOffer'
+import { ContextMenuHost } from './components/ContextMenu'
+import { MotionConfig } from 'framer-motion'
+import { timed } from './lib/animations'
 import { ToastContainer } from './components/Toast'
+
+// Each window reads only what it shows: the capsule, Ask and the offer have their own parts,
+// and the main window's pages are read as they are first opened.
+const pages = {
+  home: () => import('./components/HomePage').then((m) => ({ default: m.HomePage })),
+  meeting: () =>
+    import('./components/HomePage/MeetingPage').then((m) => ({ default: m.MeetingPage })),
+  settings: () => import('./components/Settings').then((m) => ({ default: m.Settings })),
+  history: () => import('./components/History').then((m) => ({ default: m.History })),
+}
+const HomePage = lazy(pages.home)
+const MeetingPage = lazy(pages.meeting)
+const Settings = lazy(pages.settings)
+const History = lazy(pages.history)
+const Onboarding = lazy(() =>
+  import('./components/Onboarding').then((m) => ({ default: m.Onboarding })),
+)
+const Capsule = lazy(() => import('./components/Capsule').then((m) => ({ default: m.Capsule })))
+const AskPanel = lazy(() => import('./components/AskPanel').then((m) => ({ default: m.AskPanel })))
+const MeetingOffer = lazy(() =>
+  import('./components/MeetingOffer').then((m) => ({ default: m.MeetingOffer })),
+)
 
 function CapsuleApp() {
   useTauriEvents()
@@ -56,7 +73,11 @@ function CapsuleApp() {
   // Window show is handled by useCapsuleResize (setSize → setPosition → show),
   // which works on both Windows and macOS. The previous rAF-based show approach
   // failed on macOS because WKWebView pauses requestAnimationFrame in hidden windows.
-  return <Capsule />
+  return (
+    <Suspense fallback={null}>
+      <Capsule />
+    </Suspense>
+  )
 }
 
 /** The window that asks whether to record a meeting found going on. */
@@ -73,7 +94,11 @@ function OfferApp() {
       })
       .catch(() => {})
   }, [setConfig])
-  return <MeetingOffer />
+  return (
+    <Suspense fallback={null}>
+      <MeetingOffer />
+    </Suspense>
+  )
 }
 
 function AskApp() {
@@ -96,7 +121,9 @@ function AskApp() {
 
   return (
     <>
-      <AskPanel />
+      <Suspense fallback={null}>
+        <AskPanel />
+      </Suspense>
       <ToastContainer />
     </>
   )
@@ -181,6 +208,10 @@ function MainApp() {
         setLoadError(true)
       }
       setLoaded(true)
+      // The other pages are read while nothing else is going on, so none waits when opened.
+      const later =
+        window.requestIdleCallback ?? ((run: () => void) => window.setTimeout(run, 1500))
+      later(() => Object.values(pages).forEach((page) => void page().catch(() => {})))
     })
   }, [
     setOnboardingCompleted,
@@ -206,20 +237,27 @@ function MainApp() {
         <span className="text-error text-[13px]">Failed to load application data.</span>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-accent text-white rounded-[10px] text-[13px] border-none cursor-pointer hover:bg-accent-hover transition-colors"
+          className="px-4 py-2 bg-accent text-white rounded-lg text-[13px] border-none cursor-pointer hover:bg-accent-hover transition-colors"
         >
           Retry
         </button>
       </div>
     )
-  if (!onboardingCompleted) return <Onboarding />
+  if (!onboardingCompleted)
+    return (
+      <Suspense fallback={null}>
+        <Onboarding />
+      </Suspense>
+    )
 
   return (
     <MainLayout>
-      {route === 'home' && <HomePage />}
-      {route === 'meeting' && <MeetingPage />}
-      {route === 'settings' && <Settings />}
-      {route === 'history' && <History />}
+      <Suspense fallback={null}>
+        {route === 'home' && <HomePage />}
+        {route === 'meeting' && <MeetingPage />}
+        {route === 'settings' && <Settings />}
+        {route === 'history' && <History />}
+      </Suspense>
       <WhatsNew />
       <ToastContainer />
     </MainLayout>
@@ -228,10 +266,25 @@ function MainApp() {
 
 function App() {
   // Capsule window loads with #capsule hash — detect synchronously, no race condition
-  if (window.location.hash === '#capsule') return <CapsuleApp />
-  if (window.location.hash === '#ask') return <AskApp />
-  if (window.location.hash === '#offer') return <OfferApp />
-  return <MainApp />
+  if (window.location.hash === '#capsule')
+    return (
+      <MotionConfig reducedMotion="user" transition={timed()}>
+        <CapsuleApp />
+      </MotionConfig>
+    )
+  // Every other window shows the app's own right-click menu, in place of the web view's.
+  return (
+    <MotionConfig reducedMotion="user" transition={timed()}>
+      {window.location.hash === '#ask' ? (
+        <AskApp />
+      ) : window.location.hash === '#offer' ? (
+        <OfferApp />
+      ) : (
+        <MainApp />
+      )}
+      <ContextMenuHost />
+    </MotionConfig>
+  )
 }
 
 export default App

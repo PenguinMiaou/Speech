@@ -19,7 +19,7 @@ export function StepIndicator({ total, current }: Props) {
             scale: i === current ? 1 : 0.85,
             width: i === current ? 10 : 8,
           }}
-          transition={spring.jelly}
+          transition={spring.smooth}
         />
       ))}
     </div>

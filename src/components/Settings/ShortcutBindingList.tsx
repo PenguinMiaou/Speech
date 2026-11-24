@@ -218,7 +218,7 @@ export function HotkeyRecorder({
           type="button"
           onClick={handleClick}
           disabled={disabled}
-          className={`h-9 min-w-0 flex-1 rounded-[8px] border px-3 text-left font-mono text-[12px] transition-colors disabled:opacity-40 ${
+          className={`h-9 min-w-0 flex-1 rounded-md border px-3 text-left font-mono text-[12px] transition-colors disabled:opacity-40 ${
             recording
               ? 'border-text-secondary bg-bg-tertiary text-text-primary ring-2 ring-text-secondary/20'
               : 'border-transparent bg-bg-secondary text-text-primary hover:border-border'
@@ -232,7 +232,7 @@ export function HotkeyRecorder({
             onClick={cancelRecording}
             aria-label={t('common.cancel')}
             title={t('common.cancel')}
-            className="grid h-9 w-8 flex-none place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+            className="grid h-9 w-8 flex-none place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
           >
             <X size={14} />
           </button>
@@ -248,7 +248,7 @@ export function HotkeyRecorder({
               key={option.value}
               type="button"
               onClick={() => confirmHotkey(option.value)}
-              className="rounded-[8px] border border-border bg-bg-secondary px-2 py-1 text-[11px] text-text-secondary hover:border-border-focus hover:text-text-primary"
+              className="rounded-md border border-border bg-bg-secondary px-2 py-1 text-[11px] text-text-secondary hover:border-border-focus hover:text-text-primary"
             >
               {option.label}
             </button>
@@ -355,7 +355,7 @@ export function ShortcutBindingList({
           title={t('settings.shortcutAdd')}
           disabled={disabled || atLimit || adding}
           onClick={() => setAdding(true)}
-          className="grid h-7 w-7 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
+          className="grid h-7 w-7 place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
         >
           <Plus size={14} />
         </button>
@@ -376,7 +376,7 @@ export function ShortcutBindingList({
                 onSaved={(hotkey) => saveAt(index, hotkey)}
               />
               {bindings.length > 1 && index === 0 && (
-                <p className="mt-0.5 text-[10px] text-text-tertiary">
+                <p className="mt-0.5 text-[11px] text-text-tertiary">
                   {t('settings.shortcutPrimary')}
                 </p>
               )}
@@ -393,14 +393,14 @@ export function ShortcutBindingList({
                   aria-expanded={menuIndex === index}
                   onClick={() => setMenuIndex((current) => (current === index ? null : index))}
                   disabled={disabled}
-                  className="grid h-9 w-8 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
+                  className="grid h-9 w-8 place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-35"
                 >
                   <MoreHorizontal size={14} />
                 </button>
                 {menuIndex === index && (
                   <>
                     <div className="fixed inset-0 z-30" onClick={() => closeMenu(true)} />
-                    <div className="absolute right-0 top-9 z-40 min-w-[150px] rounded-[8px] border border-border bg-bg-primary py-1 shadow-float">
+                    <div className="absolute right-0 top-9 z-40 min-w-[150px] rounded-md border border-border bg-bg-primary py-1 shadow-float">
                       {index > 0 && (
                         <button
                           type="button"
@@ -450,7 +450,7 @@ export function ShortcutBindingList({
       </div>
 
       {atLimit && (
-        <p className="mt-1 text-[10px] text-text-tertiary">{t('settings.shortcutMax')}</p>
+        <p className="mt-1 text-[11px] text-text-tertiary">{t('settings.shortcutMax')}</p>
       )}
     </div>
   )

@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Speech",
-    "tagline": "Entrada de voz con IA"
+    "tagline": "Entrada de voz"
   },
   "nav": {
     "home": "Inicio",
@@ -9,7 +9,10 @@
     "ask": "Preguntar",
     "settings": "Configuración",
     "history": "Historial",
-    "mainNavigation": "Navegación principal"
+    "mainNavigation": "Navegación principal",
+    "toTop": "Volver arriba",
+    "meetingRecording": "Grabando una reunión",
+    "meetingPaused": "Grabación en pausa"
   },
   "ask": {
     "title": "Preguntar",
@@ -67,7 +70,13 @@
     "wordsDictated": "Palabras dictadas",
     "timeSaved": "Ahorrado frente a teclear",
     "speakWith": "Pulsa {{hotkey}} y habla",
-    "figures": "Tus cifras"
+    "figures": "Tus cifras",
+    "shortcuts": "Atajos",
+    "recentMeetings": "Reuniones recientes",
+    "startMeeting": "Iniciar una reunión",
+    "noMeetings": "Todavía no hay reuniones grabadas.",
+    "untitledMeeting": "Reunión sin título",
+    "meetingMinutes": "{{count}} min"
   },
   "onboarding": {
     "speakToWrite": "Habla para escribir — convierte tu voz en texto pulido en tiempo real",
@@ -109,7 +118,9 @@
       "permissionsSub": "Permite solo lo que necesita tu configuración",
       "getStarted": "Comenzar",
       "tryIt": "Try it",
-      "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
+      "tryItSub": "Read one sentence and see how slips and lists get cleaned up",
+      "more": "Reuniones y preguntas",
+      "moreSub": "Dos cosas más que Speech hace además del dictado"
     },
     "permissions": {
       "subtitle": "Speech solo pide acceso cuando una función lo necesita.",
@@ -158,6 +169,16 @@
       "again": "Intentar de nuevo",
       "nameExample": "Momo",
       "nameHint": "Di primero «{{name}}» y lo demás es una instrucción. «{{name}}, traduce eso al inglés» cambia el texto recién escrito. Déjalo vacío para no usarlo"
+    },
+    "more": {
+      "meetingTitle": "Grabar reuniones",
+      "meetingDesc": "Graba una reunión o llamada y la transcripción aparece mientras se habla; después se redacta el acta a partir de ella. Empieza desde Reuniones en la barra lateral. Cuando empieza una llamada, Speech también puede ofrecerte grabarla.",
+      "record": "Grabar",
+      "transcript": "Transcripción",
+      "minutes": "Acta",
+      "askTitle": "Preguntar con la voz",
+      "askDesc": "Pulsa el atajo de preguntas y di tu pregunta; la respuesta se abre en un pequeño panel.",
+      "askNoHotkey": "Configura un atajo de preguntas en Configuración, en Dictado."
     }
   },
   "capsule": {
@@ -472,7 +493,16 @@
     "moreShortcuts": "Más atajos",
     "meetingQuietPause": "Pausar la grabación tras cuánto silencio",
     "meetingQuietPauseNever": "Nunca",
-    "meetingQuietPauseMinutes": "{{count}} min"
+    "meetingQuietPauseMinutes": "{{count}} min",
+    "meetingFolderSuggest": "Sugerir una carpeta después de cada reunión",
+    "meetingFolderSuggestHint": "El modelo de pulido elige una de tus carpetas según el título y el inicio de la reunión, y algunos títulos de cada carpeta; antes se te pregunta.",
+    "searchPlaceholder": "Buscar ajustes",
+    "searchNoResults": "Ningún ajuste coincide",
+    "leaveTitle": "¿Guardar los cambios?",
+    "leaveBody": "Hay ajustes modificados sin guardar. Guárdalos antes de salir o descártalos.",
+    "leaveSave": "Guardar y salir",
+    "leaveDiscard": "Descartar",
+    "leaveStay": "Quedarse"
   },
   "contextFamilies": {
     "email": "Correo electrónico",
@@ -672,7 +702,14 @@
       "partial": "Resultado parcial",
       "fallback": "Salida alternativa",
       "clipboardFallback": "Copiado al portapapeles"
-    }
+    },
+    "copyEntry": "Copiar texto: {{text}}",
+    "filterByApp": "Filtrar por aplicación",
+    "allApps": "Todas las aplicaciones",
+    "loadMore": "Cargar más",
+    "loadingMore": "Cargando…",
+    "failedToLoadMore": "No se pudo cargar más historial",
+    "clearFilters": "Borrar búsqueda y filtro"
   },
   "error": {
     "somethingWentWrong": "Algo salió mal",
@@ -686,7 +723,10 @@
     "cancel": "Cancelar",
     "reset": "Restablecer",
     "connectionFail": "Error de conexión",
-    "saveFailed": "No se pudo guardar la configuración. Inténtalo de nuevo."
+    "saveFailed": "No se pudo guardar la configuración. Inténtalo de nuevo.",
+    "undo": "Deshacer",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar"
   },
   "recordingLimits": {
     "auto": "Automático (recomendado, hasta {{duration}})",
@@ -834,7 +874,19 @@
       "someFailed": "Algunos archivos no se pudieron transcribir.",
       "timesDownload": "No se pudo descargar el modelo",
       "overview": "No se pudo crear el resumen",
-      "trim": "No se pudo recortar la grabación."
+      "trim": "No se pudo recortar la grabación.",
+      "delete": "No se pudo eliminar la reunión",
+      "audioDelete": "No se pudo eliminar la grabación",
+      "undo": "No se pudo deshacer",
+      "folder": "No se pudo mover a la carpeta",
+      "languages": "No se pudieron cambiar los idiomas",
+      "pick": "No se pudo abrir el archivo",
+      "open": "No se pudo abrir la reunión",
+      "dictionary": "No se pudo añadir la palabra al diccionario",
+      "voice": "No se pudo olvidar la voz",
+      "save": "No se pudo guardar la reunión",
+      "style": "No se pudo quitar la regla",
+      "questions": "No se pudieron guardar las preguntas"
     },
     "live": "Texto en directo",
     "listening": "Escuchando. El texto llega cada quince segundos aproximadamente",
@@ -972,12 +1024,59 @@
     "quietPaused": "No se dijo nada durante {{count}} min, así que la grabación se pausó.",
     "cutAfter": "Cortar desde aquí hasta el final",
     "cutAfterConfirm": "Quitar esto y todo lo que sigue",
-    "cutAfterConfirmSound": "Quitar esto y todo lo que sigue, con la grabación; no se puede deshacer",
+    "cutAfterConfirmSound": "Quitar esto y todo lo que sigue, con la grabación",
     "cutSilentTail": "Quitar los {{minutes}} min de silencio del final",
-    "cutSilentTailAsk": "¿Cortar la grabación justo después de las últimas palabras ({{time}})? No se puede deshacer.",
-    "cutSilentTailConfirm": "Cortar"
+    "cutSilentTailAsk": "¿Cortar la grabación justo después de las últimas palabras ({{time}})?",
+    "cutSilentTailConfirm": "Cortar",
+    "cutFromHere": "Cortar desde {{time}} hasta el final",
+    "cutFromHereAsk": "¿Quitar la grabación y el texto desde {{time}}?",
+    "cutFromHereConfirm": "Cortar",
+    "cutFromHereHint": "Reproduce o arrastra hasta donde terminó la reunión y corta desde ahí",
+    "folderOffer": "¿Poner «{{title}}» en la carpeta «{{folder}}»?",
+    "folderOfferYes": "Ponerla ahí",
+    "folderOfferNo": "No",
+    "deleted": "Se eliminó «{{title}}»",
+    "audioDeleted": "Grabación eliminada",
+    "cutDone": "Cortado",
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "noMatches": "Ninguna reunión coincide",
+    "showMore": "Mostrar {{count}} más",
+    "renameFolder": "Renombrar carpeta",
+    "removeFolder": "Quitar carpeta",
+    "folderRemoved": "Carpeta «{{folder}}» quitada; sus reuniones se conservan",
+    "order": "Orden",
+    "orderBy": {
+      "newest": "Más recientes",
+      "oldest": "Más antiguas",
+      "longest": "Más largas",
+      "title": "Por título"
+    },
+    "skipBack": "Atrás {{seconds}} segundos",
+    "skipOn": "Adelante {{seconds}} segundos",
+    "rate": "Velocidad {{rate}}×",
+    "findInText": "Buscar en el texto",
+    "foundAt": "{{at}} de {{count}}",
+    "foundNone": "No encontrado",
+    "findPrevious": "Anterior",
+    "findNext": "Siguiente",
+    "jumpToSpeaker": "Ir a un hablante",
+    "previousTurn": "Intervención anterior",
+    "nextTurn": "Intervención siguiente",
+    "editHint": "Haz doble clic en las palabras para cambiarlas, o en un hablante para dar la sección a otra persona o ponerle nombre"
   },
   "whatsNew": {
     "title": "Novedades de {{version}}"
+  },
+  "contextMenu": {
+    "cut": "Cortar",
+    "copy": "Copiar",
+    "paste": "Pegar",
+    "selectAll": "Seleccionar todo",
+    "open": "Abrir",
+    "copyAll": "Copiar texto"
+  },
+  "offer": {
+    "closesByItself": "Si no respondes, este aviso se cierra solo al cabo de un minuto."
   }
 }

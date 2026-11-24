@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from '../../i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { UI_LANGUAGES } from '../../lib/constants'
+import { Mic } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 
 export function WelcomeStep() {
@@ -21,7 +22,9 @@ export function WelcomeStep() {
   return (
     <div className="space-y-6">
       <div className="text-center py-4">
-        <div className="text-[40px] mb-2">🎙</div>
+        <span className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-accent/10 text-accent">
+          <Mic size={22} aria-hidden />
+        </span>
         <p className="text-[15px] text-text-secondary leading-relaxed">
           {t('onboarding.speakToWrite')}
         </p>
@@ -36,7 +39,7 @@ export function WelcomeStep() {
             <button
               key={lang.value}
               onClick={() => handleSelectLanguage(lang.value)}
-              className={`px-4 py-4 rounded-[8px] text-[14px] border cursor-pointer transition-all ${
+              className={`px-4 py-4 rounded-md text-[14px] border cursor-pointer transition-all ${
                 currentLang === lang.value
                   ? 'bg-accent/10 border-accent text-accent font-medium'
                   : 'bg-bg-secondary border-border text-text-primary hover:border-text-tertiary'

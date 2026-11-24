@@ -46,7 +46,7 @@ export function OnboardingLayout({
       <div className="flex items-center justify-end px-3 pt-3 pb-0" data-tauri-drag-region>
         <button
           onClick={handleClose}
-          className="p-1.5 rounded-[8px] hover:bg-bg-tertiary transition-colors bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary"
+          className="p-1.5 rounded-md hover:bg-bg-tertiary transition-colors bg-transparent border-none cursor-pointer text-text-tertiary hover:text-text-primary"
           aria-label={t('onboarding.layout.close')}
         >
           <X size={14} />
@@ -80,14 +80,13 @@ export function OnboardingLayout({
         <div className={`${wide ? 'max-w-[540px]' : 'max-w-[460px]'} mx-auto pb-6`}>{children}</div>
       </div>
 
-      {/* Navigation — jelly buttons */}
+      {/* Navigation */}
       <div className="flex items-center justify-between px-8 py-4">
         <motion.button
           onClick={onBack}
           disabled={!canBack}
-          whileHover={canBack ? { scale: 1.04 } : undefined}
-          whileTap={canBack ? { scaleX: 1.06, scaleY: 0.94 } : undefined}
-          transition={spring.jellyGentle}
+          whileTap={canBack ? { scale: 0.97 } : undefined}
+          transition={spring.gentle}
           className="px-4 py-2 text-[13px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer disabled:opacity-0 disabled:cursor-default transition-colors"
         >
           {t('onboarding.layout.back')}
@@ -95,9 +94,8 @@ export function OnboardingLayout({
         <motion.button
           onClick={onNext}
           disabled={!canNext}
-          whileHover={canNext ? { scale: 1.04 } : undefined}
-          whileTap={canNext ? { scaleX: 1.06, scaleY: 0.94 } : undefined}
-          transition={spring.jellyGentle}
+          whileTap={canNext ? { scale: 0.97 } : undefined}
+          transition={spring.gentle}
           className="px-6 py-2 text-[13px] font-medium text-white bg-accent rounded-full border-none cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors jelly-btn-accent"
         >
           {nextLabel}

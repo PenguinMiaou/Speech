@@ -110,7 +110,7 @@ export function MeetingOverviewPanel({
               type="button"
               onClick={make}
               disabled={busy}
-              className="cursor-pointer rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-primary hover:border-border-focus disabled:cursor-default disabled:opacity-50"
+              className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-primary hover:border-border-focus disabled:cursor-default disabled:opacity-50"
             >
               {t('meeting.overviewAgain')}
             </button>
@@ -120,7 +120,7 @@ export function MeetingOverviewPanel({
             type="button"
             onClick={make}
             disabled={busy}
-            className="cursor-pointer rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-primary hover:border-border-focus disabled:cursor-default disabled:opacity-50"
+            className="cursor-pointer rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-primary hover:border-border-focus disabled:cursor-default disabled:opacity-50"
           >
             {t('meeting.overviewMake')}
           </button>
@@ -139,7 +139,7 @@ export function MeetingOverviewPanel({
           type="button"
           onClick={make}
           disabled={working || busy}
-          className="flex cursor-pointer items-center gap-1.5 rounded-[8px] border-none bg-transparent px-2 py-1 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary disabled:cursor-default disabled:opacity-50"
+          className="flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-2 py-1 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary disabled:cursor-default disabled:opacity-50"
         >
           {working ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
           {t('meeting.overviewAgain')}

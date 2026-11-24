@@ -284,7 +284,7 @@ export function DictionaryPane() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t('dictionary.searchPlaceholder')}
-            className="h-9 w-full min-w-0 rounded-[8px] border border-border bg-bg-secondary pl-8 pr-3 text-[12px] text-text-primary outline-none focus:border-border-focus"
+            className="h-9 w-full min-w-0 rounded-md border border-border bg-bg-secondary pl-8 pr-3 text-[12px] text-text-primary outline-none focus:border-border-focus"
           />
         </div>
         <button
@@ -293,7 +293,7 @@ export function DictionaryPane() {
           onClick={() => importInputRef.current?.click()}
           aria-label={t('dictionary.import')}
           title={t('dictionary.import')}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
         >
           <Upload size={14} />
         </button>
@@ -318,7 +318,7 @@ export function DictionaryPane() {
             title={t('dictionary.export')}
             aria-haspopup="menu"
             aria-expanded={exportMenuOpen}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[8px] border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-transparent text-text-secondary hover:border-border-focus hover:text-text-primary"
           >
             <Download size={14} />
           </button>
@@ -327,7 +327,7 @@ export function DictionaryPane() {
               <div className="fixed inset-0 z-30" onClick={closeExportMenu} />
               <div
                 role="menu"
-                className="absolute right-0 top-9 z-40 min-w-32 rounded-[8px] border border-border bg-bg-primary py-1 shadow-float"
+                className="absolute right-0 top-9 z-40 min-w-32 rounded-md border border-border bg-bg-primary py-1 shadow-float"
               >
                 <button
                   type="button"
@@ -383,26 +383,26 @@ export function DictionaryPane() {
               value={word}
               onChange={(event) => setWord(event.target.value)}
               placeholder={t('dictionary.word')}
-              className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="min-w-0 rounded-md border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
             <input
               value={pronunciation}
               onChange={(event) => setPronunciation(event.target.value)}
               placeholder={t('dictionary.pronunciationOptional')}
-              className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="min-w-0 rounded-md border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
             <button
               type="button"
               onClick={() => void handleAdd()}
               disabled={!word.trim()}
-              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 rounded-md border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
             >
               <Plus size={14} />
               {t('dictionary.add')}
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-[8px] border border-border">
+          <div className="overflow-hidden rounded-md border border-border">
             <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_64px] gap-2 bg-bg-secondary px-3 py-2.5 text-[12px] font-medium text-text-secondary">
               <span>{t('dictionary.word')}</span>
               <span>{t('dictionary.pronunciation')}</span>
@@ -423,7 +423,7 @@ export function DictionaryPane() {
                       aria-label={t('dictionary.word')}
                       value={editing.word}
                       onChange={(event) => setEditing({ ...editing, word: event.target.value })}
-                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <input
                       aria-label={t('dictionary.pronunciation')}
@@ -431,7 +431,7 @@ export function DictionaryPane() {
                       onChange={(event) =>
                         setEditing({ ...editing, pronunciation: event.target.value })
                       }
-                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <div className="flex justify-end">
                       <button
@@ -464,7 +464,7 @@ export function DictionaryPane() {
                       {entry.learned_from && (
                         <span
                           title={t('dictionary.learnedFrom', { heard: entry.learned_from })}
-                          className="flex-shrink-0 rounded-[4px] bg-bg-secondary px-1.5 py-0.5 text-[10px] text-text-tertiary"
+                          className="flex-shrink-0 rounded-xs bg-bg-secondary px-1.5 py-0.5 text-[11px] text-text-tertiary"
                         >
                           {t('dictionary.learned')}
                         </span>
@@ -515,27 +515,27 @@ export function DictionaryPane() {
               value={pattern}
               onChange={(event) => setPattern(event.target.value)}
               placeholder={t('dictionary.wrongPhrase')}
-              className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="min-w-0 rounded-md border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
             <input
               value={replacement}
               onChange={(event) => setReplacement(event.target.value)}
               placeholder={t('dictionary.correctPhrase')}
-              className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="min-w-0 rounded-md border border-border bg-bg-secondary px-3 py-2.5 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
             <button
               type="button"
               onClick={() => void handleAddCorrection()}
               disabled={!pattern.trim() || !replacement.trim()}
               aria-label={t('dictionary.addCorrection')}
-              className="flex items-center justify-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
+              className="flex items-center justify-center gap-1.5 rounded-md border-none bg-accent px-4 py-2.5 text-[13px] text-white hover:bg-accent-hover disabled:opacity-40"
             >
               <Plus size={14} />
               {t('dictionary.add')}
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-[8px] border border-border">
+          <div className="overflow-hidden rounded-md border border-border">
             {filteredCorrections.length === 0 ? (
               <div className="px-3 py-8 text-center text-[13px] text-text-tertiary">
                 {t('dictionary.noCorrections')}
@@ -552,7 +552,7 @@ export function DictionaryPane() {
                       aria-label={t('dictionary.wrongPhrase')}
                       value={editing.pattern}
                       onChange={(event) => setEditing({ ...editing, pattern: event.target.value })}
-                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <input
                       aria-label={t('dictionary.correctPhrase')}
@@ -560,7 +560,7 @@ export function DictionaryPane() {
                       onChange={(event) =>
                         setEditing({ ...editing, replacement: event.target.value })
                       }
-                      className="min-w-0 rounded-[8px] border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
+                      className="min-w-0 rounded-md border border-border bg-bg-secondary px-2 py-1.5 text-[12px] text-text-primary outline-none focus:border-border-focus"
                     />
                     <div className="flex justify-end">
                       <button

@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Speech",
-    "tagline": "AI音声入力"
+    "tagline": "音声入力"
   },
   "nav": {
     "home": "ホーム",
@@ -9,7 +9,10 @@
     "ask": "質問",
     "settings": "設定",
     "history": "履歴",
-    "mainNavigation": "メインナビゲーション"
+    "mainNavigation": "メインナビゲーション",
+    "toTop": "トップへ戻る",
+    "meetingRecording": "会議を録音中",
+    "meetingPaused": "録音を一時停止中"
   },
   "ask": {
     "title": "質問",
@@ -67,7 +70,13 @@
     "wordsDictated": "音声入力した語数",
     "timeSaved": "タイピングより節約",
     "speakWith": "{{hotkey}} を押して話す",
-    "figures": "利用状況"
+    "figures": "利用状況",
+    "shortcuts": "ショートカット",
+    "recentMeetings": "最近の会議",
+    "startMeeting": "会議を始める",
+    "noMeetings": "録音した会議はまだありません。",
+    "untitledMeeting": "無題の会議",
+    "meetingMinutes": "{{count}} 分"
   },
   "onboarding": {
     "speakToWrite": "話して書く — 音声をリアルタイムで整形されたテキストに変換します",
@@ -109,7 +118,9 @@
       "permissionsSub": "この設定に必要なものだけを許可",
       "getStarted": "始める",
       "tryIt": "Try it",
-      "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
+      "tryItSub": "Read one sentence and see how slips and lists get cleaned up",
+      "more": "会議と質問",
+      "moreSub": "音声入力のほかに Speech でできる 2 つのこと"
     },
     "permissions": {
       "subtitle": "Speechは機能に必要なときだけアクセスを求めます。",
@@ -158,6 +169,16 @@
       "again": "もう一度",
       "nameExample": "モモ",
       "nameHint": "先に「{{name}}」と呼ぶと、続きは指示になります。「{{name}}、今のを英語にして」で直前に入力した文章を書き換えます。空欄なら無効です"
+    },
+    "more": {
+      "meetingTitle": "会議を録音",
+      "meetingDesc": "会議や通話を録音すると、話している間に文字起こしが表示され、終了後にそこから議事録が作られます。サイドバーの「会議」から始めます。通話が始まったときに、Speech から録音を提案することもできます。",
+      "record": "録音",
+      "transcript": "文字起こし",
+      "minutes": "議事録",
+      "askTitle": "声で質問",
+      "askDesc": "質問用のショートカットを押して質問を話すと、小さなパネルに答えが表示されます。",
+      "askNoHotkey": "質問用のショートカットは「設定 → 音声入力」で設定できます。"
     }
   },
   "capsule": {
@@ -472,7 +493,16 @@
     "moreShortcuts": "その他のショートカット",
     "meetingQuietPause": "無音が続いたら録音を一時停止するまでの時間",
     "meetingQuietPauseNever": "しない",
-    "meetingQuietPauseMinutes": "{{count}} 分"
+    "meetingQuietPauseMinutes": "{{count}} 分",
+    "meetingFolderSuggest": "会議のあとにフォルダを提案",
+    "meetingFolderSuggestHint": "整形モデルが会議のタイトルと冒頭、各フォルダの会議タイトルをもとに既存のフォルダから一つ選びます。入れる前に確認します。",
+    "searchPlaceholder": "設定を検索",
+    "searchNoResults": "一致する設定はありません",
+    "leaveTitle": "変更を保存しますか？",
+    "leaveBody": "保存されていない設定の変更があります。移動する前に保存するか、破棄してください。",
+    "leaveSave": "保存して移動",
+    "leaveDiscard": "破棄",
+    "leaveStay": "このまま"
   },
   "contextFamilies": {
     "email": "メールアドレス",
@@ -672,7 +702,14 @@
       "partial": "部分的な結果",
       "fallback": "代替出力",
       "clipboardFallback": "クリップボードにコピーしました"
-    }
+    },
+    "copyEntry": "テキストをコピー: {{text}}",
+    "filterByApp": "アプリで絞り込む",
+    "allApps": "すべてのアプリ",
+    "loadMore": "さらに読み込む",
+    "loadingMore": "読み込み中…",
+    "failedToLoadMore": "履歴を追加で読み込めませんでした",
+    "clearFilters": "検索と絞り込みをクリア"
   },
   "error": {
     "somethingWentWrong": "問題が発生しました",
@@ -686,7 +723,10 @@
     "cancel": "キャンセル",
     "reset": "リセット",
     "connectionFail": "接続に失敗しました",
-    "saveFailed": "設定を保存できませんでした。もう一度お試しください。"
+    "saveFailed": "設定を保存できませんでした。もう一度お試しください。",
+    "undo": "元に戻す",
+    "copied": "コピーしました",
+    "copyFailed": "コピーできませんでした"
   },
   "recordingLimits": {
     "auto": "自動（推奨、最大{{duration}}）",
@@ -834,7 +874,19 @@
       "someFailed": "文字にできなかったファイルがあります。",
       "timesDownload": "モデルをダウンロードできませんでした",
       "overview": "概要を作成できませんでした",
-      "trim": "録音をカットできませんでした。"
+      "trim": "録音をカットできませんでした。",
+      "delete": "会議を削除できませんでした",
+      "audioDelete": "録音を削除できませんでした",
+      "undo": "元に戻せませんでした",
+      "folder": "フォルダに移動できませんでした",
+      "languages": "言語を変更できませんでした",
+      "pick": "ファイルを開けませんでした",
+      "open": "会議を開けませんでした",
+      "dictionary": "辞書に追加できませんでした",
+      "voice": "声を削除できませんでした",
+      "save": "会議を保存できませんでした",
+      "style": "ルールを削除できませんでした",
+      "questions": "質問を保存できませんでした"
     },
     "live": "リアルタイムの文字",
     "listening": "聞き取り中。文字は約15秒ごとに出ます",
@@ -972,12 +1024,59 @@
     "quietPaused": "{{count}} 分間だれも話さなかったので、録音を一時停止しました。",
     "cutAfter": "ここから最後までカット",
     "cutAfterConfirm": "ここから後をすべて削除",
-    "cutAfterConfirmSound": "ここから後を録音ごと削除（元に戻せません）",
+    "cutAfterConfirmSound": "ここから後を録音ごと削除",
     "cutSilentTail": "最後の {{minutes}} 分の無音をカット",
-    "cutSilentTailAsk": "最後の発言の直後（{{time}}）で録音をカットしますか？元に戻せません。",
-    "cutSilentTailConfirm": "カット"
+    "cutSilentTailAsk": "最後の発言の直後（{{time}}）で録音をカットしますか？",
+    "cutSilentTailConfirm": "カット",
+    "cutFromHere": "{{time}} から最後までカット",
+    "cutFromHereAsk": "{{time}} 以降の録音と文字を削除しますか？",
+    "cutFromHereConfirm": "カット",
+    "cutFromHereHint": "会議が終わった位置まで再生またはドラッグしてから、そこからカット",
+    "folderOffer": "「{{title}}」をフォルダ「{{folder}}」に入れますか？",
+    "folderOfferYes": "入れる",
+    "folderOfferNo": "いいえ",
+    "deleted": "「{{title}}」を削除しました",
+    "audioDeleted": "録音を削除しました",
+    "cutDone": "カットしました",
+    "today": "今日",
+    "yesterday": "昨日",
+    "noMatches": "一致する会議はありません",
+    "showMore": "あと {{count}} 件表示",
+    "renameFolder": "フォルダ名を変更",
+    "removeFolder": "フォルダを削除",
+    "folderRemoved": "フォルダ「{{folder}}」を削除しました（会議は残ります）",
+    "order": "並び順",
+    "orderBy": {
+      "newest": "新しい順",
+      "oldest": "古い順",
+      "longest": "長い順",
+      "title": "タイトル順"
+    },
+    "skipBack": "{{seconds}} 秒戻る",
+    "skipOn": "{{seconds}} 秒進む",
+    "rate": "速度 {{rate}}×",
+    "findInText": "テキスト内を検索",
+    "foundAt": "{{at}} / {{count}} 件",
+    "foundNone": "見つかりません",
+    "findPrevious": "前へ",
+    "findNext": "次へ",
+    "jumpToSpeaker": "話者へ移動",
+    "previousTurn": "前の発言",
+    "nextTurn": "次の発言",
+    "editHint": "文字をダブルクリックで直接修正、話者をダブルクリックでこの部分を別の人に変更または名前を付けられます"
   },
   "whatsNew": {
     "title": "{{version}} の新機能"
+  },
+  "contextMenu": {
+    "cut": "切り取り",
+    "copy": "コピー",
+    "paste": "貼り付け",
+    "selectAll": "すべて選択",
+    "open": "開く",
+    "copyAll": "テキストをコピー"
+  },
+  "offer": {
+    "closesByItself": "応答がない場合、この通知は 1 分後に自動で閉じます。"
   }
 }

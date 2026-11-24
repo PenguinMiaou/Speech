@@ -36,7 +36,7 @@ export function ContextAdaptationApps({ disabled }: { disabled: boolean }) {
           role="img"
           aria-label={app.label}
           title={app.label}
-          className={`grid h-5 w-5 shrink-0 place-items-center rounded-[4px] ${app.hideAtMinimum ? 'context-app--compact-duplicate' : ''}`}
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded-xs ${app.hideAtMinimum ? 'context-app--compact-duplicate' : ''}`}
         >
           <AppLogo iconKey={app.iconKey} family={app.family} />
         </span>

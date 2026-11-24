@@ -409,7 +409,7 @@ export function ScenesPane() {
           onChange={handleFamilySceneChange}
         />
         {config.active_scene && (
-          <div className="flex items-center justify-between gap-3 rounded-[8px] border border-border px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5">
             <p className="min-w-0 truncate text-[12px] text-text-secondary">
               {t('scenes.activeScene', { name: config.active_scene.name })}
             </p>
@@ -431,14 +431,14 @@ export function ScenesPane() {
             <button
               onClick={handleExportCustomScenes}
               disabled={config.custom_scenes.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-border bg-transparent text-text-secondary text-[12px] cursor-pointer hover:text-text-primary hover:border-border-focus transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-transparent text-text-secondary text-[12px] cursor-pointer hover:text-text-primary hover:border-border-focus transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
             >
               <Download size={13} />
               {t('scenes.export')}
             </button>
             <button
               onClick={() => importInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-border bg-transparent text-text-secondary text-[12px] cursor-pointer hover:text-text-primary hover:border-border-focus transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-transparent text-text-secondary text-[12px] cursor-pointer hover:text-text-primary hover:border-border-focus transition-colors"
             >
               <Upload size={13} />
               {t('scenes.import')}
@@ -457,7 +457,7 @@ export function ScenesPane() {
             />
             <button
               onClick={handleStartCreate}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] border border-border bg-bg-secondary text-text-primary text-[12px] cursor-pointer hover:border-border-focus transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-bg-secondary text-text-primary text-[12px] cursor-pointer hover:border-border-focus transition-colors"
             >
               <Plus size={13} />
               {t('scenes.newScene')}
@@ -497,7 +497,7 @@ export function ScenesPane() {
         </div>
 
         {config.custom_scenes.length === 0 ? (
-          <div className="rounded-[8px] border border-dashed border-border px-4 py-6 text-center">
+          <div className="rounded-md border border-dashed border-border px-4 py-6 text-center">
             <p className="text-[13px] text-text-primary font-medium">
               {t('scenes.noCustomScenes')}
             </p>
@@ -530,9 +530,9 @@ export function ScenesPane() {
       </section>
 
       {mergeMsg && (
-        <p className={`text-[12px] ${!mergeOk ? 'text-red-500' : 'text-green-500'}`}>{mergeMsg}</p>
+        <p className={`text-[12px] ${!mergeOk ? 'text-error' : 'text-success'}`}>{mergeMsg}</p>
       )}
-      {saveError && <p className="text-[12px] text-red-500">{saveError}</p>}
+      {saveError && <p className="text-[12px] text-error">{saveError}</p>}
     </div>
   )
 }
@@ -559,7 +559,7 @@ function AppWritingModes({
         return (
           <div
             key={mode.family}
-            className="grid grid-cols-1 gap-2.5 rounded-[8px] border border-border px-3 py-2.5 min-[840px]:grid-cols-[minmax(0,1fr)_minmax(140px,180px)] min-[840px]:items-center"
+            className="grid grid-cols-1 gap-2.5 rounded-md border border-border px-3 py-2.5 min-[840px]:grid-cols-[minmax(0,1fr)_minmax(140px,180px)] min-[840px]:items-center"
           >
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex flex-none items-center gap-1.5">
@@ -569,7 +569,7 @@ function AppWritingModes({
                     role="img"
                     aria-label={icon.label}
                     title={icon.label}
-                    className="grid h-6 w-6 place-items-center rounded-[8px] bg-bg-secondary"
+                    className="grid h-6 w-6 place-items-center rounded-md bg-bg-secondary"
                   >
                     <AppLogo iconKey={icon.iconKey} family={mode.family} />
                   </span>
@@ -617,7 +617,7 @@ function SceneEditor({
   const canSave = editor.name.trim().length > 0 && editor.promptTemplate.trim().length > 0
 
   return (
-    <div className="space-y-3 rounded-[8px] border border-border bg-bg-secondary px-3 py-3">
+    <div className="space-y-3 rounded-md border border-border bg-bg-secondary px-3 py-3">
       {editor.mode === 'system' ? (
         <p className="text-[13px] font-medium text-text-primary">{editor.name}</p>
       ) : (
@@ -628,7 +628,7 @@ function SceneEditor({
               value={editor.name}
               onChange={(e) => onChange({ ...editor, name: e.target.value })}
               maxLength={80}
-              className="w-full px-3 py-2 rounded-[8px] border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="w-full px-3 py-2 rounded-md border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
           </label>
           <label className="block text-[12px] text-text-secondary">
@@ -637,7 +637,7 @@ function SceneEditor({
               value={editor.description}
               onChange={(e) => onChange({ ...editor, description: e.target.value })}
               maxLength={240}
-              className="w-full px-3 py-2 rounded-[8px] border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="w-full px-3 py-2 rounded-md border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
           </label>
         </>
@@ -649,20 +649,20 @@ function SceneEditor({
           onChange={(e) => onChange({ ...editor, promptTemplate: e.target.value })}
           maxLength={4000}
           rows={5}
-          className="w-full resize-y px-3 py-2 rounded-[8px] border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
+          className="w-full resize-y px-3 py-2 rounded-md border border-border bg-bg-primary text-[13px] text-text-primary outline-none focus:border-border-focus"
         />
       </label>
       <div className="flex items-center justify-end gap-2">
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 rounded-[8px] border border-border bg-transparent text-[12px] text-text-secondary cursor-pointer hover:text-text-primary transition-colors"
+          className="px-3 py-1.5 rounded-md border border-border bg-transparent text-[12px] text-text-secondary cursor-pointer hover:text-text-primary transition-colors"
         >
           {t('common.cancel')}
         </button>
         <button
           onClick={onSave}
           disabled={!canSave}
-          className="px-3 py-1.5 rounded-[8px] border border-border bg-bg-primary text-[12px] text-text-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1.5 rounded-md border border-border bg-bg-primary text-[12px] text-text-primary cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {t('common.save')}
         </button>
@@ -706,7 +706,7 @@ function LocalSceneCard({
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className="border border-border rounded-[8px] overflow-hidden">
+    <div className="border border-border rounded-md overflow-hidden">
       <button
         type="button"
         aria-expanded={expanded}
@@ -717,7 +717,7 @@ function LocalSceneCard({
           <span className="flex items-center gap-2">
             <span className="text-[13px] text-text-primary font-medium truncate">{name}</span>
             {active && (
-              <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
+              <span className="text-[11px] text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
                 {t('scenes.active')}
               </span>
             )}
@@ -735,7 +735,7 @@ function LocalSceneCard({
       </button>
       {expanded && (
         <div className="border-t border-border px-3 py-3 space-y-3">
-          <pre className="text-[12px] text-text-primary bg-bg-secondary rounded-[8px] px-3 py-2 whitespace-pre-wrap max-h-[140px] overflow-y-auto leading-relaxed">
+          <pre className="text-[12px] text-text-primary bg-bg-secondary rounded-md px-3 py-2 whitespace-pre-wrap max-h-[140px] overflow-y-auto leading-relaxed">
             {promptTemplate}
           </pre>
           <div className="flex items-center gap-3 flex-wrap">
@@ -775,7 +775,7 @@ function LocalSceneCard({
             {onDelete && !confirmingDelete && (
               <button
                 onClick={onDelete}
-                className="flex items-center gap-1 text-[12px] text-red-500 bg-transparent border-none cursor-pointer hover:opacity-80"
+                className="flex items-center gap-1 text-[12px] text-error bg-transparent border-none cursor-pointer hover:opacity-80"
               >
                 <Trash2 size={12} />
                 {t('scenes.delete')}
@@ -783,7 +783,7 @@ function LocalSceneCard({
             )}
           </div>
           {confirmingDelete && onCancelDelete && onConfirmDelete && (
-            <div className="rounded-[8px] border border-error/20 bg-error/10 px-3 py-2">
+            <div className="rounded-md border border-error/20 bg-error/10 px-3 py-2">
               <p className="text-[12px] leading-relaxed text-text-secondary">
                 {t('scenes.deleteConfirm')}
               </p>
@@ -791,14 +791,14 @@ function LocalSceneCard({
                 <button
                   type="button"
                   onClick={onCancelDelete}
-                  className="rounded-[8px] border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
+                  className="rounded-md border border-border bg-transparent px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={onConfirmDelete}
-                  className="rounded-[8px] border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
+                  className="rounded-md border border-error/30 bg-error/15 px-2.5 py-1 text-[11px] font-medium text-error hover:bg-error/20"
                 >
                   {t('scenes.delete')}
                 </button>

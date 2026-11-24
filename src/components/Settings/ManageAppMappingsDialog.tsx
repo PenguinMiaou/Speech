@@ -93,7 +93,7 @@ export function ManageAppMappingsDialog({
         role="dialog"
         aria-modal="true"
         aria-label={t('settings.manageAppMappingsTitle')}
-        className="relative z-10 flex max-h-[72vh] w-full max-w-[460px] flex-col rounded-[8px] border border-border bg-bg-primary shadow-float"
+        className="relative z-10 flex max-h-[72vh] w-full max-w-[460px] flex-col rounded-md border border-border bg-bg-primary shadow-float"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h3 className="text-[14px] font-medium text-text-primary">
@@ -104,7 +104,7 @@ export function ManageAppMappingsDialog({
             onClick={onCancel}
             disabled={Boolean(busyId)}
             aria-label={t('settings.mappingCancel')}
-            className="grid h-7 w-7 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-40"
+            className="grid h-7 w-7 place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary disabled:opacity-40"
           >
             <X size={15} />
           </button>
@@ -150,7 +150,7 @@ export function ManageAppMappingsDialog({
                   onClick={() => onEdit(mapping)}
                   aria-label={t('settings.mappingEdit')}
                   title={t('settings.mappingEdit')}
-                  className="grid h-7 w-7 flex-none place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
+                  className="grid h-7 w-7 flex-none place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-primary"
                 >
                   <Pencil size={14} />
                 </button>
@@ -160,7 +160,7 @@ export function ManageAppMappingsDialog({
                   onClick={() => void remove(mapping)}
                   aria-label={t('settings.mappingDelete')}
                   title={t('settings.mappingDelete')}
-                  className="grid h-7 w-7 flex-none place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-error disabled:opacity-40"
+                  className="grid h-7 w-7 flex-none place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-error disabled:opacity-40"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -181,7 +181,7 @@ export function ManageAppMappingsDialog({
                 type="button"
                 onClick={() => setResetConfirming(false)}
                 disabled={Boolean(busyId)}
-                className="rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary disabled:opacity-40"
+                className="rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary disabled:opacity-40"
               >
                 {t('settings.mappingCancel')}
               </button>
@@ -189,7 +189,7 @@ export function ManageAppMappingsDialog({
                 type="button"
                 onClick={() => void reset()}
                 disabled={Boolean(busyId)}
-                className="rounded-[8px] border-none bg-error px-3 py-1.5 text-[12px] text-white disabled:opacity-40"
+                className="rounded-md border-none bg-error-fill px-3 py-1.5 text-[12px] text-white disabled:opacity-40"
               >
                 {t('settings.mappingResetConfirmAction')}
               </button>

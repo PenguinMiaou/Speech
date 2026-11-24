@@ -58,7 +58,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
         role="dialog"
         aria-modal="true"
         aria-label={t('history.createCorrection')}
-        className="relative z-10 w-full max-w-[420px] rounded-[8px] border border-border bg-bg-primary shadow-float"
+        className="relative z-10 w-full max-w-[420px] rounded-md border border-border bg-bg-primary shadow-float"
       >
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-[14px] font-medium text-text-primary">
@@ -72,7 +72,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
               ref={patternRef}
               value={pattern}
               onChange={(event) => setPattern(clampCorrectionText(event.target.value))}
-              className="mt-1 w-full rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="mt-1 w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
           </label>
           <label className="block text-[11px] text-text-secondary">
@@ -80,7 +80,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
             <input
               value={replacement}
               onChange={(event) => setReplacement(clampCorrectionText(event.target.value))}
-              className="mt-1 w-full rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
+              className="mt-1 w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary outline-none focus:border-border-focus"
             />
           </label>
         </div>
@@ -89,7 +89,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
             type="button"
             onClick={onCancel}
             disabled={saving}
-            className="rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
+            className="rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
           >
             {t('common.cancel')}
           </button>
@@ -97,7 +97,7 @@ export function CreateCorrectionDialog({ entry, onCancel, onSave }: CreateCorrec
             type="button"
             onClick={() => void save()}
             disabled={!pattern.trim() || !replacement.trim() || saving}
-            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
+            className="rounded-md border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
           >
             {t('history.saveCorrection')}
           </button>

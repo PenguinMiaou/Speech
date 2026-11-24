@@ -344,7 +344,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
         aria-label={t('ask.copyAnswer')}
         title={t('ask.copyAnswer')}
         onClick={copyAnswer}
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] border border-border bg-bg-secondary text-text-tertiary transition-colors hover:border-border-focus hover:text-accent cursor-pointer"
+        className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-bg-secondary text-text-tertiary transition-colors hover:border-border-focus hover:text-accent cursor-pointer"
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </button>
@@ -413,7 +413,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
         <section
           data-testid="ask-floating-note"
           onMouseDown={startStandaloneDrag}
-          className="flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-[12px] border border-border/80 bg-bg-primary/95 shadow-[0_4px_14px_rgba(15,23,42,0.08)] backdrop-blur"
+          className="flex max-h-[calc(100vh-24px)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-bg-primary/95 shadow-[0_4px_14px_rgba(15,23,42,0.08)] backdrop-blur"
         >
           <div className="flex min-h-0 flex-col gap-2.5 p-3">
             {!resultText && (
@@ -450,7 +450,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
                     {standaloneCloseButton}
                   </div>
                 </div>
-                <div className="min-h-0 overflow-y-auto rounded-[12px] border border-border bg-bg-secondary/65 px-3 py-2">
+                <div className="min-h-0 overflow-y-auto rounded-lg border border-border bg-bg-secondary/65 px-3 py-2">
                   {result && !error && result.output !== 'openedSearch' && (
                     <p className="mb-2 text-[12px] leading-5 text-text-secondary">
                       {result.question}
@@ -490,7 +490,7 @@ export function AskPanel({ embedded = false, showHeader = true, title = 'Ask' }:
         </p>
 
         {resultText && (
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-[8px] border border-border bg-bg-secondary px-3 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border bg-bg-secondary px-3 py-2">
             {canCopyAnswer && (
               <div className="mb-2 flex items-center justify-between gap-2">
                 {result && (

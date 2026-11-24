@@ -36,7 +36,7 @@ export function DictionaryImportDialog({
         role="dialog"
         aria-modal="true"
         aria-label={t('dictionary.importTitle')}
-        className="relative z-10 w-full max-w-[420px] rounded-[8px] border border-border bg-bg-primary shadow-float"
+        className="relative z-10 w-full max-w-[420px] rounded-md border border-border bg-bg-primary shadow-float"
       >
         <div className="border-b border-border px-4 py-3">
           <h3 className="text-[14px] font-medium text-text-primary">
@@ -46,17 +46,17 @@ export function DictionaryImportDialog({
         </div>
         <div className="grid grid-cols-3 gap-3 px-4 py-3 text-center">
           <div>
-            <p className="text-[16px] font-semibold text-text-primary">{report.accepted}</p>
+            <p className="text-[15px] font-semibold text-text-primary">{report.accepted}</p>
             <p className="text-[11px] text-text-tertiary">{t('dictionary.importAccepted')}</p>
           </div>
           <div>
-            <p className="text-[16px] font-semibold text-text-primary">
+            <p className="text-[15px] font-semibold text-text-primary">
               {report.skippedDuplicates}
             </p>
             <p className="text-[11px] text-text-tertiary">{t('dictionary.importDuplicates')}</p>
           </div>
           <div>
-            <p className="text-[16px] font-semibold text-text-primary">{report.skippedInvalid}</p>
+            <p className="text-[15px] font-semibold text-text-primary">{report.skippedInvalid}</p>
             <p className="text-[11px] text-text-tertiary">{t('dictionary.importInvalid')}</p>
           </div>
         </div>
@@ -77,7 +77,7 @@ export function DictionaryImportDialog({
             type="button"
             onClick={onCancel}
             disabled={committing}
-            className="rounded-[8px] border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
+            className="rounded-md border border-border bg-transparent px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
           >
             {t('common.cancel')}
           </button>
@@ -86,7 +86,7 @@ export function DictionaryImportDialog({
             autoFocus
             onClick={onConfirm}
             disabled={report.accepted === 0 || committing}
-            className="rounded-[8px] border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
+            className="rounded-md border-none bg-accent px-3 py-1.5 text-[12px] text-white hover:bg-accent-hover disabled:opacity-40"
           >
             {t('dictionary.confirmImport')}
           </button>

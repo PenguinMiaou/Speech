@@ -1,8 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Copy, LayoutTemplate, Pencil, Sparkles, Star, X } from 'lucide-react'
+import { Check, LayoutTemplate, Palette, Pencil, Star, X } from 'lucide-react'
 import {
-  copyText,
   meetingAsk,
   meetingMinutes,
   meetingQuestions,
@@ -17,6 +16,8 @@ import {
 } from '../../lib/tauri'
 import { BUILT_IN, OWN, own, ownKind, TemplateGallery, templateText } from './TemplateGallery'
 import { minutesFull, minutesLanguage } from '../../stores/meetingStore'
+import { CopyButton } from '../CopyButton'
+import { toast } from '../toast-service'
 import { MinutesForm } from './MinutesForm'
 
 const KNOWN_ERRORS = ['llm_not_configured']
@@ -106,7 +107,9 @@ export function MeetingMinutes({
   const forget = (rule: string) => {
     const rules = style.filter((other) => other !== rule)
     setStyle(rules)
-    void Promise.resolve(minutesStyleSave(firstLine, rules)).catch(() => {})
+    void Promise.resolve(minutesStyleSave(firstLine, rules)).catch(() =>
+      toast.error(t('meeting.error.style')),
+    )
   }
 
   useEffect(() => {
@@ -165,7 +168,7 @@ export function MeetingMinutes({
     setKept(next)
     void Promise.resolve(meetingQuestionsSave(next))
       .then((now) => now && setKept(now))
-      .catch(() => {})
+      .catch(() => toast.error(t('meeting.error.questions')))
   }
   /** The questions that come with the app, then the user's own. */
   const ready = [
@@ -222,7 +225,7 @@ export function MeetingMinutes({
           onChange={(event) => setQuestion(event.target.value)}
           aria-label={t('meeting.ask')}
           placeholder={t('meeting.ask')}
-          className="h-9 min-w-0 flex-1 rounded-[8px] border border-border bg-bg-primary px-3 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
+          className="h-9 min-w-0 flex-1 rounded-md border border-border bg-bg-primary px-3 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
         />
         <button type="submit" disabled={asking} className="btn-quiet">
           {asking ? t('meeting.asking') : t('meeting.askButton')}
@@ -286,19 +289,16 @@ export function MeetingMinutes({
           {answers.map((each, index) => (
             <li
               key={`${each.at}-${index}`}
-              className="rounded-[8px] border border-border px-3 py-2 text-[13px] leading-relaxed"
+              className="rounded-md border border-border px-3 py-2 text-[13px] leading-relaxed"
             >
               <div className="flex items-start gap-2">
                 <p className="min-w-0 flex-1 font-medium text-text-secondary">{each.question}</p>
-                <button
-                  type="button"
-                  onClick={() => void copyText(each.answer)}
-                  aria-label={t('meeting.copy')}
-                  title={t('meeting.copy')}
+                <CopyButton
+                  text={each.answer}
+                  label={t('meeting.copy')}
+                  size={12}
                   className="btn-quiet px-1"
-                >
-                  <Copy size={12} />
-                </button>
+                />
                 <button
                   type="button"
                   onClick={() => onAnswers?.(answers.filter((_, at) => at !== index))}
@@ -326,7 +326,7 @@ export function MeetingMinutes({
               onChange={(event) => onEdit(event.target.value)}
               rows={12}
               aria-label={t('meeting.minutesResult')}
-              className="w-full resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none"
+              className="w-full resize-y rounded-md border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary outline-none"
             />
           ) : (
             <MinutesText text={minutes} onChange={onEdit} onSeek={onSeek} />
@@ -342,9 +342,9 @@ export function MeetingMinutes({
             >
               {editing ? <Check size={15} /> : <Pencil size={15} />}
             </button>
-            <button type="button" onClick={() => void copyText(minutes)} className="btn-quiet">
+            <CopyButton text={minutes} label={t('meeting.copy')} size={13} className="btn-quiet">
               {t('meeting.copy')}
-            </button>
+            </CopyButton>
             <button
               type="button"
               onClick={() => void saveTextFile(minutes, t('meeting.minutesFileName'))}
@@ -359,7 +359,7 @@ export function MeetingMinutes({
                 aria-expanded={showingStyle}
                 className={`btn-quiet ml-auto flex items-center gap-1 ${learning ? 'animate-pulse' : ''}`}
               >
-                <Sparkles size={14} />
+                <Palette size={14} />
                 {learning
                   ? t('meeting.styleLearning')
                   : t('meeting.style', { count: style.length })}
@@ -367,7 +367,7 @@ export function MeetingMinutes({
             )}
           </div>
           {showingStyle && style.length > 0 && (
-            <div className="rounded-[8px] border border-border px-3 py-2 text-[12px]">
+            <div className="rounded-md border border-border px-3 py-2 text-[12px]">
               <p className="text-text-tertiary">{t('meeting.styleNote')}</p>
               <ul
                 aria-label={t('meeting.style', { count: style.length })}
@@ -412,7 +412,7 @@ function withTimes(text: string, onSeek?: (seconds: number) => void) {
         <button
           type="button"
           onClick={() => onSeek(seconds)}
-          className="cursor-pointer rounded-[4px] border-none bg-bg-secondary px-1 text-[12px] tabular-nums text-text-secondary hover:text-accent"
+          className="cursor-pointer rounded-xs border-none bg-bg-secondary px-1 text-[12px] tabular-nums text-text-secondary hover:text-accent"
         >
           {found[1]}
         </button>
@@ -459,7 +459,7 @@ function MinutesText({
     onChange(next.join('\n'))
   }
   return (
-    <div className="select-text rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary">
+    <div className="select-text rounded-md border border-border bg-bg-primary px-3 py-2.5 text-[13px] leading-relaxed text-text-primary">
       {lines.map((line, index) => {
         const task = /^\s*[-*] \[([ xX])\] (.*)$/.exec(line)
         if (task) {

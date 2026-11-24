@@ -62,7 +62,7 @@ export function RewriteDemo() {
         defaultValue={text}
         rows={3}
         spellCheck={false}
-        className="w-full resize-none rounded-xl border border-border bg-bg-secondary px-5 py-4 text-[15px] leading-relaxed text-text-primary outline-none focus:border-border-focus"
+        className="w-full resize-none rounded-lg border border-border bg-bg-secondary px-5 py-4 text-[15px] leading-relaxed text-text-primary outline-none focus:border-border-focus"
       />
 
       {allowed ? (
@@ -95,7 +95,7 @@ export function RewriteDemo() {
           <button
             type="button"
             onClick={again}
-            className="rounded-[8px] border border-border bg-bg-secondary px-3 py-1.5 text-text-primary transition-colors hover:bg-bg-tertiary"
+            className="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-text-primary transition-colors hover:bg-bg-tertiary"
           >
             {t('onboarding.tryIt.again')}
           </button>

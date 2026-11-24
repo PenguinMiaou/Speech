@@ -29,8 +29,13 @@ function valuesEqual(left: unknown, right: unknown): boolean {
   )
 }
 
+/** Whether the settings in the store differ from the ones last saved. */
+export function isConfigDirty(config: unknown, savedConfig: unknown): boolean {
+  return savedConfig !== null && !valuesEqual(config, savedConfig)
+}
+
 export function useDirtyConfig() {
   const config = useAppStore((state) => state.config)
   const savedConfig = useAppStore((state) => state.savedConfig)
-  return savedConfig !== null && !valuesEqual(config, savedConfig)
+  return isConfigDirty(config, savedConfig)
 }

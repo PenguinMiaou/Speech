@@ -89,6 +89,24 @@ describe('useTauriEvents', () => {
     expect(useAppStore.getState().pipelineError).toBeNull()
   })
 
+  it('reads the newest history again after a dictation, keeping older entries loaded', async () => {
+    const entry = (id: number) =>
+      ({ id, polished_text: `text ${id}` }) as unknown as ReturnType<
+        typeof useAppStore.getState
+      >['history'][number]
+    useAppStore.setState({ history: [entry(3), entry(2), entry(1)] })
+    const { getHistory } = await import('../../lib/tauri')
+    vi.mocked(getHistory).mockResolvedValueOnce([entry(4), entry(3)])
+    render(<HookHarness />)
+    await waitFor(() => expect(eventListeners.has('pipeline:state')).toBe(true))
+    act(() => {
+      eventListeners.get('pipeline:state')?.({ payload: 'idle' })
+    })
+    await waitFor(() =>
+      expect(useAppStore.getState().history.map((each) => each.id)).toEqual([4, 3, 2, 1]),
+    )
+  })
+
   it('stores only the safe context summary emitted for the completed operation', async () => {
     render(<HookHarness />)
 

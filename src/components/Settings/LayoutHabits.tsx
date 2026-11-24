@@ -33,7 +33,7 @@ export function LayoutHabits() {
       <p className="mb-1.5 text-[13px] font-medium text-text-secondary">
         {t('dictionary.layoutHabits')}
       </p>
-      <ul className="divide-y divide-border rounded-[8px] border border-border">
+      <ul className="divide-y divide-border rounded-md border border-border">
         {habits.map((habit) => (
           <li
             key={`${habit.app}:${habit.habit}`}
@@ -44,7 +44,7 @@ export function LayoutHabits() {
             <button
               type="button"
               onClick={() => forget(habit)}
-              className="rounded-[8px] border border-border px-2.5 py-1 text-[12px] text-text-secondary cursor-pointer"
+              className="rounded-md border border-border px-2.5 py-1 text-[12px] text-text-secondary cursor-pointer"
             >
               {t('dictionary.forgetHabit')}
             </button>

@@ -66,6 +66,7 @@ vi.mock('../../Settings/LlmConnectionForm', () => ({
 }))
 vi.mock('../PermissionsStep', () => ({ PermissionsStep: () => <div>Permissions step</div> }))
 vi.mock('../TryItStep', () => ({ TryItStep: () => <div>Try it step</div> }))
+vi.mock('../MoreStep', () => ({ MoreStep: () => <div>Meetings and Ask step</div> }))
 
 vi.mock('../../../stores/appStore', () => ({
   useAppStore: (selector: (state: typeof mockStore) => unknown) => selector(mockStore),
@@ -94,11 +95,12 @@ describe('Onboarding', () => {
     [2, 'Polish step'],
     [3, 'Permissions step'],
     [4, 'Try it step'],
-  ])('shows step %i as %s, five steps in total', (step, label) => {
+    [5, 'Meetings and Ask step'],
+  ])('shows step %i as %s, six steps in total', (step, label) => {
     mockStore.onboardingStep = step
     render(<Onboarding />)
     expect(screen.getByText(label)).toBeTruthy()
-    expect(screen.getByText('total 5')).toBeTruthy()
+    expect(screen.getByText('total 6')).toBeTruthy()
   })
 
   it('moves from the language step to the speech step', async () => {
@@ -107,11 +109,11 @@ describe('Onboarding', () => {
     await waitFor(() => expect(mockStore.setOnboardingStep).toHaveBeenCalledWith(1))
   })
 
-  it.each([1, 2, 3, 4])('never blocks the next button on step %i', (step) => {
+  it.each([1, 2, 3, 4, 5])('never blocks the next button on step %i', (step) => {
     mockStore.onboardingStep = step
     render(<Onboarding />)
     const next = screen.getByRole('button', {
-      name: step === 4 ? 'onboarding.steps.getStarted' : 'onboarding.layout.next',
+      name: step === 5 ? 'onboarding.steps.getStarted' : 'onboarding.layout.next',
     }) as HTMLButtonElement
     expect(next.disabled).toBe(false)
   })
@@ -127,7 +129,7 @@ describe('Onboarding', () => {
   })
 
   it('finishes from the last step', async () => {
-    mockStore.onboardingStep = 4
+    mockStore.onboardingStep = 5
     render(<Onboarding />)
     fireEvent.click(screen.getByText('onboarding.steps.getStarted'))
     await waitFor(() => expect(mockStore.setOnboardingCompleted).toHaveBeenCalledWith(true))
@@ -144,7 +146,7 @@ describe('Onboarding', () => {
   })
 
   it('stays open and reports when the final save fails', async () => {
-    mockStore.onboardingStep = 4
+    mockStore.onboardingStep = 5
     vi.mocked(saveOnboardingConfig).mockRejectedValue(new Error('disk full'))
     render(<Onboarding />)
     fireEvent.click(screen.getByText('onboarding.steps.getStarted'))

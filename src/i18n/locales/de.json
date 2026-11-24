@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Speech",
-    "tagline": "AI-Spracheingabe"
+    "tagline": "Spracheingabe"
   },
   "nav": {
     "home": "Startseite",
@@ -9,7 +9,10 @@
     "ask": "Fragen",
     "settings": "Einstellungen",
     "history": "Verlauf",
-    "mainNavigation": "Hauptnavigation"
+    "mainNavigation": "Hauptnavigation",
+    "toTop": "Nach oben",
+    "meetingRecording": "Meeting wird aufgenommen",
+    "meetingPaused": "Aufnahme pausiert"
   },
   "ask": {
     "title": "Fragen",
@@ -67,7 +70,13 @@
     "wordsDictated": "Diktierte Wörter",
     "timeSaved": "Gegenüber Tippen gespart",
     "speakWith": "{{hotkey}} drücken und sprechen",
-    "figures": "Deine Zahlen"
+    "figures": "Deine Zahlen",
+    "shortcuts": "Tastenkürzel",
+    "recentMeetings": "Letzte Meetings",
+    "startMeeting": "Meeting starten",
+    "noMeetings": "Noch keine Meetings aufgenommen.",
+    "untitledMeeting": "Meeting ohne Titel",
+    "meetingMinutes": "{{count}} Min."
   },
   "onboarding": {
     "speakToWrite": "Sprechen Sie, um zu schreiben — verwandeln Sie Ihre Stimme in Echtzeit in geglätteten Text",
@@ -109,7 +118,9 @@
       "permissionsSub": "Nur Zugriff erlauben, den Ihre Einrichtung braucht",
       "getStarted": "Loslegen",
       "tryIt": "Try it",
-      "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
+      "tryItSub": "Read one sentence and see how slips and lists get cleaned up",
+      "more": "Meetings und Fragen",
+      "moreSub": "Zwei weitere Dinge, die Speech neben dem Diktat kann"
     },
     "permissions": {
       "subtitle": "Speech fragt nur nach Zugriff, wenn eine Funktion ihn braucht.",
@@ -158,6 +169,16 @@
       "again": "Noch einmal",
       "nameExample": "Momo",
       "nameHint": "Sagen Sie zuerst „{{name}}“, der Rest ist eine Anweisung. „{{name}}, übersetze das ins Englische“ ändert den gerade eingegebenen Text. Leer lassen, um dies auszuschalten"
+    },
+    "more": {
+      "meetingTitle": "Meetings aufnehmen",
+      "meetingDesc": "Nimm ein Meeting oder einen Anruf auf: Das Transkript erscheint, während gesprochen wird, danach entsteht daraus ein Protokoll. Starte über Meetings in der Seitenleiste. Beginnt ein Anruf, kann Speech die Aufnahme auch anbieten.",
+      "record": "Aufnehmen",
+      "transcript": "Transkript",
+      "minutes": "Protokoll",
+      "askTitle": "Per Stimme fragen",
+      "askDesc": "Drücke das Kürzel für Fragen und sprich deine Frage; die Antwort öffnet sich in einem kleinen Fenster.",
+      "askNoHotkey": "Lege in den Einstellungen unter Diktat ein Kürzel für Fragen fest."
     }
   },
   "capsule": {
@@ -472,7 +493,16 @@
     "moreShortcuts": "Weitere Tastenkürzel",
     "meetingQuietPause": "Pause nach wie langer Stille",
     "meetingQuietPauseNever": "Nie",
-    "meetingQuietPauseMinutes": "{{count}} Min."
+    "meetingQuietPauseMinutes": "{{count}} Min.",
+    "meetingFolderSuggest": "Nach jedem Meeting einen Ordner vorschlagen",
+    "meetingFolderSuggestHint": "Das Überarbeitungsmodell wählt anhand von Titel und Anfang des Meetings sowie einigen Titeln je Ordner einen Ihrer Ordner; Sie werden vorher gefragt.",
+    "searchPlaceholder": "Einstellungen durchsuchen",
+    "searchNoResults": "Keine passende Einstellung",
+    "leaveTitle": "Änderungen speichern?",
+    "leaveBody": "Einige Einstellungen wurden geändert, aber nicht gespeichert. Vor dem Verlassen speichern oder verwerfen.",
+    "leaveSave": "Speichern und verlassen",
+    "leaveDiscard": "Verwerfen",
+    "leaveStay": "Hierbleiben"
   },
   "contextFamilies": {
     "email": "E-Mail",
@@ -672,7 +702,14 @@
       "partial": "Teilergebnis",
       "fallback": "Ersatzausgabe",
       "clipboardFallback": "In Zwischenablage kopiert"
-    }
+    },
+    "copyEntry": "Text kopieren: {{text}}",
+    "filterByApp": "Nach App filtern",
+    "allApps": "Alle Apps",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Wird geladen…",
+    "failedToLoadMore": "Weitere Einträge konnten nicht geladen werden",
+    "clearFilters": "Suche und Filter zurücksetzen"
   },
   "error": {
     "somethingWentWrong": "Etwas ist schiefgelaufen",
@@ -686,7 +723,10 @@
     "cancel": "Abbrechen",
     "reset": "Zurücksetzen",
     "connectionFail": "Verbindung fehlgeschlagen",
-    "saveFailed": "Die Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut."
+    "saveFailed": "Die Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+    "undo": "Rückgängig",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren fehlgeschlagen"
   },
   "recordingLimits": {
     "auto": "Automatisch (empfohlen, bis zu {{duration}})",
@@ -834,7 +874,19 @@
       "someFailed": "Einige Dateien konnten nicht in Text umgewandelt werden.",
       "timesDownload": "Das Modell konnte nicht geladen werden",
       "overview": "Der Überblick konnte nicht erstellt werden",
-      "trim": "Die Aufnahme konnte nicht gekürzt werden."
+      "trim": "Die Aufnahme konnte nicht gekürzt werden.",
+      "delete": "Meeting konnte nicht gelöscht werden",
+      "audioDelete": "Aufnahme konnte nicht gelöscht werden",
+      "undo": "Rückgängig nicht möglich",
+      "folder": "Konnte nicht in den Ordner verschoben werden",
+      "languages": "Sprachen konnten nicht geändert werden",
+      "pick": "Datei konnte nicht geöffnet werden",
+      "open": "Meeting konnte nicht geöffnet werden",
+      "dictionary": "Wort konnte nicht ins Wörterbuch aufgenommen werden",
+      "voice": "Stimme konnte nicht vergessen werden",
+      "save": "Meeting konnte nicht gespeichert werden",
+      "style": "Regel konnte nicht entfernt werden",
+      "questions": "Fragen konnten nicht gespeichert werden"
     },
     "live": "Live-Text",
     "listening": "Hört zu. Text erscheint etwa alle fünfzehn Sekunden",
@@ -972,12 +1024,59 @@
     "quietPaused": "{{count}} Min. lang wurde nichts gesagt, die Aufnahme wurde pausiert.",
     "cutAfter": "Ab hier alles abschneiden",
     "cutAfterConfirm": "Diesen Teil und alles danach entfernen",
-    "cutAfterConfirmSound": "Diesen Teil und alles danach samt Aufnahme entfernen; nicht rückgängig zu machen",
+    "cutAfterConfirmSound": "Diesen Teil und alles danach samt Aufnahme entfernen",
     "cutSilentTail": "Die {{minutes}} Min. Stille am Ende entfernen",
-    "cutSilentTailAsk": "Aufnahme kurz nach den letzten Worten ({{time}}) abschneiden? Nicht rückgängig zu machen.",
-    "cutSilentTailConfirm": "Abschneiden"
+    "cutSilentTailAsk": "Aufnahme kurz nach den letzten Worten ({{time}}) abschneiden?",
+    "cutSilentTailConfirm": "Abschneiden",
+    "cutFromHere": "Ab {{time}} alles abschneiden",
+    "cutFromHereAsk": "Aufnahme und Text ab {{time}} entfernen?",
+    "cutFromHereConfirm": "Schneiden",
+    "cutFromHereHint": "Zum Ende des Meetings abspielen oder ziehen, dann ab dort schneiden",
+    "folderOffer": "„{{title}}“ in den Ordner „{{folder}}“ legen?",
+    "folderOfferYes": "Dort ablegen",
+    "folderOfferNo": "Nein",
+    "deleted": "„{{title}}“ gelöscht",
+    "audioDeleted": "Aufnahme gelöscht",
+    "cutDone": "Geschnitten",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "noMatches": "Keine passenden Meetings",
+    "showMore": "{{count}} weitere anzeigen",
+    "renameFolder": "Ordner umbenennen",
+    "removeFolder": "Ordner entfernen",
+    "folderRemoved": "Ordner „{{folder}}“ entfernt; die Meetings bleiben",
+    "order": "Reihenfolge",
+    "orderBy": {
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "longest": "Längste zuerst",
+      "title": "Nach Titel"
+    },
+    "skipBack": "{{seconds}} Sekunden zurück",
+    "skipOn": "{{seconds}} Sekunden vor",
+    "rate": "Tempo {{rate}}×",
+    "findInText": "Im Text suchen",
+    "foundAt": "{{at}} von {{count}}",
+    "foundNone": "Nicht gefunden",
+    "findPrevious": "Vorherige",
+    "findNext": "Nächste",
+    "jumpToSpeaker": "Zu einer Person springen",
+    "previousTurn": "Vorheriger Beitrag",
+    "nextTurn": "Nächster Beitrag",
+    "editHint": "Doppelklick auf Wörter ändert sie, auf einen Namen gibt den Abschnitt jemand anderem oder benennt die Person"
   },
   "whatsNew": {
     "title": "Neu in {{version}}"
+  },
+  "contextMenu": {
+    "cut": "Ausschneiden",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "selectAll": "Alles auswählen",
+    "open": "Öffnen",
+    "copyAll": "Text kopieren"
+  },
+  "offer": {
+    "closesByItself": "Ohne Antwort schließt sich dieser Hinweis nach einer Minute von selbst."
   }
 }

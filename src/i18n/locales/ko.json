@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Speech",
-    "tagline": "AI 음성 입력"
+    "tagline": "음성 입력"
   },
   "nav": {
     "home": "홈",
@@ -9,7 +9,10 @@
     "ask": "질문",
     "settings": "설정",
     "history": "기록",
-    "mainNavigation": "메인 내비게이션"
+    "mainNavigation": "메인 내비게이션",
+    "toTop": "맨 위로",
+    "meetingRecording": "회의 녹음 중",
+    "meetingPaused": "녹음 일시 정지됨"
   },
   "ask": {
     "title": "질문",
@@ -67,7 +70,13 @@
     "wordsDictated": "받아쓴 단어 수",
     "timeSaved": "타이핑보다 절약",
     "speakWith": "{{hotkey}} 키를 누르고 말하기",
-    "figures": "사용 현황"
+    "figures": "사용 현황",
+    "shortcuts": "단축키",
+    "recentMeetings": "최근 회의",
+    "startMeeting": "회의 시작",
+    "noMeetings": "아직 녹음한 회의가 없습니다.",
+    "untitledMeeting": "제목 없는 회의",
+    "meetingMinutes": "{{count}}분"
   },
   "onboarding": {
     "speakToWrite": "말해서 글 쓰기 — 음성을 실시간으로 다듬어진 텍스트로 변환합니다",
@@ -109,7 +118,9 @@
       "permissionsSub": "현재 설정에 필요한 권한만 허용",
       "getStarted": "시작하기",
       "tryIt": "Try it",
-      "tryItSub": "Read one sentence and see how slips and lists get cleaned up"
+      "tryItSub": "Read one sentence and see how slips and lists get cleaned up",
+      "more": "회의와 질문",
+      "moreSub": "받아쓰기 외에 Speech가 하는 두 가지"
     },
     "permissions": {
       "subtitle": "Speech는 기능에 필요할 때만 접근 권한을 요청합니다.",
@@ -158,6 +169,16 @@
       "again": "다시 하기",
       "nameExample": "모모",
       "nameHint": "먼저 “{{name}}”라고 부르면 뒤의 말은 지시가 됩니다. “{{name}}, 방금 것을 영어로 바꿔 줘”라고 하면 방금 입력한 글을 고칩니다. 비워 두면 사용하지 않습니다"
+    },
+    "more": {
+      "meetingTitle": "회의 녹음",
+      "meetingDesc": "회의나 통화를 녹음하면 말하는 동안 전사가 표시되고, 끝난 뒤 이를 바탕으로 회의록이 작성됩니다. 사이드바의 회의에서 시작하세요. 통화가 시작되면 Speech가 녹음을 제안할 수도 있습니다.",
+      "record": "녹음",
+      "transcript": "전사",
+      "minutes": "회의록",
+      "askTitle": "음성으로 질문",
+      "askDesc": "질문 단축키를 누르고 질문을 말하면 작은 패널에 답이 열립니다.",
+      "askNoHotkey": "설정의 받아쓰기에서 질문 단축키를 지정하세요."
     }
   },
   "capsule": {
@@ -472,7 +493,16 @@
     "moreShortcuts": "추가 단축키",
     "meetingQuietPause": "말이 없을 때 녹음을 일시 정지할 시간",
     "meetingQuietPauseNever": "안 함",
-    "meetingQuietPauseMinutes": "{{count}}분"
+    "meetingQuietPauseMinutes": "{{count}}분",
+    "meetingFolderSuggest": "회의가 끝나면 폴더 추천",
+    "meetingFolderSuggestHint": "다듬기 모델이 회의 제목과 앞부분, 폴더별 회의 제목 몇 개를 보고 기존 폴더 중 하나를 고릅니다. 넣기 전에 먼저 묻습니다.",
+    "searchPlaceholder": "설정 검색",
+    "searchNoResults": "일치하는 설정이 없습니다",
+    "leaveTitle": "변경 사항을 저장할까요?",
+    "leaveBody": "저장되지 않은 설정 변경이 있습니다. 나가기 전에 저장하거나 취소하세요.",
+    "leaveSave": "저장하고 나가기",
+    "leaveDiscard": "버리기",
+    "leaveStay": "머무르기"
   },
   "contextFamilies": {
     "email": "이메일",
@@ -672,7 +702,14 @@
       "partial": "부분 결과",
       "fallback": "대체 출력",
       "clipboardFallback": "클립보드에 복사됨"
-    }
+    },
+    "copyEntry": "텍스트 복사: {{text}}",
+    "filterByApp": "앱별 필터",
+    "allApps": "모든 앱",
+    "loadMore": "더 불러오기",
+    "loadingMore": "불러오는 중…",
+    "failedToLoadMore": "기록을 더 불러오지 못했습니다",
+    "clearFilters": "검색 및 필터 지우기"
   },
   "error": {
     "somethingWentWrong": "문제가 발생했습니다",
@@ -686,7 +723,10 @@
     "cancel": "취소",
     "reset": "재설정",
     "connectionFail": "연결에 실패했습니다",
-    "saveFailed": "설정을 저장하지 못했습니다. 다시 시도해 주세요."
+    "saveFailed": "설정을 저장하지 못했습니다. 다시 시도해 주세요.",
+    "undo": "실행 취소",
+    "copied": "복사됨",
+    "copyFailed": "복사하지 못했습니다"
   },
   "recordingLimits": {
     "auto": "자동(권장, 최대 {{duration}})",
@@ -834,7 +874,19 @@
       "someFailed": "텍스트로 바꾸지 못한 파일이 있습니다.",
       "timesDownload": "모델을 다운로드하지 못했습니다",
       "overview": "개요를 만들지 못했습니다",
-      "trim": "녹음을 자르지 못했습니다."
+      "trim": "녹음을 자르지 못했습니다.",
+      "delete": "회의를 삭제하지 못했습니다",
+      "audioDelete": "녹음을 삭제하지 못했습니다",
+      "undo": "되돌리지 못했습니다",
+      "folder": "폴더로 옮기지 못했습니다",
+      "languages": "언어를 바꾸지 못했습니다",
+      "pick": "파일을 열지 못했습니다",
+      "open": "회의를 열지 못했습니다",
+      "dictionary": "사전에 추가하지 못했습니다",
+      "voice": "목소리를 지우지 못했습니다",
+      "save": "회의를 저장하지 못했습니다",
+      "style": "규칙을 지우지 못했습니다",
+      "questions": "질문을 저장하지 못했습니다"
     },
     "live": "실시간 텍스트",
     "listening": "듣는 중입니다. 텍스트는 약 15초마다 나옵니다",
@@ -972,12 +1024,59 @@
     "quietPaused": "{{count}}분 동안 말이 없어 녹음을 일시 정지했습니다.",
     "cutAfter": "여기부터 끝까지 자르기",
     "cutAfterConfirm": "이 부분과 그 뒤를 모두 삭제",
-    "cutAfterConfirmSound": "이 부분과 그 뒤를 녹음까지 삭제(되돌릴 수 없음)",
+    "cutAfterConfirmSound": "이 부분과 그 뒤를 녹음까지 삭제",
     "cutSilentTail": "끝부분 무음 {{minutes}}분 자르기",
-    "cutSilentTailAsk": "마지막 말 바로 뒤({{time}})에서 녹음을 자를까요? 되돌릴 수 없습니다.",
-    "cutSilentTailConfirm": "자르기"
+    "cutSilentTailAsk": "마지막 말 바로 뒤({{time}})에서 녹음을 자를까요?",
+    "cutSilentTailConfirm": "자르기",
+    "cutFromHere": "{{time}}부터 끝까지 자르기",
+    "cutFromHereAsk": "{{time}} 이후의 녹음과 텍스트를 삭제할까요?",
+    "cutFromHereConfirm": "자르기",
+    "cutFromHereHint": "회의가 끝난 곳까지 재생하거나 끌어온 뒤 거기서부터 자르세요",
+    "folderOffer": "“{{title}}”을(를) “{{folder}}” 폴더에 넣을까요?",
+    "folderOfferYes": "넣기",
+    "folderOfferNo": "아니요",
+    "deleted": "“{{title}}” 삭제됨",
+    "audioDeleted": "녹음 삭제됨",
+    "cutDone": "잘라냄",
+    "today": "오늘",
+    "yesterday": "어제",
+    "noMatches": "일치하는 회의가 없습니다",
+    "showMore": "{{count}}개 더 보기",
+    "renameFolder": "폴더 이름 바꾸기",
+    "removeFolder": "폴더 없애기",
+    "folderRemoved": "“{{folder}}” 폴더를 없앴습니다(회의는 남아 있습니다)",
+    "order": "정렬",
+    "orderBy": {
+      "newest": "최신순",
+      "oldest": "오래된순",
+      "longest": "긴 순",
+      "title": "제목순"
+    },
+    "skipBack": "{{seconds}}초 뒤로",
+    "skipOn": "{{seconds}}초 앞으로",
+    "rate": "속도 {{rate}}×",
+    "findInText": "텍스트에서 찾기",
+    "foundAt": "{{count}}개 중 {{at}}번째",
+    "foundNone": "찾지 못함",
+    "findPrevious": "이전",
+    "findNext": "다음",
+    "jumpToSpeaker": "화자로 이동",
+    "previousTurn": "이전 발언",
+    "nextTurn": "다음 발언",
+    "editHint": "글자를 두 번 클릭하면 바로 고칠 수 있고, 화자를 두 번 클릭하면 이 부분을 다른 사람에게 넘기거나 이름을 붙일 수 있습니다"
   },
   "whatsNew": {
     "title": "{{version}} 새로운 기능"
+  },
+  "contextMenu": {
+    "cut": "잘라내기",
+    "copy": "복사",
+    "paste": "붙여넣기",
+    "selectAll": "모두 선택",
+    "open": "열기",
+    "copyAll": "텍스트 복사"
+  },
+  "offer": {
+    "closesByItself": "응답하지 않으면 1분 후 자동으로 닫힙니다."
   }
 }

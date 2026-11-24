@@ -920,6 +920,16 @@ export function meetingAudioKeep(id: string): Promise<string | null> {
 }
 
 /** Cuts the sound of a meeting off at `endMs` from its start. */
+/** Puts back the sound a meeting had before its last cut; false where none is kept. */
+export function meetingAudioCutUndo(id: string): Promise<boolean> {
+  return invoke('meeting_audio_cut_undo', { id })
+}
+
+/** Lets the sound from before a meeting's last cut go: the cut stands. */
+export function meetingAudioCutKeep(id: string): Promise<void> {
+  return invoke('meeting_audio_cut_keep', { id })
+}
+
 export function meetingAudioTrim(id: string, endMs: number): Promise<void> {
   return invoke('meeting_audio_trim', { id, endMs })
 }
@@ -1287,6 +1297,16 @@ export function meetingSpeakersCheck(
   pieces: { speaker: number; text: string }[],
 ): Promise<{ speaker: number; text: string }[]> {
   return invoke('meeting_speakers_check', { pieces })
+}
+
+/** The folder, of `folders`, a meeting belongs in, picked by the polish model; null where
+ * none clearly fits, no model is set up or the suggestion is turned off. */
+export function meetingFolderPick(
+  title: string,
+  transcript: string,
+  folders: { name: string; titles: string[] }[],
+): Promise<string | null> {
+  return invoke('meeting_folder_pick', { title, transcript, folders })
 }
 
 /** A title for a meeting, written by the polish model from what was said. Empty when no

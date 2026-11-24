@@ -212,7 +212,7 @@ export function Transcript({
             ) : part.kind === 'new' ? (
               <ins
                 key={at}
-                className="rounded-[3px] bg-accent/20 font-medium text-accent no-underline"
+                className="rounded-xs bg-accent/20 font-medium text-accent no-underline"
               >
                 {part.text}
               </ins>
@@ -273,7 +273,7 @@ export function Transcript({
           if (after && after !== line.text) onEdit(index, line.text, after)
           else event.currentTarget.textContent = line.text
         }}
-        className={`rounded-[3px] outline-none transition-colors focus:bg-bg-secondary ${
+        className={`rounded-xs outline-none transition-colors focus:bg-bg-secondary ${
           ahead ? 'text-text-tertiary' : ''
         }`}
       >
@@ -297,7 +297,7 @@ export function Transcript({
           {'text' in line ? (
             words(line, index)
           ) : (
-            <span className="group/section">
+            <span className="group/section" data-speaker={line.speaker ?? undefined}>
               {line.speaker !== null && !goesOn[index] && (
                 <>
                   {onSpeaker ? (
@@ -317,7 +317,7 @@ export function Transcript({
                       {choosing === index && (
                         <span
                           role="menu"
-                          className="absolute left-0 top-full z-20 mt-1 flex min-w-[168px] select-none flex-col whitespace-nowrap rounded-[8px] border border-border bg-bg-elevated py-1 text-[13px] shadow-lg"
+                          className="absolute left-0 top-full z-20 mt-1 flex min-w-[168px] select-none flex-col whitespace-nowrap rounded-md border border-border bg-bg-elevated py-1 text-[13px] shadow-lg"
                         >
                           {onName && line.speaker > 0 && (
                             <input
@@ -331,7 +331,7 @@ export function Transcript({
                                 onName(line.speaker, event.currentTarget.value.trim())
                                 setChoosing(null)
                               }}
-                              className="mx-2 mb-1 rounded-[6px] border border-border bg-bg-primary px-2 py-1 text-[13px] text-text-primary outline-none focus:border-accent"
+                              className="mx-2 mb-1 rounded-sm border border-border bg-bg-primary px-2 py-1 text-[13px] text-text-primary outline-none focus:border-accent"
                             />
                           )}
                           {[...numbers, (numbers[numbers.length - 1] ?? 0) + 1]
@@ -360,7 +360,7 @@ export function Transcript({
                               className="flex cursor-pointer items-center gap-2 border-x-0 border-b-0 border-t border-border bg-transparent px-3 py-1.5 text-left text-text-secondary hover:bg-bg-secondary"
                             >
                               <span
-                                className={`h-3 w-3 rounded-[3px] border border-border ${all ? 'bg-accent' : ''}`}
+                                className={`h-3 w-3 rounded-xs border border-border ${all ? 'bg-accent' : ''}`}
                               />
                               {allLabel}
                             </button>
@@ -398,7 +398,7 @@ export function Transcript({
                   onBlur={() => setCutting((now) => (now === index ? null : now))}
                   aria-label={cutting === index ? cutConfirmLabel : cutLabel}
                   title={cutting === index ? cutConfirmLabel : cutLabel}
-                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border-none bg-transparent p-0 align-middle text-[12px] ${
+                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-xs border-none bg-transparent p-0 align-middle text-[12px] ${
                     cutting === index
                       ? 'text-error'
                       : 'text-text-tertiary opacity-0 hover:text-error focus:opacity-100 group-hover/section:opacity-100'
@@ -419,7 +419,7 @@ export function Transcript({
                   onBlur={() => setCuttingAfter((now) => (now === index ? null : now))}
                   aria-label={cuttingAfter === index ? cutAfterConfirmLabel : cutAfterLabel}
                   title={cuttingAfter === index ? cutAfterConfirmLabel : cutAfterLabel}
-                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-[4px] border-none bg-transparent p-0 align-middle text-[12px] ${
+                  className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-xs border-none bg-transparent p-0 align-middle text-[12px] ${
                     cuttingAfter === index
                       ? 'text-error'
                       : 'text-text-tertiary opacity-0 hover:text-error focus:opacity-100 group-hover/section:opacity-100'

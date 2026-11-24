@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, cleanup, within } from '@testing-library/react'
 import React from 'react'
 import { useAppStore } from '../../../stores/appStore'
 
@@ -249,6 +249,7 @@ vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }))
 
 // ─── Import components AFTER mocks ───────────────────────────────────────────
 import { Settings } from '../index'
+import { findLabel } from '../findLabel'
 import {
   checkAccessibilityPermission,
   getConfig,
@@ -260,6 +261,10 @@ import {
   updateConfig,
 } from '../../../lib/tauri'
 import { toast } from '../../../components/toast-service'
+import { useRoute } from '../../../lib/router'
+import { SETTINGS_SEARCH_INDEX } from '../settingsSearchIndex'
+import { PANES } from '../SettingsSidebar'
+import en from '../../../i18n/locales/en.json'
 import type { HotkeyStatus } from '../../../lib/tauri'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1533,5 +1538,170 @@ describe('appStore getInitialState 包含 llmModels', () => {
     expect(initial.config.hotkey).toBe('Ctrl+/')
     expect(initial.pipelineState).toBe('idle')
     expect(initial.dictionary).toEqual([])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Search, shortcut save, leaving with unsaved edits, sidebar state
+// ─────────────────────────────────────────────────────────────────────────────
+/** Settings shown only while the address names it, as the app's router does. */
+function RoutedSettings() {
+  const { route } = useRoute()
+  return route === 'settings' ? <Settings /> : <p>elsewhere {route}</p>
+}
+
+describe('Settings navigation helpers', () => {
+  beforeEach(() => {
+    resetStore()
+    seedSavedConfig()
+    vi.mocked(updateConfig).mockClear()
+    window.history.replaceState(null, '', '#/settings')
+  })
+  afterEach(() => {
+    window.history.replaceState(null, '', '#/')
+  })
+
+  it('marks the pane in view with aria-current', () => {
+    renderSettings()
+    clickSidebarItem('settings.dictationPane')
+    const current = document.querySelectorAll('[aria-current="page"]')
+    expect(current).toHaveLength(1)
+    expect(current[0].textContent).toContain('settings.dictationPane')
+  })
+
+  it('every searchable label names a key in the English strings', () => {
+    for (const { key } of SETTINGS_SEARCH_INDEX) {
+      const value = key
+        .split('.')
+        .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], en)
+      expect(typeof value, key).toBe('string')
+    }
+  })
+
+  it('finds a setting in another pane, opens that pane and points at it', async () => {
+    renderSettings()
+    const box = screen.getByRole('combobox', { name: 'settings.searchPlaceholder' })
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: 'outputmode' } })
+    const option = screen.getByRole('option', { name: /settings\.outputMode/ })
+    fireEvent.click(option)
+    expect(screen.getByRole('heading', { level: 2, name: 'settings.dictationPane' })).toBeTruthy()
+    await waitFor(() =>
+      expect(document.querySelector('[data-search-found="true"]')?.textContent).toBe(
+        'settings.outputMode',
+      ),
+    )
+  })
+
+  it('says so when no setting matches, and Escape clears the search', () => {
+    renderSettings()
+    const box = screen.getByRole('combobox', { name: 'settings.searchPlaceholder' })
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: 'zzzz' } })
+    expect(screen.getByText('settings.searchNoResults')).toBeTruthy()
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(box).toHaveValue('')
+  })
+
+  it('closes the result list when the search box loses focus', () => {
+    renderSettings()
+    const box = screen.getByRole('combobox', { name: 'settings.searchPlaceholder' })
+    fireEvent.focus(box)
+    fireEvent.change(box, { target: { value: 'hotkey' } })
+    expect(screen.getByRole('listbox')).toBeTruthy()
+    fireEvent.blur(box)
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('every searchable label shows on its pane with the default settings', async () => {
+    renderSettings()
+    const missing: string[] = []
+    for (const { pane, key, inside } of SETTINGS_SEARCH_INDEX) {
+      clickSidebarItem(PANES.find((each) => each.id === pane)!.labelKey)
+      // Some sections fill in after their data loads.
+      await act(async () => {})
+      const content = document.querySelector('[data-motion="div"].max-w-\\[720px\\]') as HTMLElement
+      if (!findLabel(content, inside ?? key)) missing.push(`${key} on ${pane}`)
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('leaves Ctrl+S alone while a shortcut is being recorded', () => {
+    renderSettings()
+    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true })
+    event.preventDefault()
+    act(() => {
+      window.dispatchEvent(event)
+    })
+    expect(updateConfig).not.toHaveBeenCalled()
+  })
+
+  it('saves with Ctrl+S or Cmd+S when there are unsaved edits', async () => {
+    renderSettings()
+    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    fireEvent.keyDown(window, { key: 's', metaKey: true })
+    await waitFor(() => expect(updateConfig).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).toBeNull())
+  })
+
+  it('does nothing on Ctrl+S when nothing changed', () => {
+    renderSettings()
+    fireEvent.keyDown(window, { key: 's', ctrlKey: true })
+    expect(updateConfig).not.toHaveBeenCalled()
+  })
+
+  it('leaves without asking when nothing changed', async () => {
+    render(<RoutedSettings />)
+    act(() => {
+      window.location.hash = '#/history'
+    })
+    await waitFor(() => expect(screen.getByText('elsewhere history')).toBeTruthy())
+  })
+
+  it('holds back leaving with unsaved edits and saves on request', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm')
+    // Start elsewhere, so the router listens before Settings does, as in the app.
+    window.history.replaceState(null, '', '#/')
+    render(<RoutedSettings />)
+    act(() => {
+      window.location.hash = '#/settings'
+    })
+    await screen.findByRole('heading', { level: 2, name: 'settings.general' })
+    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    act(() => {
+      window.location.hash = '#/history'
+    })
+    const dialog = await screen.findByRole('alertdialog', { name: 'settings.leaveTitle' })
+    expect(window.location.hash).toBe('#/settings')
+    expect(screen.queryByText(/elsewhere/)).toBeNull()
+    expect(confirmSpy).not.toHaveBeenCalled()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'settings.leaveSave' }))
+    await waitFor(() => expect(screen.getByText('elsewhere history')).toBeTruthy())
+    expect(updateConfig).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().savedConfig?.auto_start).toBe(false)
+    confirmSpy.mockRestore()
+  })
+
+  it('discards the edits and leaves, or stays on Escape', async () => {
+    render(<RoutedSettings />)
+    act(() => useAppStore.getState().updateConfig({ auto_start: false }))
+    act(() => {
+      window.location.hash = '#/'
+    })
+    await screen.findByRole('alertdialog')
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+
+    act(() => {
+      window.location.hash = '#/'
+    })
+    const dialog = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'settings.leaveDiscard' }))
+    await waitFor(() => expect(screen.getByText('elsewhere home')).toBeTruthy())
+    expect(updateConfig).not.toHaveBeenCalled()
+    expect(useAppStore.getState().config.auto_start).toBe(true)
   })
 })

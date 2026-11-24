@@ -10,7 +10,8 @@ import {
   speakersIn,
   spansOf,
   spokenLines,
-  stampNote,
+  notesShown,
+  withNotesTyped,
   stampedNotes,
   subtitles,
   timesOf,
@@ -224,35 +225,36 @@ describe('meeting text', () => {
     expect(withLines(text, at, ['', undefined])).toBe(text)
   })
 
-  it('marks a note with the time its line was begun at', () => {
-    expect(stampNote('预', 1, 65)).toEqual({ value: '[01:05] 预', caret: 9 })
-    // The line already has its time, and typing on does not add another.
-    expect(stampNote('[01:05] 预算', 10, 90)).toEqual({ value: '[01:05] 预算', caret: 10 })
-    expect(stampNote('[01:05] 预算\n排', 12, 130)).toEqual({
-      value: '[01:05] 预算\n[02:10] 排',
-      caret: 20,
-    })
-    expect(stampNote('', 0, 5)).toEqual({ value: '', caret: 0 })
-  })
+  it('keeps the time each line of a note was begun at, out of sight', () => {
+    // Typed while recording: each new line takes the moment it was begun at.
+    let notes = withNotesTyped('', '预', 65)
+    expect(notes).toBe('[01:05] 预')
+    notes = withNotesTyped(notes, '预算', 90)
+    expect(notes).toBe('[01:05] 预算')
+    notes = withNotesTyped(notes, '预算\n', 120)
+    expect(notes).toBe('[01:05] 预算\n')
+    notes = withNotesTyped(notes, '预算\n排', 130)
+    expect(notes).toBe('[01:05] 预算\n[02:10] 排')
+    expect(notesShown(notes)).toBe('预算\n排')
 
-  it('lets the time of a note be deleted, and marks the next line typed', () => {
-    let value = '[00:10] 预算\n[00:16] 排期'
-    let caret = value.length
-    let seconds = 20
-    const press = (next: string, at: number) => {
-      const stamped = stampNote(next, at, seconds, value)
-      value = stamped.value
-      caret = stamped.caret
-      seconds += 1
-    }
-    // Back over the second line, its time and the line break, one key at a time.
-    while (value !== '[00:10] 预算')
-      press(value.slice(0, caret - 1) + value.slice(caret), caret - 1)
-    expect(value).toBe('[00:10] 预算')
-    press(value + '\n', caret + 1)
-    expect(value).toBe('[00:10] 预算\n')
-    press(value + '会', caret + 1)
-    expect(value).toMatch(/^\[00:10\] 预算\n\[00:\d\d\] 会$/)
+    // A line changed where it stands keeps its time; the lines around it keep theirs.
+    notes = withNotesTyped(notes, '预算超了\n排', 200)
+    expect(notes).toBe('[01:05] 预算超了\n[02:10] 排')
+    // A line put in between takes the moment it was begun at.
+    notes = withNotesTyped(notes, '预算超了\n问法务\n排', 210)
+    expect(notes).toBe('[01:05] 预算超了\n[03:30] 问法务\n[02:10] 排')
+    // A line taken away takes its time with it.
+    notes = withNotesTyped(notes, '预算超了\n排', 220)
+    expect(notes).toBe('[01:05] 预算超了\n[02:10] 排')
+
+    // Typed when nothing is recorded: no time is made up.
+    expect(withNotesTyped(notes, '预算超了\n排\n会后再看', null)).toBe(
+      '[01:05] 预算超了\n[02:10] 排\n会后再看',
+    )
+    expect(withNotesTyped('', '', 5)).toBe('')
+    // A line begun with a number in brackets is the user's, not a time.
+    expect(withNotesTyped('', '[1] first point', null)).toBe('[1] first point')
+    expect(notesShown('[1] first point\n[1:02:03] later')).toBe('[1] first point\nlater')
   })
 
   it('finds the notes that can be looked up in the recording', () => {

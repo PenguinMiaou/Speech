@@ -1,85 +1,13 @@
 import { useTranslation } from 'react-i18next'
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
-import { useAppStore } from '../../../stores/appStore'
-import {
-  getConfig,
-  getHotkeyRegistrationError,
-  updateConfig,
-  setAutoStart,
-} from '../../../lib/tauri'
-import { toast } from '../../toast-service'
+import type { ConfigSaver } from './useSaveConfig'
 
-type SaveResult = 'idle' | 'success' | 'error'
-
-export function DirtyBar() {
+export function DirtyBar({ saver }: { saver: ConfigSaver }) {
   const { t } = useTranslation()
-  const config = useAppStore((s) => s.config)
-  const savedConfig = useAppStore((s) => s.savedConfig)
-  const setConfig = useAppStore((s) => s.setConfig)
-  const resetConfig = useAppStore((s) => s.resetConfig)
-  const setSavedConfig = useAppStore((s) => s.setSavedConfig)
-  const setHotkeyRegistrationError = useAppStore((s) => s.setHotkeyRegistrationError)
-  const [saving, setSaving] = useState(false)
-  const [saveResult, setSaveResult] = useState<SaveResult>('idle')
-  const [errorMsg, setErrorMsg] = useState('')
-
-  const refreshHotkeyRegistrationError = async () => {
-    try {
-      setHotkeyRegistrationError(await getHotkeyRegistrationError())
-    } catch (error) {
-      console.error('[settings] failed to refresh hotkey registration error', error)
-    }
-  }
-
-  const handleSave = async () => {
-    if (saving) return
-    setSaving(true)
-    setSaveResult('idle')
-    setErrorMsg('')
-    const autoStartChanged = savedConfig !== null && savedConfig.auto_start !== config.auto_start
-    let autoStartApplied = false
-    try {
-      if (autoStartChanged) {
-        await setAutoStart(config.auto_start)
-        autoStartApplied = true
-      }
-      await updateConfig(config)
-      await refreshHotkeyRegistrationError()
-      setSavedConfig(config)
-      setSaveResult('success')
-      setTimeout(() => {
-        setSaveResult('idle')
-      }, 1500)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to save settings'
-      if (autoStartApplied && savedConfig) {
-        await setAutoStart(savedConfig.auto_start).catch((rollbackError) => {
-          console.error('[settings] failed to roll back auto-start', rollbackError)
-        })
-      }
-      toast(msg, 'error')
-      try {
-        const backendConfig = await getConfig()
-        setConfig(backendConfig)
-        setSavedConfig(backendConfig)
-      } catch {
-        // Keep the dirty state visible if backend truth cannot be reloaded.
-      }
-      await refreshHotkeyRegistrationError()
-      setErrorMsg(msg)
-      setSaveResult('error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleReset = () => {
-    setSaveResult('idle')
-    setErrorMsg('')
-    resetConfig()
-  }
+  const { saving, saveResult, errorMsg } = saver
+  const handleSave = () => void saver.save()
+  const handleReset = saver.reset
 
   const bgClass =
     saveResult === 'success'
@@ -116,14 +44,14 @@ export function DirtyBar() {
           <button
             onClick={handleReset}
             disabled={saving}
-            className="px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer rounded-[8px] hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-[12px] text-text-secondary hover:text-text-primary bg-transparent border-none cursor-pointer rounded-md hover:bg-bg-tertiary transition-colors disabled:opacity-50"
           >
             {t('common.reset')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-white bg-accent rounded-[8px] border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-70"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-white bg-accent rounded-md border-none cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-70"
           >
             {saving && (
               <motion.div

@@ -243,6 +243,7 @@ export interface AppConfig {
   meeting_detect: boolean
   /** Minutes with nothing said after which a meeting recording pauses; 0 never. */
   meeting_quiet_pause_minutes: number
+  meeting_folder_suggest: boolean
   start_minimized: boolean
   recording_limit_mode: 'auto' | 'custom'
   custom_recording_limit_seconds: number
@@ -814,6 +815,7 @@ const defaultConfig: AppConfig = {
   close_to_tray: true,
   meeting_detect: true,
   meeting_quiet_pause_minutes: 10,
+  meeting_folder_suggest: true,
   start_minimized: false,
   recording_limit_mode: 'auto',
   custom_recording_limit_seconds: 600,

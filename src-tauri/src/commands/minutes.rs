@@ -180,6 +180,26 @@ pub async fn meeting_title(
     crate::minutes::title(&client, &config, &api_key, &transcript).await
 }
 
+/// The folder, of `folders`, a meeting belongs in, picked by the language model chosen in
+/// the settings; none where none clearly fits or no model is set up.
+#[tauri::command]
+pub async fn meeting_folder_pick(
+    title: String,
+    transcript: String,
+    folders: Vec<crate::minutes::Folder>,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Option<String>, String> {
+    let (config, api_key) = meeting_llm(&config_state).await?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured || !config.meeting_folder_suggest {
+        return Ok(None);
+    }
+    crate::minutes::pick_folder(&client, &config, &api_key, &title, &transcript, &folders).await
+}
+
 /// Puts the words of a whole meeting right with the language model chosen in the settings,
 /// which is told the spellings in the user's dictionary. `pieces` is what each person said,
 /// `calendar` the day of the meeting and the days around it.

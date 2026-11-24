@@ -35,7 +35,7 @@ export function NameDemo() {
         aria-label={t('settings.assistantName')}
         placeholder={t('settings.assistantNamePlaceholder')}
         maxLength={24}
-        className="w-full rounded-xl border border-border bg-bg-secondary px-5 py-3 text-center text-[15px] text-text-primary outline-none focus:border-border-focus"
+        className="w-full rounded-lg border border-border bg-bg-secondary px-5 py-3 text-center text-[15px] text-text-primary outline-none focus:border-border-focus"
       />
       <p className="text-center text-[13px] leading-relaxed text-text-secondary">
         {t('onboarding.tryIt.nameHint', {

@@ -113,6 +113,9 @@ pub fn pack_kept_audio(app: tauri::AppHandle) {
     let _ = std::thread::Builder::new()
         .name("opentypeless-pack-audio".to_string())
         .spawn(move || {
+            // Sound kept aside for an undo from when the app last ran can no longer be asked
+            // for.
+            crate::meetings::drop_cuts();
             // Leaves the app's start to itself.
             std::thread::sleep(std::time::Duration::from_secs(20));
             let mut count = 0;
@@ -142,6 +145,18 @@ pub fn meeting_audio_save(id: String, path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn meeting_audio_trim(id: String, end_ms: u64) -> Result<(), String> {
     blocking(move || crate::meetings::trim_audio(&id, end_ms)).await
+}
+
+/// Puts back the sound a meeting had before its last cut; false where none is kept.
+#[tauri::command]
+pub async fn meeting_audio_cut_undo(id: String) -> Result<bool, String> {
+    blocking(move || crate::meetings::undo_cut(&id)).await
+}
+
+/// Lets the sound from before a meeting's last cut go, once the cut can no longer be undone.
+#[tauri::command]
+pub async fn meeting_audio_cut_keep(id: String) -> Result<(), String> {
+    blocking(move || crate::meetings::keep_cut(&id)).await
 }
 
 #[tauri::command]

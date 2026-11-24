@@ -213,30 +213,59 @@ export function withSpeakersChecked(
   return all.join('\n')
 }
 
-const STAMP = /^\[(\d[\d:]*)\] ?/
-
-/** A note being typed during a meeting, with the line the caret is in marked with the
- * time it was begun at, so that the note can later be found in the recording. A line that
- * is empty or already has its time is left alone, and so is every change that takes text
- * away from `before`, the notes as they were: a time being deleted is not put back. */
-export function stampNote(
-  value: string,
-  caret: number,
-  seconds: number,
-  before = '',
-): { value: string; caret: number } {
-  if (value.length <= before.length) return { value, caret }
-  const start = value.lastIndexOf('\n', caret - 1) + 1
-  const stop = value.indexOf('\n', start)
-  const line = value.slice(start, stop < 0 ? undefined : stop)
-  if (line.trim() === '' || STAMP.test(line)) return { value, caret }
-  const stamp = `[${clock(seconds)}] `
-  return { value: value.slice(0, start) + stamp + value.slice(start), caret: caret + stamp.length }
-}
+// A time as clock() writes it, which always holds a colon, so that a line begun with
+// [1] is not taken for one.
+const STAMP = /^\[(\d+(?::\d{2}){1,2})\] ?/
 
 /** The seconds from the start a transcript's time, such as 01:05 or 1:02:03, stands for. */
 export function secondsOf(time: string): number {
   return time.split(':').reduce((total, part) => total * 60 + Number(part), 0)
+}
+
+/** The notes as the user sees and types them: each line without the time it is kept with. */
+export function notesShown(notes: string): string {
+  return notes
+    .split('\n')
+    .map((line) => line.replace(STAMP, ''))
+    .join('\n')
+}
+
+/** The notes kept after the user typed `typed` over them as shown: each line keeps the
+ * time it was begun at, out of sight. Lines before and after the change keep theirs, and
+ * so does a line changed where it stands; a line begun while the meeting is recorded
+ * (`seconds` given) is marked with that moment, and one begun otherwise with none. */
+export function withNotesTyped(notes: string, typed: string, seconds: number | null): string {
+  const was = notes.split('\n').map((line) => {
+    const found = STAMP.exec(line)
+    return { stamp: found ? found[1] : null, text: found ? line.slice(found[0].length) : line }
+  })
+  const lines = typed.split('\n')
+  let head = 0
+  while (head < was.length && head < lines.length && was[head].text === lines[head]) head += 1
+  let tail = 0
+  while (
+    tail < was.length - head &&
+    tail < lines.length - head &&
+    was[was.length - 1 - tail].text === lines[lines.length - 1 - tail]
+  )
+    tail += 1
+  return lines
+    .map((line, index) => {
+      const fromEnd = lines.length - 1 - index
+      // The same line as before, or the one that stood where it stands.
+      const before =
+        index < head
+          ? was[index]
+          : fromEnd < tail
+            ? was[was.length - 1 - fromEnd]
+            : index < was.length - tail
+              ? was[index]
+              : null
+      const stamp =
+        before?.stamp ?? (seconds !== null && line.trim() !== '' ? clock(seconds) : null)
+      return stamp && line.trim() !== '' ? `[${stamp}] ${line}` : line
+    })
+    .join('\n')
 }
 
 /** The notes that carry the time they were written at, with that time in seconds. */

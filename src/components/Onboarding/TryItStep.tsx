@@ -22,7 +22,7 @@ const COLLAPSE_MS = 520
 const LIST_MARK = /^(\d+[.、)）]|[-•])(\s*)(.*)$/
 
 const SURFACE =
-  'whitespace-pre-wrap break-words rounded-xl border border-border bg-bg-secondary px-5 py-4 text-[15px] leading-relaxed text-text-primary'
+  'whitespace-pre-wrap break-words rounded-lg border border-border bg-bg-secondary px-5 py-4 text-[15px] leading-relaxed text-text-primary'
 
 function strikeStagger(parts: DiffPart[]): number {
   const removed = parts.filter((part) => part.kind === 'removed').length
@@ -150,7 +150,7 @@ export function TryItStep() {
           <button
             type="button"
             onClick={() => show(next)}
-            className="rounded-[8px] border border-border bg-bg-secondary px-3 py-1.5 text-[12px] text-text-primary transition-colors hover:bg-bg-tertiary"
+            className="rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-[12px] text-text-primary transition-colors hover:bg-bg-tertiary"
           >
             {t('onboarding.tryIt.next')}
           </button>

@@ -14,7 +14,7 @@ const PART: Record<string, string> = {
 
 const STATE: Record<string, [label: string, colour: string]> = {
   ok: ['settings.diagnosticStatusOk', 'text-text-tertiary'],
-  warning: ['settings.diagnosticStatusWarning', 'text-amber-500'],
+  warning: ['settings.diagnosticStatusWarning', 'text-warning'],
   error: ['settings.diagnosticStatusError', 'text-error'],
   notApplicable: ['settings.diagnosticStatusNotApplicable', 'text-text-tertiary'],
   checking: ['settings.diagnosticStatusChecking', 'text-text-tertiary'],
@@ -42,7 +42,7 @@ export function DiagnosticsSection() {
         type="button"
         onClick={check}
         disabled={busy}
-        className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
       >
         {t(busy ? 'settings.diagnosticStatusChecking' : 'settings.refreshDiagnostics')}
       </button>
@@ -50,14 +50,14 @@ export function DiagnosticsSection() {
         type="button"
         onClick={() => void Promise.resolve(logReveal()).catch(() => {})}
         title={t('settings.showLogHint')}
-        className="ml-2 inline-flex items-center gap-1.5 rounded-[8px] border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary"
+        className="ml-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-secondary px-3 py-2 text-[13px] text-text-primary transition-colors hover:bg-bg-tertiary"
       >
         <FileText size={14} />
         {t('settings.showLog')}
       </button>
       {failed && <p className="text-[12px] text-error">{t('settings.diagnosticsUnavailable')}</p>}
       {rows && rows.length > 0 && (
-        <ul className="divide-y divide-border rounded-[8px] border border-border">
+        <ul className="divide-y divide-border rounded-md border border-border">
           {rows.map((row) => {
             const [label, colour] = STATE[row.status] ?? STATE.checking
             const fine = row.status === 'ok' || row.status === 'notApplicable'

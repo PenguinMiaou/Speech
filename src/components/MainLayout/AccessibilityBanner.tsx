@@ -91,11 +91,11 @@ export function AccessibilityBanner() {
           transition={{ duration: 0.2 }}
           className="overflow-hidden"
         >
-          <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20">
+          <div className="flex items-center gap-2 px-4 py-2 bg-warning/10 border-b border-warning/20">
             {showAccessibility ? (
-              <ShieldAlert size={14} className="text-amber-500 shrink-0" />
+              <ShieldAlert size={14} className="text-warning shrink-0" />
             ) : (
-              <Globe2 size={14} className="text-amber-500 shrink-0" />
+              <Globe2 size={14} className="text-warning shrink-0" />
             )}
             <span className="text-[12px] text-text-primary flex-1">
               {showAccessibility
@@ -120,7 +120,7 @@ export function AccessibilityBanner() {
               }}
               aria-label={t('common.close')}
               title={t('common.close')}
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-hover hover:text-text-secondary"
             >
               <X size={13} />
             </button>

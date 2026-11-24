@@ -10,7 +10,7 @@ import { LogoSelect } from './shared/LogoSelect'
 import { Toggle } from './shared/Toggle'
 
 const NUMBER =
-  'h-8 w-24 rounded-[8px] border border-border bg-bg-secondary px-2 text-right text-[13px] text-text-primary outline-none focus:border-border-focus'
+  'h-8 w-24 rounded-md border border-border bg-bg-secondary px-2 text-right text-[13px] text-text-primary outline-none focus:border-border-focus'
 
 function whole(text: string, least: number, most: number): number {
   const value = Math.floor(Number(text))

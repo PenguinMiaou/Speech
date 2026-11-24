@@ -10,6 +10,8 @@ pub struct TrayHandle {
 }
 
 struct TrayLabels {
+    /// Shown while a meeting is being recorded; choosing it opens the meetings page.
+    meeting_recording: &'static str,
     show_window: &'static str,
     hide_window: &'static str,
     start_recording: &'static str,
@@ -26,6 +28,7 @@ struct TrayLabels {
 fn get_tray_labels(lang: &str) -> TrayLabels {
     match lang {
         "zh" => TrayLabels {
+            meeting_recording: "会议录音中…",
             show_window: "显示窗口",
             hide_window: "隐藏窗口",
             start_recording: "开始录音",
@@ -39,6 +42,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "退出",
         },
         "ja" => TrayLabels {
+            meeting_recording: "会議を録音中…",
             show_window: "ウィンドウを表示",
             hide_window: "ウィンドウを隠す",
             start_recording: "録音を開始",
@@ -52,6 +56,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "終了",
         },
         "ko" => TrayLabels {
+            meeting_recording: "회의 녹음 중…",
             show_window: "창 보이기",
             hide_window: "창 숨기기",
             start_recording: "녹음 시작",
@@ -65,6 +70,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "종료",
         },
         "fr" => TrayLabels {
+            meeting_recording: "Réunion en cours d’enregistrement…",
             show_window: "Afficher la fenêtre",
             hide_window: "Masquer la fenêtre",
             start_recording: "Démarrer l'enregistrement",
@@ -78,6 +84,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Quitter",
         },
         "de" => TrayLabels {
+            meeting_recording: "Meeting wird aufgenommen…",
             show_window: "Fenster anzeigen",
             hide_window: "Fenster ausblenden",
             start_recording: "Aufnahme starten",
@@ -91,6 +98,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Beenden",
         },
         "es" => TrayLabels {
+            meeting_recording: "Grabando reunión…",
             show_window: "Mostrar ventana",
             hide_window: "Ocultar ventana",
             start_recording: "Iniciar grabación",
@@ -104,6 +112,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Salir",
         },
         "pt" => TrayLabels {
+            meeting_recording: "Gravando reunião…",
             show_window: "Mostrar janela",
             hide_window: "Ocultar janela",
             start_recording: "Iniciar gravação",
@@ -117,6 +126,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Sair",
         },
         "ru" => TrayLabels {
+            meeting_recording: "Идёт запись встречи…",
             show_window: "Показать окно",
             hide_window: "Скрыть окно",
             start_recording: "Начать запись",
@@ -130,6 +140,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Выход",
         },
         "it" => TrayLabels {
+            meeting_recording: "Registrazione riunione in corso…",
             show_window: "Mostra finestra",
             hide_window: "Nascondi finestra",
             start_recording: "Inizia registrazione",
@@ -143,6 +154,7 @@ fn get_tray_labels(lang: &str) -> TrayLabels {
             quit: "Esci",
         },
         _ => TrayLabels {
+            meeting_recording: "Recording a meeting…",
             show_window: "Show Window",
             hide_window: "Hide Window",
             start_recording: "Start Recording",
@@ -212,6 +224,8 @@ pub fn build_tray_menu(
         None::<&str>,
     )?;
     let sep1 = PredefinedMenuItem::separator(app)?;
+    let meeting = MenuItem::with_id(app, "meeting", labels.meeting_recording, true, None::<&str>)?;
+    let meeting_sep = PredefinedMenuItem::separator(app)?;
     let record = MenuItem::with_id(
         app,
         "record",
@@ -242,22 +256,28 @@ pub fn build_tray_menu(
     let about = MenuItem::with_id(app, "about", labels.about, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
 
-    let menu = Menu::with_items(
-        app,
-        &[
-            &show_hide,
-            &sep1,
-            &record,
-            &capsule_visibility,
-            &sep2,
-            &settings,
-            &history,
-            &account,
-            &sep3,
-            &about,
-            &quit,
-        ],
-    )?;
+    // A meeting being recorded is named first, so that it is never forgotten running.
+    let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = Vec::new();
+    if crate::meeting_record::is_recording() {
+        items.extend([
+            &meeting as &dyn tauri::menu::IsMenuItem<tauri::Wry>,
+            &meeting_sep,
+        ]);
+    }
+    items.extend([
+        &show_hide as &dyn tauri::menu::IsMenuItem<tauri::Wry>,
+        &sep1,
+        &record,
+        &capsule_visibility,
+        &sep2,
+        &settings,
+        &history,
+        &account,
+        &sep3,
+        &about,
+        &quit,
+    ]);
+    let menu = Menu::with_items(app, &items)?;
     Ok(menu)
 }
 
@@ -279,6 +299,15 @@ pub fn refresh_tray(app: &tauri::AppHandle) {
             {
                 let _ = tray.set_menu(Some(menu));
             }
+            let tooltip = if crate::meeting_record::is_recording() {
+                format!(
+                    "Speech · {}",
+                    get_tray_labels(&tray_language(app)).meeting_recording
+                )
+            } else {
+                "Speech".to_string()
+            };
+            let _ = tray.set_tooltip(Some(tooltip));
         }
     }
 }

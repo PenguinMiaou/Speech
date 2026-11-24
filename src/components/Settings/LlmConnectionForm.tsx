@@ -288,7 +288,7 @@ export function LlmConnectionForm({ meeting = false }: { meeting?: boolean } = {
               aria-label={label}
               title={label}
               onClick={() => chooseFormat(value)}
-              className={`flex items-center gap-2 rounded-[8px] border px-2.5 py-1.5 text-[12px] cursor-pointer ${
+              className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[12px] cursor-pointer ${
                 value === apiFormat
                   ? 'border-accent bg-accent/10 text-text-primary'
                   : 'border-border bg-bg-secondary text-text-secondary'
@@ -322,7 +322,7 @@ export function LlmConnectionForm({ meeting = false }: { meeting?: boolean } = {
             type="button"
             onClick={handleTest}
             disabled={!canReachService || testStatus === 'testing'}
-            className="flex items-center gap-1.5 rounded-[8px] border-none bg-accent px-4 py-2.5 text-[13px] text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-md border-none bg-accent px-4 py-2.5 text-[13px] text-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
           >
             {testStatus === 'testing' && <Loader2 size={14} className="animate-spin" />}
             {t('settings.test')}
@@ -335,7 +335,7 @@ export function LlmConnectionForm({ meeting = false }: { meeting?: boolean } = {
           </p>
         )}
         {reasoningActive && (
-          <p role="alert" className="mt-2 text-[12px] text-amber-600">
+          <p role="alert" className="mt-2 text-[12px] text-warning">
             {t('settings.llmReasoningActive')}
           </p>
         )}
@@ -373,7 +373,7 @@ export function LlmConnectionForm({ meeting = false }: { meeting?: boolean } = {
             onClick={refreshModels}
             disabled={fetching || !canReachService}
             title={t('settings.fetchModels')}
-            className="rounded-[8px] border border-border bg-bg-secondary px-3 py-2.5 text-text-secondary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-border bg-bg-secondary px-3 py-2.5 text-text-secondary cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RefreshCw size={14} className={fetching ? 'animate-spin' : ''} />
           </button>
@@ -472,7 +472,7 @@ function BaseUrlField({
         aria-expanded={open}
         title={service ? t(service.labelKey) : undefined}
         onClick={() => showAll(!open)}
-        className="absolute right-1 top-1 flex h-[calc(100%-8px)] w-8 cursor-pointer items-center justify-center rounded-[8px] border-none bg-transparent text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary"
+        className="absolute right-1 top-1 flex h-[calc(100%-8px)] w-8 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary"
       >
         <ChevronDown size={14} />
       </button>

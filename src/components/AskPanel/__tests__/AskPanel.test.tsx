@@ -176,7 +176,9 @@ describe('AskPanel', () => {
       }),
     )
 
-    expect(await screen.findByText('Target changed; result copied')).toBeDefined()
+    expect(
+      await screen.findByText('The target app changed, so the result was copied'),
+    ).toBeDefined()
     expect(screen.getByText('Launch note')).toBeDefined()
     expect(screen.queryByText(/confidence/i)).toBeNull()
     expect(screen.queryByText(/grammar/i)).toBeNull()
@@ -226,7 +228,7 @@ describe('AskPanel', () => {
       }),
     )
 
-    expect(await screen.findByText('This route is disabled')).toBeDefined()
+    expect(await screen.findByText('This feature is turned off')).toBeDefined()
   })
 
   it('hides the standalone floating note from its close button', async () => {

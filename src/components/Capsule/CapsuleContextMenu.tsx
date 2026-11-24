@@ -77,7 +77,7 @@ export function CapsuleContextMenu({ onClose }: Props) {
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="relative z-50 min-w-[140px] py-1 rounded-[14px] jelly-card shadow-float"
+        className="relative z-50 min-w-[140px] py-1 rounded-lg jelly-card shadow-float"
         role="menu"
       >
         {items.map((item, i) => {

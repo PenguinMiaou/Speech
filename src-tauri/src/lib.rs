@@ -1061,6 +1061,14 @@ pub fn run() {
                             refresh_tray(app);
                         }
                     }
+                    "meeting" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("navigate", "#/meeting");
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            refresh_tray(app);
+                        }
+                    }
                     "history" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("tray:history", ());
@@ -1256,6 +1264,8 @@ pub fn run() {
             commands::meetings::meeting_audio_save,
             commands::meetings::meeting_audio_delete,
             commands::meetings::meeting_audio_trim,
+            commands::meetings::meeting_audio_cut_undo,
+            commands::meetings::meeting_audio_cut_keep,
             commands::minutes::meeting_minutes,
             commands::minutes::meeting_ask,
             commands::minutes::meeting_translate,
@@ -1264,6 +1274,7 @@ pub fn run() {
             commands::minutes::meeting_speakers_check,
             commands::minutes::meeting_speaker_names,
             commands::minutes::meeting_title,
+            commands::minutes::meeting_folder_pick,
             commands::local_stt::meeting_languages,
             commands::local_stt::meeting_record_pause,
             commands::local_stt::meeting_recover,

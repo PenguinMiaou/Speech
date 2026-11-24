@@ -1,46 +1,58 @@
 import type { Transition, Variants } from 'framer-motion'
 
-// Spring config — smooth, no visible bounce
+/** The app's one motion curve: quick to start, soft to settle. The same as --ease-out in
+ * globals.css. */
+export const ease = [0.2, 0, 0, 1] as const
+
+/** How long a change takes, in seconds: small things, most things, and whole panels. The
+ * same as --duration-fast, --duration-base and --duration-slow in globals.css. */
+export const duration = { fast: 0.14, base: 0.2, slow: 0.3 }
+
+/** A spring that comes to rest without overshooting, for things that move or resize. */
+const settle: Transition = { type: 'spring', stiffness: 420, damping: 40, mass: 1 }
+/** The same, slower, for larger things. */
+const glide: Transition = { type: 'spring', stiffness: 260, damping: 32, mass: 1 }
+
+/** The two springs the app moves with, so that each part of it moves the same way. */
 export const spring = {
-  snappy: { type: 'spring', stiffness: 400, damping: 35 } as Transition,
-  smooth: { type: 'spring', stiffness: 300, damping: 30 } as Transition,
-  gentle: { type: 'spring', stiffness: 200, damping: 26 } as Transition,
-  bouncy: { type: 'spring', stiffness: 400, damping: 28 } as Transition,
-  // Jelly springs — smooth with minimal overshoot
-  jelly: { type: 'spring', stiffness: 300, damping: 24 } as Transition,
-  jellyGentle: { type: 'spring', stiffness: 200, damping: 22 } as Transition,
-  jellyBouncy: { type: 'spring', stiffness: 350, damping: 22 } as Transition,
+  smooth: settle,
+  gentle: glide,
 }
 
-// Shared animation presets
+/** A timed change in the app's curve. */
+export const timed = (length: keyof typeof duration = 'base'): Transition => ({
+  duration: duration[length],
+  ease,
+})
+
 export const fadeIn: Variants = {
   initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
+  animate: { opacity: 1, transition: timed() },
+  exit: { opacity: 0, transition: timed('fast') },
 }
 
 export const scaleIn: Variants = {
-  initial: { opacity: 0, scale: 0.95 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.95 },
+  initial: { opacity: 0, scale: 0.98 },
+  animate: { opacity: 1, scale: 1, transition: timed() },
+  exit: { opacity: 0, scale: 0.98, transition: timed('fast') },
 }
 
 export const slideUp: Variants = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: timed() },
+  exit: { opacity: 0, y: -4, transition: timed('fast') },
 }
 
 export const slideRight: Variants = {
-  initial: { opacity: 0, x: 12 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -12 },
+  initial: { opacity: 0, x: 8 },
+  animate: { opacity: 1, x: 0, transition: timed() },
+  exit: { opacity: 0, x: -8, transition: timed('fast') },
 }
 
-// Jelly variants — gentle, not jarring
+/** A small shake, to say no. */
 export const jellyShake: Variants = {
   animate: {
     x: [-2, 2, -1, 1, 0],
-    transition: { duration: 0.4, ease: 'easeInOut' },
+    transition: { duration: 0.3, ease: 'easeInOut' },
   },
 }

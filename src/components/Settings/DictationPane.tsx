@@ -170,7 +170,7 @@ export function DictationPane() {
                 aria-label={t('settings.tryAsk')}
                 title={t('settings.tryAsk')}
                 onClick={handleOpenAsk}
-                className="grid h-7 w-7 place-items-center rounded-[8px] border border-transparent bg-bg-secondary text-text-tertiary hover:border-border hover:text-text-primary"
+                className="grid h-7 w-7 place-items-center rounded-md border border-transparent bg-bg-secondary text-text-tertiary hover:border-border hover:text-text-primary"
               >
                 <MessageCircle size={13} />
               </button>
@@ -187,17 +187,17 @@ export function DictationPane() {
           />
         </div>
         {platformCapabilities && !platformCapabilities.globalHotkeyReliable && (
-          <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+          <p className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
             {t('settings.waylandHotkeyLimited')}
           </p>
         )}
         {hotkeyRegistrationError && !registrationErrorCoveredByAccessibilityBanner && (
-          <p className="mt-2 rounded-[8px] border border-error/30 bg-error/10 px-3 py-2 text-[12px] leading-relaxed text-error">
+          <p className="mt-2 rounded-md border border-error/30 bg-error/10 px-3 py-2 text-[12px] leading-relaxed text-error">
             {t('settings.hotkeyRegistrationFailed')}
           </p>
         )}
         {hotkeyStatusMessage && (
-          <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+          <p className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
             {hotkeyStatusMessage}
           </p>
         )}
@@ -206,7 +206,7 @@ export function DictationPane() {
             type="button"
             aria-expanded={advancedOpen}
             onClick={() => setAdvancedOpen((open) => !open)}
-            className="flex w-full items-center justify-between rounded-[8px] border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
+            className="flex w-full items-center justify-between rounded-md border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] font-medium text-text-primary transition-colors hover:border-border-focus"
           >
             <span>{t('settings.moreShortcuts')}</span>
             <ChevronDown
@@ -279,7 +279,7 @@ export function DictationPane() {
         {config.output_mode === 'clipboard' &&
           platformCapabilities &&
           !platformCapabilities.clipboardAutoPasteReliable && (
-            <p className="mt-2 rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+            <p className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
               {t('settings.waylandClipboardCopyOnly')}
             </p>
           )}

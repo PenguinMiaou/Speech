@@ -57,4 +57,28 @@ describe('MeetingOffer', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(tauri.meetingOfferDismiss).toHaveBeenCalled()
   })
+
+  it('shows a thin line that runs down over the minute the offer stays', async () => {
+    const animate = vi.fn(() => ({ cancel: vi.fn() }))
+    const original = (HTMLElement.prototype as { animate?: unknown }).animate
+    Object.defineProperty(HTMLElement.prototype, 'animate', { value: animate, configurable: true })
+    try {
+      render(<MeetingOffer />)
+      await act(async () => told?.(call))
+      const bar = screen.getByTestId('offer-countdown')
+      expect(bar.getAttribute('aria-hidden')).toBe('true')
+      expect(animate).toHaveBeenCalledWith(
+        [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
+        expect.objectContaining({ duration: 60_000, fill: 'forwards' }),
+      )
+      const dialog = screen.getByRole('alertdialog')
+      const note = document.getElementById(dialog.getAttribute('aria-describedby') ?? '')
+      expect(note?.textContent).toBe('offer.closesByItself')
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'animate', {
+        value: original,
+        configurable: true,
+      })
+    }
+  })
 })

@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, FilePlus2, FileUp, Trash2, X } from 'lucide-react'
+import { useDismiss } from '../../hooks/useDismiss'
 import {
   importMinutesTemplate,
   removeMinutesTemplate,
@@ -45,14 +46,14 @@ function Page({ text }: { text: string }) {
   return (
     <span
       aria-hidden
-      className="flex aspect-[3/4] w-full flex-col gap-[5px] overflow-hidden rounded-[6px] border border-border bg-bg-primary px-2.5 py-3"
+      className="flex aspect-[3/4] w-full flex-col gap-[5px] overflow-hidden rounded-sm border border-border bg-bg-primary px-2.5 py-3"
     >
       {lines.map((line, index) => {
         const heading = /^#{1,4} (.*)$/.exec(line)
         return heading ? (
           <span
             key={index}
-            className="truncate text-[9px] font-semibold leading-[1.2] text-text-primary"
+            className="truncate text-[11px] font-semibold leading-[1.2] text-text-primary"
           >
             {heading[1]}
           </span>
@@ -140,16 +141,20 @@ export function TemplateGallery({
     ...templates.map((entry) => ({ value: entry.name, label: entry.name, mine: true })),
   ]
   const tile =
-    'flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[6px] border border-dashed border-border bg-transparent text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent'
+    'flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-border bg-transparent text-[12px] text-text-secondary transition-colors hover:border-accent hover:text-accent'
 
+  const dialog = useRef<HTMLDivElement>(null)
+  // Escape closes it; a press outside is the backdrop's.
+  useDismiss(true, onClose, dialog, false)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-5">
       <div className="fixed inset-0" onClick={onClose} />
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-label={t('meeting.template')}
-        className="relative z-10 flex max-h-[82vh] w-full max-w-[720px] flex-col rounded-[10px] border border-border bg-bg-secondary shadow-float"
+        className="relative z-10 flex max-h-[82vh] w-full max-w-[720px] flex-col rounded-lg border border-border bg-bg-secondary shadow-float"
       >
         <div className="flex items-center justify-between px-5 pb-1 pt-4">
           <h3 className="m-0 text-[15px] font-semibold text-text-primary">
@@ -159,7 +164,7 @@ export function TemplateGallery({
             type="button"
             onClick={onClose}
             aria-label={t('meeting.cancel')}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[6px] border-none bg-transparent text-text-tertiary hover:text-text-primary"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent text-text-tertiary hover:text-text-primary"
           >
             <X size={15} />
           </button>
@@ -172,14 +177,14 @@ export function TemplateGallery({
               onChange={(event) => setName(event.target.value)}
               aria-label={t('meeting.templateName')}
               placeholder={t('meeting.templateName')}
-              className="h-9 rounded-[8px] border border-border bg-bg-primary px-3 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
+              className="h-9 rounded-md border border-border bg-bg-primary px-3 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
             />
             <textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
               rows={12}
               aria-label={t('meeting.templateText')}
-              className="min-h-0 resize-y rounded-[8px] border border-border bg-bg-primary px-3 py-2.5 font-mono text-[12px] leading-relaxed text-text-primary outline-none"
+              className="min-h-0 resize-y rounded-md border border-border bg-bg-primary px-3 py-2.5 font-mono text-[12px] leading-relaxed text-text-primary outline-none"
             />
           </div>
         ) : (
@@ -219,7 +224,7 @@ export function TemplateGallery({
                     className="flex w-full cursor-pointer flex-col gap-1.5 border-none bg-transparent p-0 text-left"
                   >
                     <span
-                      className={`relative block w-full rounded-[7px] transition-shadow ${
+                      className={`relative block w-full rounded-md transition-shadow ${
                         picked
                           ? 'shadow-[0_0_0_2px_var(--color-accent)]'
                           : 'hover:shadow-[0_0_0_1px_var(--color-border)]'
@@ -246,7 +251,7 @@ export function TemplateGallery({
                       aria-label={`${t('meeting.removeTemplate')} ${card.label}`}
                       title={t('meeting.removeTemplate')}
                       onClick={() => remove(card.value)}
-                      className="absolute right-1.5 top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-[5px] border-none bg-bg-secondary text-text-tertiary opacity-0 transition-opacity hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute right-1.5 top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-sm border-none bg-bg-secondary text-text-tertiary opacity-0 transition-opacity hover:text-error focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       <Trash2 size={12} />
                     </button>
