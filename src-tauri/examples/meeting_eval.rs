@@ -115,7 +115,7 @@ async fn main() {
     } else {
         let started = std::time::Instant::now();
         let pieces: Vec<String> = paras.iter().map(|p| p.2.clone()).collect();
-        match minutes::polish(&client, &config, &key, pieces, &[], "", |_, _| {}).await {
+        match minutes::polish(&client, &config, &key, pieces, &[], &[], "", |_, _| {}).await {
             Ok((better, terms)) => {
                 for (para, line) in paras.iter_mut().zip(better) {
                     let line = line

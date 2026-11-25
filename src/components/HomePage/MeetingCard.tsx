@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type React
 import { useTranslation } from 'react-i18next'
 import {
   AudioLines,
+  ArrowDown,
   ArrowDownUp,
   ArrowLeft,
   Cloud,
@@ -94,6 +95,8 @@ import {
   clock,
   remaining,
   meetingText,
+  asHeard,
+  namesIn,
   subtitles,
   timesOf,
   renameSpeakers,
@@ -167,6 +170,7 @@ const MIC_DEAD_AFTER = 4
 const TRANSLATE_TO_KEY = 'meeting.translateTo'
 const LANGUAGES_KEY = 'meeting.languages'
 const POLISH_KEY = 'meeting.polishAfter'
+const LIVE_FIX_KEY = 'meeting.liveFix'
 const WORD_TIMES_KEY = 'meeting.wordTimes'
 
 function rememberedChoice(key: string, fallback: string): string {
@@ -323,6 +327,7 @@ export function MeetingCard() {
     kept,
     notes,
     names,
+    people,
     minutes,
     answers,
     overview,
@@ -567,6 +572,9 @@ export function MeetingCard() {
    * at all: muted, or not allowed. */
   const [loudest, setLoudest] = useState(0)
   const liveRef = useRef<HTMLDivElement>(null)
+  /** Whether the live words were scrolled to their end, to be kept there as more come. */
+  const atNewest = useRef(true)
+  const [behind, setBehind] = useState(false)
   const [speakers, setSpeakers] = useState(false)
   const [speakersInstalled, setSpeakersInstalled] = useState(false)
   const [systemSound, setSystemSound] = useState(() => remembered(SYSTEM_SOUND_KEY))
@@ -576,6 +584,7 @@ export function MeetingCard() {
     rememberedChoice(LANGUAGES_KEY, '').split(',').filter(Boolean).slice(0, MOST_LANGUAGES),
   )
   const [polishAfter, setPolishAfter] = useState(() => remembered(POLISH_KEY))
+  const [liveFix, setLiveFix] = useState(() => remembered(LIVE_FIX_KEY))
   const [position, setPosition] = useState(0)
   /** The text of the file being transcribed, as far as it is written out. */
   const [paused, setPaused] = useState(false)
@@ -621,12 +630,18 @@ export function MeetingCard() {
 
   /** The text with each speaker who said next to nothing and sounds like another given
    * to that other. A voice that sounds like nobody else stays a person. */
-  const settle = (text: string): Promise<string> => {
+  const settle = (text: string): Promise<string> => joinsOf(text).then((joins) => joins(text))
+  /** How a text of the meeting just heard is given its speakers who are no people of their
+   * own, found from `text`. */
+  const joinsOf = (text: string): Promise<(text: string) => string> => {
     const said = saidBy(text, label)
-    if (Object.keys(said).length < 2) return Promise.resolve(text)
+    const none = (same: string) => same
+    if (Object.keys(said).length < 2) return Promise.resolve(none)
     return Promise.resolve(speakerFewer(said, 0))
-      .then((pairs) => (pairs?.length ? withSpeakersJoined(text, label, pairs) : text))
-      .catch(() => text)
+      .then((pairs) =>
+        pairs?.length ? (other: string) => withSpeakersJoined(other, label, pairs) : none,
+      )
+      .catch(() => none)
   }
   /** Set once the file in hand was asked to be let be, until it has ended. */
   const [stopping, setStopping] = useState(false)
@@ -826,10 +841,32 @@ export function MeetingCard() {
   }, [phase])
 
   useEffect(() => {
-    // The newest words stay in view, except while the user is changing earlier ones.
+    // The newest words stay in view, unless the user scrolled up to read or is changing
+    // earlier ones.
     const live = liveRef.current
-    if (live && editing === null) live.scrollTop = live.scrollHeight
+    if (live && editing === null && atNewest.current) live.scrollTop = live.scrollHeight
   }, [paragraphs, interim, editing])
+
+  // A recording begins at its newest words.
+  useEffect(() => {
+    atNewest.current = true
+    setBehind(false)
+  }, [phase])
+
+  const followLive = () => {
+    const live = liveRef.current
+    if (!live) return
+    const newest = live.scrollHeight - live.scrollTop - live.clientHeight < 40
+    atNewest.current = newest
+    setBehind(!newest)
+  }
+  const toNewest = () => {
+    const live = liveRef.current
+    if (!live) return
+    atNewest.current = true
+    setBehind(false)
+    live.scrollTo?.({ top: live.scrollHeight, behavior: 'smooth' })
+  }
 
   const toggleWordTimes = (on: boolean) => {
     if (!on || timesInstalled) {
@@ -893,6 +930,8 @@ export function MeetingCard() {
       paragraphs: [],
       notes: '',
       names: {},
+      people: [],
+      liveFix,
       minutes: null,
       answers: [],
       overview: null,
@@ -951,11 +990,28 @@ export function MeetingCard() {
     Promise.resolve(meetingRecordStop(discard))
       .then(() => (discard ? undefined : whenTranslated()))
       // The sound becomes the meeting's own once the meeting is kept; that sets `kept`.
-      .then(() => (discard ? undefined : settle(meetingText(heardNow(), label))))
-      .then((said) => {
-        if (said === undefined) return
+      .then(() => (discard ? undefined : joinsOf(meetingText(heardNow(), label))))
+      .then((joins) => {
+        if (joins === undefined) return
+        const said = joins(meetingText(heardNow(), label))
+        // Words put right while the meeting went on can be compared with, and taken back to,
+        // what was heard.
+        const fixed = heardNow().some((paragraph) => paragraph.heard !== undefined)
+        const heard = fixed ? joins(meetingText(asHeard(heardNow()), label)) : said
+        let { id } = useMeetingStore.getState()
+        if (!id && heard !== said) {
+          const startedAt = Date.now()
+          id = `m-${startedAt}`
+          set({ id, startedAt })
+        }
         // From here on the meeting is its text, which the user can go on correcting.
-        set({ recorded: true, text: said, editing: null, times: timesOf(heardNow()) })
+        set({
+          recorded: true,
+          text: said,
+          editing: null,
+          times: timesOf(heardNow()),
+          unpolished: heard !== said && id ? { id, text: heard, live: true } : null,
+        })
         // Heard whole, the meeting tells its speakers apart better than window by window.
         void keep().then(hearAgain)
         if (polishAfter) polish(said)
@@ -1046,12 +1102,24 @@ export function MeetingCard() {
         .then((kept) => setSound(soundOf(meeting.id, kept)))
         .catch(() => {})
   }
+  /** Writes the minutes of the meeting `forId` from its words as they stand, after a
+   * tidy-up of it going on, and names it after them while it is still open. */
+  const writeMinutes = (forId: string, template: string) =>
+    makeMinutes(label, forId, template, null, false)
+      .then(() => {
+        const now = useMeetingStore.getState()
+        if (now.id === forId && now.minutes) return nameFromMinutes(label, now.minutes)
+      })
+      .then(refreshPast)
   /** Makes minutes of the picked meeting in one go, after the picked template. */
   const makeOf = () => {
     const meeting = picking?.meeting
     setPicking(null)
     if (!meeting) return
-    const again = sound && againFirst ? { audio: sound, options: optionsRef.current } : null
+    // Written out anew, the words being tidied up would be thrown away.
+    const tidied = useMeetingStore.getState().tidying?.id === meeting.id
+    const again =
+      sound && againFirst && !tidied ? { audio: sound, options: optionsRef.current } : null
     void makeMinutes(label, meeting.id, templateText(t, templates, template), again).then(
       refreshPast,
     )
@@ -1097,6 +1165,7 @@ export function MeetingCard() {
           error: null,
           notes: meeting.notes,
           names: meeting.names ?? {},
+          people: meeting.people ?? [],
           minutes: meeting.minutes || null,
           answers: meeting.answers ?? [],
           overview: meeting.overview ?? null,
@@ -1202,6 +1271,24 @@ export function MeetingCard() {
         vtt: () => subtitles(plainOf(written), label, names, times, 'vtt'),
       }
     : undefined
+  const peopleBox = (
+    <input
+      key={id ?? 'new'}
+      defaultValue={people.join('、')}
+      onBlur={(event) => {
+        const next = namesIn(event.target.value)
+        if (next.join('\n') === people.join('\n')) return
+        set({ people: next })
+        persist()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+      }}
+      aria-label={t('meeting.attendees')}
+      placeholder={t('meeting.attendeesPlaceholder')}
+      className="mt-3 w-full rounded-md border border-border bg-bg-primary px-3 py-2 text-[13px] text-text-primary outline-none placeholder:text-text-tertiary"
+    />
+  )
   const notesBox = (
     <textarea
       ref={notesRef}
@@ -1231,18 +1318,24 @@ export function MeetingCard() {
   /** Whether what the tidy-up changed is shown in the text, instead of the text as it
    * now reads. */
   const [comparing, setComparing] = useState(false)
+  /** Set while the user is asked whether a meeting tidied up already is to be again. */
+  const [askingAgain, setAskingAgain] = useState(false)
+  useEffect(() => setAskingAgain(false), [id])
   const unpolish = () => {
     if (!heard) return
     set({ text: heard.text, ...(heard.times ? { times: heard.times } : {}), unpolished: null })
     persist()
   }
-  /** Keeps a speaker's name with the meeting, and with the voice where that is at hand. */
-  const nameKept = (number: number, name: string) =>
-    useMeetingStore.getState().voicesAtHand &&
-    void Promise.resolve(rememberSpeaker(number, name))
+  /** Keeps a speaker's name with the meeting, and with the voice: the one at hand from
+   * the meeting just heard, or the one kept with the meeting opened again. */
+  const nameKept = (number: number, name: string) => {
+    const { voicesAtHand, id: meeting } = useMeetingStore.getState()
+    if (!voicesAtHand && !meeting) return
+    void Promise.resolve(rememberSpeaker(number, name, voicesAtHand ? undefined : meeting!))
       .then((all) => all && setVoices(all))
       .catch(() => {})
       .finally(persist)
+  }
   /** Writes each term the one way the user settled on, wherever the meeting says it,
    * and keeps the spelling in the dictionary. A term left empty stays as it is. */
   const settleTerms = (spellings: string[]) => {
@@ -1519,6 +1612,7 @@ export function MeetingCard() {
       overview: null,
       notes: '',
       names: {},
+      people: [],
       title: '',
       folder: inFolder,
       duration: 0,
@@ -1636,7 +1730,7 @@ export function MeetingCard() {
             </span>
           )}
         </span>
-        {tidying?.id === summary.id && tidyingBar}
+        {tidying?.id === summary.id && making?.id !== summary.id && tidyingBar}
         {making?.id === summary.id && makingBar}
       </button>
       {summary.has_minutes && (
@@ -1646,7 +1740,7 @@ export function MeetingCard() {
         type="button"
         aria-label={t('meeting.minutes')}
         title={t('meeting.minutes')}
-        disabled={making !== null || tidying !== null}
+        disabled={making !== null || (tidying !== null && tidying.id !== summary.id)}
         onClick={() => pickTemplate(summary)}
         className="btn-quiet px-2.5 disabled:opacity-50"
       >
@@ -1927,8 +2021,8 @@ export function MeetingCard() {
             )}
             <button
               type="button"
-              onClick={() => polish()}
-              disabled={going}
+              onClick={() => (heard && !heard.live ? setAskingAgain(true) : polish())}
+              disabled={going || making !== null}
               aria-busy={going}
               aria-label={t('meeting.polish')}
               title={t('meeting.polish')}
@@ -2050,6 +2144,15 @@ export function MeetingCard() {
               label={t('meeting.polishAfter')}
             />
             <Toggle
+              checked={liveFix}
+              onChange={(on) => {
+                setLiveFix(on)
+                remember(on, LIVE_FIX_KEY)
+                if (now() === 'recording') set({ liveFix: on })
+              }}
+              label={t('meeting.liveFix')}
+            />
+            <Toggle
               checked={wordTimes && timesInstalled}
               onChange={toggleWordTimes}
               label={t('meeting.wordTimes')}
@@ -2117,63 +2220,78 @@ export function MeetingCard() {
           {phase === 'recording' && (
             <MeetingLanguages chosen={languages} onChange={changeLanguages} />
           )}
-          <div
-            ref={liveRef}
-            role="log"
-            aria-label={t('meeting.live')}
-            className="h-[38vh] min-h-[180px] space-y-3 overflow-y-auto text-[13px] leading-relaxed"
-          >
-            {paragraphs.length === 0 && !interim && (
-              <p className="text-text-tertiary">{t('meeting.listening')}</p>
-            )}
-            {paragraphs.map((paragraph, index) => {
-              const who = paragraph.speaker
-              return (
-                <div key={index}>
-                  <p className="text-[12px]">
-                    {who !== null && (
-                      <span className="font-medium" style={{ color: speakerColor(who) }}>
-                        {`${names[who]?.trim() || (who > 0 ? `${label} ${who}` : label)}  `}
+          <div className="relative">
+            <div
+              ref={liveRef}
+              role="log"
+              aria-label={t('meeting.live')}
+              onScroll={followLive}
+              className="h-[38vh] min-h-[180px] space-y-3 overflow-y-auto text-[13px] leading-relaxed"
+            >
+              {paragraphs.length === 0 && !interim && (
+                <p className="text-text-tertiary">{t('meeting.listening')}</p>
+              )}
+              {paragraphs.map((paragraph, index) => {
+                const who = paragraph.speaker
+                return (
+                  <div key={index}>
+                    <p className="text-[12px]">
+                      {who !== null && (
+                        <span className="font-medium" style={{ color: speakerColor(who) }}>
+                          {`${names[who]?.trim() || (who > 0 ? `${label} ${who}` : label)}  `}
+                        </span>
+                      )}
+                      <span className="tabular-nums text-text-tertiary">
+                        {clock(Math.floor(paragraph.startMs / 1000))}
                       </span>
-                    )}
-                    <span className="tabular-nums text-text-tertiary">
-                      {clock(Math.floor(paragraph.startMs / 1000))}
-                    </span>
-                  </p>
-                  <p
-                    contentEditable={phase === 'recording' ? 'plaintext-only' : undefined}
-                    suppressContentEditableWarning
-                    spellCheck={false}
-                    data-paragraph={index}
-                    onFocus={() => set({ editing: index })}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        event.currentTarget.blur()
-                      }
-                    }}
-                    onBlur={(event) => {
-                      const typed = (event.currentTarget.textContent ?? '').trim()
-                      if (typed) editParagraph(index, typed)
-                      else event.currentTarget.textContent = paragraph.text
-                      set({ editing: null })
-                    }}
-                    className="rounded-xs outline-none focus:bg-bg-secondary"
-                  >
-                    {paragraph.text}
-                  </p>
-                  {(paragraph.translation || (translatingAt === index && translating)) && (
-                    <p className="text-text-secondary">
-                      {[paragraph.translation, translatingAt === index ? translating : '']
-                        .filter(Boolean)
-                        .join(' ')}
                     </p>
-                  )}
-                </div>
-              )
-            })}
-            {interim && <p className="text-text-tertiary">{interim}</p>}
+                    <p
+                      contentEditable={phase === 'recording' ? 'plaintext-only' : undefined}
+                      suppressContentEditableWarning
+                      spellCheck={false}
+                      data-paragraph={index}
+                      onFocus={() => set({ editing: index })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          event.currentTarget.blur()
+                        }
+                      }}
+                      onBlur={(event) => {
+                        const typed = (event.currentTarget.textContent ?? '').trim()
+                        if (typed) editParagraph(index, typed)
+                        else event.currentTarget.textContent = paragraph.text
+                        set({ editing: null })
+                      }}
+                      className="rounded-xs outline-none focus:bg-bg-secondary"
+                    >
+                      {paragraph.text}
+                    </p>
+                    {(paragraph.translation || (translatingAt === index && translating)) && (
+                      <p className="text-text-secondary">
+                        {[paragraph.translation, translatingAt === index ? translating : '']
+                          .filter(Boolean)
+                          .join(' ')}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+              {interim && <p className="text-text-tertiary">{interim}</p>}
+            </div>
+            {behind && (
+              <button
+                type="button"
+                onClick={toNewest}
+                aria-label={t('nav.toNewest')}
+                title={t('nav.toNewest')}
+                className="absolute bottom-3 right-3 z-10 grid h-8 w-8 cursor-pointer place-items-center rounded-full border border-border bg-bg-primary text-text-secondary shadow-float hover:text-text-primary"
+              >
+                <ArrowDown size={16} />
+              </button>
+            )}
           </div>
+          {peopleBox}
           {notesBox}
           {phase === 'recording' && paused && quietPaused !== null && (
             <div
@@ -2595,7 +2713,33 @@ export function MeetingCard() {
                 ))}
               </ul>
             )}
-            {tidying?.id === id && tidyingBar}
+            {making?.id === id ? makingBar : tidying?.id === id && tidyingBar}
+            {askingAgain && heard && !heard.live && !going && (
+              <div
+                role="alertdialog"
+                aria-label={t('meeting.polishAgain')}
+                className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-secondary/40 px-3 py-2 text-[13px] text-text-primary"
+              >
+                <span className="flex-1">{t('meeting.polishAgain')}</span>
+                <button
+                  type="button"
+                  className="btn-quiet px-2.5"
+                  onClick={() => {
+                    setAskingAgain(false)
+                    polish()
+                  }}
+                >
+                  {t('meeting.polishAgainYes')}
+                </button>
+                <button
+                  type="button"
+                  className="btn-quiet px-2.5"
+                  onClick={() => setAskingAgain(false)}
+                >
+                  {t('meeting.cancel')}
+                </button>
+              </div>
+            )}
             {terms?.id === id && terms.open && !tidying && written !== null && (
               <MeetingTerms
                 key={terms.list.map((term) => term.spelling).join('\n')}
@@ -2766,6 +2910,7 @@ export function MeetingCard() {
             )}
           </div>
           <div hidden={tab !== 'minutes'}>
+            {peopleBox}
             {notesBox}
             {result.trim() !== '' && (
               <MeetingMinutes
@@ -2788,6 +2933,11 @@ export function MeetingCard() {
                   set({ answers: next })
                   persist()
                 }}
+                onWrite={id ? (template) => writeMinutes(id, template) : undefined}
+                waiting={tidying?.id === id}
+                blocked={
+                  phase !== 'idle' || making !== null || (tidying !== null && tidying.id !== id)
+                }
               />
             )}
           </div>

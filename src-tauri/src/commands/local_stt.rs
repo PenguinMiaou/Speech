@@ -550,8 +550,19 @@ pub async fn meeting_record_stop(
 /// Remembers the voice of a speaker of the meeting in hand under a name, so that the
 /// same person gets the name in later meetings. Returns the remembered names.
 #[tauri::command]
-pub fn speaker_remember(speaker: u32, name: String) -> Result<Vec<String>, String> {
-    crate::voiceprints::remember(speaker, &name)
+pub fn speaker_remember(
+    speaker: u32,
+    name: String,
+    meeting: Option<String>,
+) -> Result<Vec<String>, String> {
+    crate::voiceprints::remember(speaker, &name, meeting.as_deref())
+}
+
+/// Keeps the voices of the speakers of the meeting in hand with the kept meeting `id`, so
+/// that a name given when it is opened again still teaches the voice.
+#[tauri::command]
+pub fn speaker_voices_keep(id: String) -> Result<(), String> {
+    crate::voiceprints::keep_voices(&id)
 }
 
 /// Learns from the names the meeting in hand ended with: each named speaker's voice
@@ -559,8 +570,9 @@ pub fn speaker_remember(speaker: u32, name: String) -> Result<Vec<String>, Strin
 #[tauri::command]
 pub fn speaker_confirm(
     names: std::collections::HashMap<u32, String>,
+    meeting: Option<String>,
 ) -> Result<Vec<String>, String> {
-    crate::voiceprints::confirm(&names)
+    crate::voiceprints::confirm(&names, meeting.as_deref())
 }
 
 /// The speakers of the meeting in hand who are no people of their own, and whom each is

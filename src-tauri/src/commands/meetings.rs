@@ -34,7 +34,12 @@ pub fn meeting_folder(id: String, folder: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn meeting_delete(id: String) -> Result<(), String> {
     // Waits, off the window's thread, for a sound being packed.
-    blocking(move || crate::meetings::delete(&id)).await
+    blocking(move || {
+        crate::meetings::delete(&id)?;
+        crate::voiceprints::forget_voices(&id);
+        Ok(())
+    })
+    .await
 }
 
 /// Runs work that may wait for a meeting's sound being packed on a thread of its own, so

@@ -11,6 +11,7 @@ const kept = {
   notes: 'a note',
   minutes: '',
   names: { 1: 'Ann' },
+  people: ['Bo Chen', 'Ann'],
   title: 'Launch',
   duration_s: 9,
   times: [],
@@ -41,6 +42,8 @@ describe('minutes made of a kept meeting in one go', () => {
     expect(tauri.meetingPolish).toHaveBeenCalledWith(
       ['um we ship friday', 'ok'],
       expect.stringContaining('The meeting was held on 1970-01-01'),
+      // Those who took part and the speakers' names, each once.
+      ['Bo Chen', 'Ann'],
     )
     // The minutes are written of the words as put right, under the speakers' names.
     expect(tauri.meetingMinutes).toHaveBeenCalledWith(
@@ -59,6 +62,17 @@ describe('minutes made of a kept meeting in one go', () => {
     expect(useMeetingStore.getState().making).toBeNull()
   })
 
+  it('still tidies up the words of a meeting only put right as it was recorded', async () => {
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      ...kept,
+      unpolished: { text: 'S 1  00:00\num we ship fryday\n\nS 2  00:05\nok', live: true },
+    })
+    await makeMinutes('S', 'm-1', 'the template', null)
+    expect(tauri.meetingPolish).toHaveBeenCalled()
+    // What it changed is told against the words as first heard.
+    expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0].unpolished?.text).toContain('fryday')
+  })
+
   it('writes the kept sound out anew first when asked to', async () => {
     vi.mocked(tauri.transcribeFile).mockResolvedValue('S 1  00:00\nwe ship friday')
     vi.mocked(tauri.meetingPolish).mockResolvedValue(['We ship Friday.'])
@@ -71,7 +85,11 @@ describe('minutes made of a kept meeting in one go', () => {
     off()
     expect(steps).toEqual(['text', 'words', 'speakers', 'minutes'])
     expect(tauri.transcribeFile).toHaveBeenCalledWith('/kept/m-1.wav', options)
-    expect(tauri.meetingPolish).toHaveBeenCalledWith(['we ship friday'], expect.any(String))
+    expect(tauri.meetingPolish).toHaveBeenCalledWith(
+      ['we ship friday'],
+      expect.any(String),
+      expect.any(Array),
+    )
     expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0]).toMatchObject({
       transcript: 'S 1  00:00\nWe ship Friday.',
       minutes: '# Decided\nShip Friday',

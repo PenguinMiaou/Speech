@@ -15,6 +15,7 @@ import {
   type MeetingOverview,
   meetingGet,
   meetingPolish,
+  meetingCorrect,
   meetingSpeakersCheck,
   meetingSpeakerNames,
   onFileTranscribeProgress,
@@ -29,6 +30,7 @@ import {
   onMeetingTranslating,
   meetingMinutes,
   speakerConfirm,
+  speakerVoicesKeep,
   speakerFewer,
   transcribeFile,
   type MeetingRecord,
@@ -80,7 +82,15 @@ export interface MeetingState {
    * to go back to. */
   /** The meeting as it was before it was put right: its text, that text cut into the
    * paragraphs it has now where those were split, and the times it had. */
-  unpolished: { id: string; text: string; shaped?: string; times?: Times[] } | null
+  /** What the meeting said before it was put right; `live` where it was only put right as
+   * the meeting went on, not tidied up. */
+  unpolished: {
+    id: string
+    text: string
+    shaped?: string
+    times?: Times[]
+    live?: boolean
+  } | null
   /** The kept meeting minutes are being made of in one go, the steps that takes, the one
    * it is at and how far within it, and since when. */
   making: { id: string; steps: MakingStep[]; at: number; within: number; since: number } | null
@@ -104,6 +114,10 @@ export interface MeetingState {
   notes: string
   /** Names the user gave to speaker numbers. */
   names: Record<number, string>
+  /** The people the user said took part, as their names are to be written. */
+  people: string[]
+  /** Whether what is said is put right by the polish model while the meeting is recorded. */
+  liveFix: boolean
   /** The minutes written for this meeting. */
   minutes: string | null
   /** The questions asked of this meeting and their answers, the newest first. */
@@ -165,6 +179,8 @@ export const initialMeeting: MeetingState = {
   error: null,
   notes: '',
   names: {},
+  people: [],
+  liveFix: false,
   minutes: null,
   answers: [],
   overview: null,
@@ -203,8 +219,13 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
   const named = Object.fromEntries(
     Object.entries(state.names).filter(([, name]) => name.trim() !== ''),
   )
-  if (state.voicesAtHand && Object.keys(named).length > 0) {
-    void Promise.resolve(speakerConfirm(named)).catch(() => {})
+  if (state.voicesAtHand) {
+    // The voices go with the meeting, so that names given once it is opened again still
+    // teach them.
+    void Promise.resolve(speakerVoicesKeep(id)).catch(() => {})
+    if (Object.keys(named).length > 0) {
+      void Promise.resolve(speakerConfirm(named)).catch(() => {})
+    }
   }
   return (
     Promise.resolve(
@@ -217,6 +238,7 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
         answers: state.answers,
         overview: state.overview,
         names: state.names,
+        people: state.people,
         title: state.title.trim(),
         folder: state.folder,
         duration_s: state.duration,
@@ -228,6 +250,7 @@ export function persistMeeting(speakerLabel: string): Promise<void> {
                 text: state.unpolished.text,
                 shaped: state.unpolished.shaped,
                 times: state.unpolished.times,
+                ...(state.unpolished.live ? { live: true } : {}),
               }
             : null,
       }),
@@ -406,12 +429,98 @@ let translating: Promise<void> = Promise.resolve()
 
 /** Takes in one more piece of the meeting and, when asked to, has it translated. Pieces are
  * translated one after another so that they land in the order they were said. */
+/** How much of what was said, in characters, is put right at once while a meeting is
+ * recorded, unless this many paragraphs are waiting first. */
+const FIX_AT_ONCE = 300
+const FIX_PARAGRAPHS = 3
+/** Failures after which words are no longer put right in the recording going on. */
+const FIX_FAILURES = 3
+let fixing = false
+/** The first paragraph not yet put right in the recording going on. */
+let fixedUpTo = 0
+let fixFailures = 0
+
+/** The paragraph saying `text` in place of what it said, the words as heard kept, and the
+ * places where its pieces begin moved along with the words. */
+function withFixedText(paragraph: Paragraph, text: string): Paragraph {
+  const scale = paragraph.text.length > 0 ? text.length / paragraph.text.length : 1
+  return {
+    ...paragraph,
+    text,
+    heard: paragraph.heard ?? paragraph.text,
+    ...(paragraph.marks
+      ? {
+          marks: paragraph.marks.map(([at, ms]): [number, number] => [
+            Math.min(text.length, Math.round(at * scale)),
+            ms,
+          ]),
+        }
+      : {}),
+  }
+}
+
+/** While a meeting is recorded with `liveFix` on, puts right the misheard words of the
+ * paragraphs that will not grow any more, a few at a time, with the polish model. A
+ * paragraph the user is changing, or that changed meanwhile, is left as it is. */
+export function fixLive(): void {
+  const state = useMeetingStore.getState()
+  if (!state.liveFix || fixing || state.phase !== 'recording') return
+  const { paragraphs, editing } = state
+  // A recording begun anew.
+  if (fixedUpTo > paragraphs.length) {
+    fixedUpTo = 0
+    fixFailures = 0
+  }
+  if (fixFailures >= FIX_FAILURES) return
+  // The newest paragraph may still grow.
+  const settled = paragraphs.length - 1
+  const batch: number[] = []
+  for (let index = fixedUpTo; index < settled; index += 1) {
+    if (index !== editing && paragraphs[index].text.trim()) batch.push(index)
+  }
+  const chars = batch.reduce((sum, index) => sum + paragraphs[index].text.length, 0)
+  if (settled - fixedUpTo < FIX_PARAGRAPHS && chars < FIX_AT_ONCE) return
+  const upTo = settled
+  if (batch.length === 0) {
+    fixedUpTo = upTo
+    return
+  }
+  const sent = batch.map((index) => paragraphs[index].text)
+  const before = paragraphs
+    .slice(Math.max(0, batch[0] - 3), batch[0])
+    .map((paragraph) => paragraph.text)
+    .join('\n')
+  fixing = true
+  Promise.resolve(meetingCorrect(sent, peopleOf(state.people, state.names), before))
+    .then((better) => {
+      if (!better) return
+      useMeetingStore.setState(({ paragraphs: now, editing: changing }) => ({
+        paragraphs: now.map((paragraph, index) => {
+          const at = batch.indexOf(index)
+          if (at < 0 || index === changing || paragraph.text !== sent[at]) return paragraph
+          const fixed = better[at]?.replace(/\s*\n\s*/g, ' ').trim()
+          return fixed && fixed !== paragraph.text ? withFixedText(paragraph, fixed) : paragraph
+        }),
+      }))
+    })
+    .catch(() => {
+      fixFailures += 1
+      if (fixFailures === FIX_FAILURES) toast.error(i18n.t('meeting.liveFixFailed'))
+    })
+    .finally(() => {
+      fixedUpTo = Math.max(fixedUpTo, upTo)
+      fixing = false
+      fixLive()
+    })
+}
+
 export function takeSegment(segment: MeetingSegment): Promise<void> {
   const { paragraphs: before, editing } = useMeetingStore.getState()
   // A paragraph the user is changing is left alone; what follows starts a new one.
   const paragraphs = addSegment(before, segment, editing === before.length - 1)
   if (paragraphs === before) return Promise.resolve()
   useMeetingStore.setState({ paragraphs, interim: '' })
+  fixLive()
   tellMe(segment)
   const target = useMeetingStore.getState().translateTo
   if (!target) return Promise.resolve()
@@ -567,6 +676,23 @@ interface Tidied {
   shaped?: string
 }
 
+/** The people of a meeting as their names are to be written: those the user said took
+ * part and the names given to its speakers, each once. */
+export function peopleOf(people: string[], names: Record<number, string>): string[] {
+  const all = [...people, ...Object.values(names)].map((name) => name.trim()).filter(Boolean)
+  return [...new Set(all)]
+}
+
+/** What a meeting said as it was first heard, where its words were only put right as it
+ * went on and it still has as many lines as `text`; or else `text`. */
+function firstHeard(
+  text: string,
+  unpolished: { text: string; live?: boolean } | null | undefined,
+): string {
+  const heard = unpolished?.live ? unpolished.text : null
+  return heard !== null && heard.split('\n').length === text.split('\n').length ? heard : text
+}
+
 /** What stands of a meeting as it was before `tidied` made `after` of it. */
 function unpolishedOf(id: string, text: string, times: Times[], after: Tidied) {
   return { id, text, ...(after.shaped === undefined ? {} : { shaped: after.shaped, times }) }
@@ -574,15 +700,18 @@ function unpolishedOf(id: string, text: string, times: Times[], after: Tidied) {
 
 /** The text with its words put right, its long paragraphs begun anew where the subject
  * changes, and then, where the speakers are told apart, who said what by the sense of
- * it. `startedAt` tells which days the meeting spoke of. `onSpeakers` hears when the last
- * step begins. The words that were put right stand even when the speakers could not be
+ * it. `startedAt` tells which days the meeting spoke of, `people` who took part.
+ * `onSpeakers` hears when the last step begins. `heard` is the text as it was first
+ * heard, line for line, where its words were put right before. The words that were put right stand even when the speakers could not be
  * checked. */
 function tidied(
   text: string,
   speakerLabel: string,
   times: Times[],
   startedAt: number,
+  people: string[],
   onSpeakers?: () => void,
+  heard = text,
 ): Promise<Tidied> {
   const at = spokenLines(text, speakerLabel)
   const lines = text.split('\n')
@@ -590,9 +719,10 @@ function tidied(
     meetingPolish(
       at.map((index) => lines[index]),
       startedAt > 0 ? calendarOf(startedAt) : undefined,
+      people,
     ),
   ).then((better) => {
-    const split = withParagraphsSplit(withLines(text, at, better ?? []), speakerLabel, times, text)
+    const split = withParagraphsSplit(withLines(text, at, better ?? []), speakerLabel, times, heard)
     const worded = split.text
     const speakers = speakersOf(worded, speakerLabel)
     if (!speakers.some((speaker) => speaker !== null)) return split
@@ -645,16 +775,39 @@ export function tidyMeeting(speakerLabel: string, source?: string): Promise<void
   const text = source ?? state.text
   const id = state.id
   if (!text?.trim() || !id || state.tidying || state.making) return Promise.resolve()
+  const run = tidying(speakerLabel, text, id, state)
+  tidyingNow = run
+  return run
+}
+
+/** The tidy-up going on, for minutes asked for meanwhile to wait on. */
+let tidyingNow: Promise<void> = Promise.resolve()
+
+function tidying(
+  speakerLabel: string,
+  text: string,
+  id: string,
+  state: MeetingState,
+): Promise<void> {
   const told = speakersOf(text, speakerLabel).some((speaker) => speaker !== null)
   useMeetingStore.setState({
     tidying: { id, fraction: 0, since: Date.now(), steps: told ? 2 : 1 },
     error: null,
   })
   const times = state.times
-  return tidied(text, speakerLabel, times, state.startedAt)
+  const heard = firstHeard(text, state.unpolished?.id === id ? state.unpolished : null)
+  return tidied(
+    text,
+    speakerLabel,
+    times,
+    state.startedAt,
+    peopleOf(state.people, state.names),
+    undefined,
+    heard,
+  )
     .then((next) => {
       if (next.text === text) return
-      const unpolished = unpolishedOf(id, text, times, next)
+      const unpolished = unpolishedOf(id, heard, times, next)
       const now = useMeetingStore.getState()
       if (now.id === id) {
         // Only a meeting that is still as it was sent off takes the answer.
@@ -665,35 +818,51 @@ export function tidyMeeting(speakerLabel: string, source?: string): Promise<void
       }
       return Promise.resolve(meetingGet(id)).then((kept) => {
         if (!kept || kept.transcript !== text) return
-        useMeetingStore.setState({ unpolished })
-        return meetingSave({ ...kept, transcript: next.text, times: next.times })
+        const { id: _, ...heard } = unpolished
+        return meetingSave({
+          ...kept,
+          transcript: next.text,
+          times: next.times,
+          unpolished: heard,
+        })
       })
     })
     .catch((reason) => {
-      if (useMeetingStore.getState().id !== id) return
-      useMeetingStore.setState({
-        error: String(reason).includes('llm_not_configured')
-          ? 'meeting.error.llm_not_configured'
-          : 'meeting.polishFailed',
-      })
+      const error = String(reason).includes('llm_not_configured')
+        ? 'meeting.error.llm_not_configured'
+        : 'meeting.polishFailed'
+      // Said where the meeting is open, and wherever the user is otherwise.
+      if (useMeetingStore.getState().id === id) useMeetingStore.setState({ error })
+      else toast.error(i18n.t(error))
     })
     .finally(() => useMeetingStore.setState({ tidying: null }))
 }
 
 /** Makes minutes of a kept meeting in one go, a step at a time: the kept sound written
- * out anew where `again` asks for it, the words put right, who said what checked, and the
- * minutes written after `template`. Each step's result is kept as it ends, so a step that
- * fails loses nothing of the ones before; words that could not be put right are taken as
- * heard. It goes on while another page or meeting is open. */
+ * out anew where `again` asks for it, the words put right unless that was done before or
+ * `tidy` is false, who said what checked, and the minutes written after `template`. Each
+ * step's result is kept as it ends, so a step that fails loses nothing of the ones
+ * before; words that could not be put right are taken as heard. It goes on while another
+ * page or meeting is open, and waits for a tidy-up of the same meeting going on. */
 export function makeMinutes(
   speakerLabel: string,
   id: string,
   template: string,
   again: { audio: string; options: TranscribeOptions } | null,
+  tidy = true,
 ): Promise<void> {
   const state = useMeetingStore.getState()
-  if (state.making || state.tidying || state.phase !== 'idle') return Promise.resolve()
-  const steps: MakingStep[] = [...(again ? (['text'] as const) : []), 'words', 'minutes']
+  // Minutes asked for while the same meeting is tidied up wait for it, and are written
+  // from the tidied words.
+  const waiting = state.tidying?.id === id && !again
+  if (state.making || (state.tidying && !waiting) || state.phase !== 'idle') {
+    return Promise.resolve()
+  }
+  const steps: MakingStep[] = waiting
+    ? state.tidying!.steps > 1
+      ? ['words', 'speakers', 'minutes']
+      : ['words', 'minutes']
+    : [...(again ? (['text'] as const) : []), ...(tidy ? (['words'] as const) : []), 'minutes']
   useMeetingStore.setState({
     making: { id, steps, at: 0, within: 0, since: Date.now() },
     error: null,
@@ -711,7 +880,8 @@ export function makeMinutes(
     if (open.id === id) useMeetingStore.setState(shown)
     return Promise.resolve(meetingSave(record)).then(() => record)
   }
-  return Promise.resolve(meetingGet(id))
+  return (waiting ? tidyingNow : Promise.resolve())
+    .then(() => meetingGet(id))
     .then(async (kept) => {
       let record = kept
       if (again) {
@@ -722,6 +892,10 @@ export function makeMinutes(
             ? await Promise.resolve(speakerFewer(said, 0)).catch(() => null)
             : null
         if (pairs?.length) text = withSpeakersJoined(text, speakerLabel, pairs)
+        // Its speakers are numbered anew: their voices go with it in place of the old.
+        if (again.options.speakerLabel !== null) {
+          void Promise.resolve(speakerVoicesKeep(id)).catch(() => {})
+        }
         if (text.trim()) {
           record = await keep(
             { ...record, transcript: text, times: [] },
@@ -730,7 +904,15 @@ export function makeMinutes(
         }
       }
       const heard = record.transcript
-      if (speakersOf(heard, speakerLabel).some((speaker) => speaker !== null)) {
+      // Words that were tidied up already are not tidied again.
+      // Words put right only as the meeting went on are still tidied up.
+      const tidiedBefore =
+        !again && (waiting || !tidy || (!!record.unpolished && !record.unpolished.live))
+      if (tidiedBefore && !waiting) {
+        useMeetingStore.setState(({ making }) =>
+          making ? { making: { ...making, steps: ['minutes'], at: 0 } } : {},
+        )
+      } else if (!waiting && speakersOf(heard, speakerLabel).some((speaker) => speaker !== null)) {
         useMeetingStore.setState(({ making }) =>
           making
             ? {
@@ -744,10 +926,20 @@ export function makeMinutes(
             : {},
         )
       }
-      begin('words')
       const timed = record.times ?? []
-      const right = await tidied(heard, speakerLabel, timed, record.started_at, () =>
-        begin('speakers'),
+      if (!tidiedBefore) begin('words')
+      const right = await (
+        tidiedBefore
+          ? Promise.resolve<Tidied>({ text: heard, times: timed })
+          : tidied(
+              heard,
+              speakerLabel,
+              timed,
+              record.started_at,
+              peopleOf(record.people ?? [], record.names ?? {}),
+              () => begin('speakers'),
+              firstHeard(heard, record.unpolished),
+            )
       ).catch((): Tidied => {
         // The minutes are still written from the words as heard, and the user is told
         // that the text was not tidied up.
@@ -761,7 +953,7 @@ export function makeMinutes(
           {
             text: better,
             times: right.times,
-            unpolished: unpolishedOf(id, heard, timed, right),
+            unpolished: unpolishedOf(id, firstHeard(heard, record.unpolished), timed, right),
           },
         )
       }

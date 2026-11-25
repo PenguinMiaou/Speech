@@ -1008,8 +1008,19 @@ export function onMeetingNames(
 
 /** Remembers a speaker's voice under a name, so the same person gets it in later meetings.
  * Resolves with all remembered names. */
-export function rememberSpeaker(speaker: number, name: string): Promise<string[]> {
-  return invoke('speaker_remember', { speaker, name })
+/** Remembers a speaker's voice under `name`: of the kept meeting `meeting` where it is
+ * given, or else of the meeting in hand. */
+export function rememberSpeaker(
+  speaker: number,
+  name: string,
+  meeting?: string,
+): Promise<string[]> {
+  return invoke('speaker_remember', { speaker, name, meeting: meeting ?? null })
+}
+
+/** Keeps the voices of the meeting in hand with the kept meeting `id`. */
+export function speakerVoicesKeep(id: string): Promise<void> {
+  return invoke('speaker_voices_keep', { id })
 }
 
 /** The surplus speakers of the meeting in hand and whom each is taken for, when it had
@@ -1052,10 +1063,14 @@ export interface MeetingRecord {
   /** What the meeting said before it was tidied, to compare with and to go back to. */
   /** The folder it is kept in; empty or absent when in none. */
   folder?: string
+  /** The people the user said took part, as their names are to be written. */
+  people?: string[]
   unpolished?: {
     text: string
     shaped?: string
     times?: { end_ms: number; chars: number; marks: [number, number][] }[]
+    /** Whether the words were only put right as the meeting went on, not tidied up. */
+    live?: boolean
   } | null
   /** The questions asked of it and their answers, the newest first. */
   answers?: MeetingAnswer[]
@@ -1213,8 +1228,24 @@ export function meetingTranslate(text: string, target: string): Promise<string> 
  * person said; as many come back, in the same order. */
 /** `calendar` is the day the meeting was held and the days around it, by which a day
  * named from that day ("next Wednesday") can be given its date. */
-export function meetingPolish(pieces: string[], calendar?: string): Promise<string[]> {
-  return invoke('meeting_polish', { pieces, calendar: calendar ?? null })
+/** The pieces of a meeting with their words put right. `people` are those the user said
+ * took part, as their names are to be written. */
+export function meetingPolish(
+  pieces: string[],
+  calendar?: string,
+  people: string[] = [],
+): Promise<string[]> {
+  return invoke('meeting_polish', { pieces, calendar: calendar ?? null, people })
+}
+
+/** What was just said in a meeting being recorded, with only its misheard words put
+ * right. `before` is what was said just before, for its sense. */
+export function meetingCorrect(
+  pieces: string[],
+  people: string[],
+  before: string,
+): Promise<string[]> {
+  return invoke('meeting_correct', { pieces, people, before })
 }
 
 /** How far putting a meeting right has got: the words first, then who said them. */

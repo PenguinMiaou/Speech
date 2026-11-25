@@ -10,6 +10,8 @@ export interface Paragraph {
   endMs?: number
   /** Where in the text each piece that joined the paragraph begins, and when it began. */
   marks?: [number, number][]
+  /** The words as they were heard, where they were put right while the meeting went on. */
+  heard?: string
 }
 
 /** When the words under one heading were said: where they end, how long the text was
@@ -296,6 +298,22 @@ export function heading(paragraph: Paragraph, speakerLabel: string): string {
 }
 
 /** The meeting as text, the way a transcribed file is written out. */
+/** The names in what the user typed as the people of a meeting, each once. */
+export function namesIn(typed: string): string[] {
+  const names = typed
+    .split(/[,，、;；\n]+/)
+    .map((name) => name.trim())
+    .filter(Boolean)
+  return [...new Set(names)]
+}
+
+/** The paragraphs with the words as they were heard, where they were put right since. */
+export function asHeard(paragraphs: Paragraph[]): Paragraph[] {
+  return paragraphs.map((paragraph) =>
+    paragraph.heard === undefined ? paragraph : { ...paragraph, text: paragraph.heard },
+  )
+}
+
 export function meetingText(paragraphs: Paragraph[], speakerLabel: string): string {
   return paragraphs
     .map((paragraph) => {

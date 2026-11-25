@@ -208,6 +208,7 @@ pub async fn meeting_polish(
     app: tauri::AppHandle,
     pieces: Vec<String>,
     calendar: Option<String>,
+    people: Option<Vec<String>>,
     config_state: tauri::State<'_, storage::ConfigManager>,
     dictionary: tauri::State<'_, storage::DictionaryStore>,
     client: tauri::State<'_, reqwest::Client>,
@@ -228,6 +229,7 @@ pub async fn meeting_polish(
         &api_key,
         pieces,
         &words,
+        &people_of(people),
         calendar.as_deref().unwrap_or(""),
         |done, total| {
             let _ = app.emit(
@@ -240,6 +242,51 @@ pub async fn meeting_polish(
     // The spellings the model could not be sure of, for the user to settle once.
     let _ = app.emit("meeting:terms", terms);
     Ok(pieces)
+}
+
+/// The names of the people of a meeting as the window gives them: trimmed, each once.
+fn people_of(people: Option<Vec<String>>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for name in people.unwrap_or_default() {
+        let name = name.trim();
+        if !name.is_empty() && !out.iter().any(|other| other == name) {
+            out.push(name.to_string());
+        }
+    }
+    out
+}
+
+/// Puts right the misheard words of what was just said in a meeting being recorded, with
+/// the language model chosen in the settings. As many pieces come back, in the same order.
+/// `before` is what was said just before, for its sense.
+#[tauri::command]
+pub async fn meeting_correct(
+    pieces: Vec<String>,
+    people: Option<Vec<String>>,
+    before: Option<String>,
+    config_state: tauri::State<'_, storage::ConfigManager>,
+    dictionary: tauri::State<'_, storage::DictionaryStore>,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Vec<String>, String> {
+    let (config, api_key) = meeting_llm(&config_state).await?;
+    let configured = !config.llm_base_url.trim().is_empty()
+        && !config.llm_model.trim().is_empty()
+        && crate::llm::has_usable_provider_credentials(&config.llm_provider, &api_key);
+    if !configured {
+        return Err("llm_not_configured".to_string());
+    }
+    let mut words = dictionary.words().await;
+    words.reverse();
+    crate::minutes::correct(
+        &client,
+        &config,
+        &api_key,
+        pieces,
+        &words,
+        &people_of(people),
+        before.as_deref().unwrap_or(""),
+    )
+    .await
 }
 
 /// Checks who said what in a meeting by the sense of it, with the language model chosen

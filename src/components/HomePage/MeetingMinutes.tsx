@@ -35,6 +35,9 @@ export function MeetingMinutes({
   onSeek,
   answers = [],
   onAnswers,
+  onWrite,
+  waiting = false,
+  blocked = false,
 }: {
   transcript: string
   notes: string
@@ -49,6 +52,13 @@ export function MeetingMinutes({
   answers?: MeetingAnswer[]
   /** Called with the questions and answers as they now stand, to be kept with the meeting. */
   onAnswers?: (answers: MeetingAnswer[]) => void
+  /** Given for a kept meeting: writes its minutes after the template given and keeps them
+   * with it, in place of `onMinutes`, even when the user has gone elsewhere meanwhile. */
+  onWrite?: (template: string) => Promise<void>
+  /** Whether the meeting is being tidied up: minutes asked for wait until it is done. */
+  waiting?: boolean
+  /** Whether other work on meetings keeps the minutes from being written now. */
+  blocked?: boolean
 }) {
   const { t } = useTranslation()
   const [templates, setTemplates] = useState<MinutesTemplate[]>([])
@@ -124,10 +134,16 @@ export function MeetingMinutes({
   }
 
   const write = () => {
-    if (working) return
+    if (working || blocked) return
     setPicking(false)
     setWorking(true)
     setError(null)
+    if (onWrite) {
+      void onWrite(templateText(t, templates, chosen))
+        .catch((reason) => fail(reason, 'minutes'))
+        .finally(() => setWorking(false))
+      return
+    }
     Promise.resolve(
       meetingMinutes(
         transcript,
@@ -198,8 +214,15 @@ export function MeetingMinutes({
           <span className="truncate">{chosenName}</span>
         </button>
         <MinutesForm />
-        <button type="button" onClick={write} disabled={working} className="btn-record ml-auto">
-          {working ? t('meeting.minutesWorking') : t('meeting.minutes')}
+        <button
+          type="button"
+          onClick={write}
+          disabled={working || blocked}
+          className="btn-record ml-auto"
+        >
+          {working
+            ? t(waiting ? 'meeting.minutesAfterPolish' : 'meeting.minutesWorking')
+            : t('meeting.minutes')}
         </button>
       </div>
       <p className="mt-2 text-[12px] text-text-tertiary">{t('meeting.minutesNote')}</p>

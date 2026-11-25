@@ -22,12 +22,22 @@ function leafKeys(value: unknown, prefix = ''): string[] {
   )
 }
 
+/** A plural form of a message, which only the languages that have that form carry. */
+const PLURAL = /_(zero|one|two|few|many)$/
+
 describe('locale message coverage', () => {
   it('keeps every locale aligned with English leaf keys', () => {
-    const expectedKeys = leafKeys(en).sort()
+    const expectedKeys = leafKeys(en)
+      .filter((key) => !PLURAL.test(key))
+      .sort()
 
     for (const [locale, messages] of Object.entries(locales)) {
-      expect(leafKeys(messages).sort(), locale).toEqual(expectedKeys)
+      const keys = leafKeys(messages)
+      expect(keys.filter((key) => !PLURAL.test(key)).sort(), locale).toEqual(expectedKeys)
+      // A plural form stands beside the message it is a form of.
+      for (const key of keys.filter((key) => PLURAL.test(key))) {
+        expect(keys, `${locale} ${key}`).toContain(key.replace(PLURAL, ''))
+      }
     }
   })
 })

@@ -11,6 +11,7 @@
     "history": "History",
     "mainNavigation": "Main navigation",
     "toTop": "Back to top",
+    "toNewest": "Jump to the newest",
     "meetingRecording": "Recording a meeting",
     "meetingPaused": "Meeting recording paused"
   },
@@ -308,6 +309,7 @@
     "model": "Model",
     "fetchModels": "Fetch available models",
     "modelsAvailable": "{{count}} models available",
+    "modelsAvailable_one": "{{count}} model available",
     "modelCertified": "Optimized context and thought-aware support",
     "modelBestEffort": "Context and thought-aware support is best effort",
     "baseUrl": "Base URL",
@@ -557,6 +559,7 @@
     "importTooLarge": "Dictionary file exceeds 1 MiB",
     "importFailed": "Could not import the dictionary",
     "importComplete": "Imported {{count}} entries",
+    "importComplete_one": "Imported {{count}} entry",
     "exportFailed": "Could not export the dictionary",
     "learned": "Learned",
     "learnedFrom": "Learned from your correction. It was heard as “{{heard}}”",
@@ -596,6 +599,7 @@
     "export": "Export",
     "import": "Import",
     "importedScenes": "Imported {{count}} scenes",
+    "importedScenes_one": "Imported {{count}} scene",
     "importSkippedInvalid": "{{count}} invalid",
     "importSkippedLimit": "{{count}} over limit",
     "importRenamedConflicts": "{{count}} renamed",
@@ -615,31 +619,31 @@
     "copyName": "{{name}} copy",
     "builtin": {
       "cleanDictation": {
-        "name": "Clean Dictation",
+        "name": "Clean dictation",
         "description": "Lightly clean up the transcript without changing the meaning."
       },
       "meetingNotes": {
-        "name": "Meeting Notes",
+        "name": "Meeting notes",
         "description": "Turn dictation into structured bullets, decisions, and action items."
       },
       "professionalEmail": {
-        "name": "Professional Email",
+        "name": "Professional email",
         "description": "Rewrite spoken notes into a concise professional email."
       },
       "supportReply": {
-        "name": "Support Reply",
+        "name": "Support reply",
         "description": "Turn dictation into a customer support reply."
       },
       "technicalExplanation": {
-        "name": "Technical Explanation",
+        "name": "Technical explanation",
         "description": "Organize spoken notes into a clear technical explanation."
       },
       "codeComment": {
-        "name": "Code Comment",
+        "name": "Code comment",
         "description": "Write a concise code review comment or engineering note."
       },
       "productSpecNotes": {
-        "name": "Product Spec Notes",
+        "name": "Product spec notes",
         "description": "Shape dictation into goals, requirements, and open questions."
       }
     },
@@ -658,15 +662,15 @@
       "social": "Social apps like X and LinkedIn."
     },
     "systemModes": {
-      "email": "Email Format",
-      "work_chat": "Work Chat",
-      "personal_chat": "Personal Chat",
-      "document": "Document Notes",
-      "project_management": "Project Update",
-      "developer_collaboration": "Engineering Note",
-      "prompt_or_code": "Prompt / Code Request",
-      "support": "Support Reply",
-      "social": "Social Post"
+      "email": "Email format",
+      "work_chat": "Work chat",
+      "personal_chat": "Personal chat",
+      "document": "Document notes",
+      "project_management": "Project update",
+      "developer_collaboration": "Engineering note",
+      "prompt_or_code": "Prompt / code request",
+      "support": "Support reply",
+      "social": "Social post"
     },
     "systemSceneDescription": "Built-in writing mode. You can edit it or reset it.",
     "resetSystemScene": "Reset to default",
@@ -744,6 +748,7 @@
     "deadlineReached": "Reached the recording limit ({{duration}}). Transcribing what was recorded. {{reason}}",
     "loading": "Checking this provider’s recording limit…",
     "durationSeconds": "{{count}} seconds",
+    "durationSeconds_one": "{{count}} second",
     "durationMinute": "{{count}} minute",
     "durationMinutes": "{{count}} minutes",
     "reasons": {
@@ -897,6 +902,7 @@
     "audioFileName": "Meeting recording.wav",
     "minutes": "Write minutes",
     "minutesWorking": "Writing minutes…",
+    "minutesAfterPolish": "Minutes after the tidy-up…",
     "minutesResult": "Minutes",
     "minutesNote": "The polish model chosen in Settings writes the minutes. The meeting text is sent to it.",
     "template": "Minutes template",
@@ -908,6 +914,7 @@
     "notes": "My notes",
     "notesPlaceholder": "Jot down what matters as you go. The minutes will be built around these points.",
     "voices": "{{count}} voices remembered",
+    "voices_one": "{{count}} voice remembered",
     "voicesList": "Remembered voices",
     "forgetVoice": "Forget {{name}}’s voice",
     "past": "Past meetings {{count}}",
@@ -938,10 +945,15 @@
     "more": "More",
     "deleteThis": "Delete meeting",
     "people": "{{count}} speakers",
+    "people_one": "{{count}} speaker",
     "language": "Meeting languages",
     "languageAuto": "Detect language",
     "polish": "Tidy up the text (uses the polish model)",
     "polishAfter": "Tidy up the text when the meeting ends (uses the polish model)",
+    "liveFix": "Put right misheard words while recording (uses the polish model)",
+    "liveFixFailed": "Stopped putting words right while recording: the polish model did not answer",
+    "attendees": "People",
+    "attendeesPlaceholder": "Who took part, e.g. Ann Lee, Bo Chen — helps get names right",
     "unpolish": "Undo tidy-up",
     "compare": "Show what changed",
     "allOfSpeaker": "Everything this speaker said",
@@ -993,6 +1005,8 @@
     "termsHint": "Pick one, or type your own",
     "termsHear": "Hear this sentence",
     "polishFailed": "Could not tidy up the text",
+    "polishAgain": "This meeting was tidied up already. Tidy it up again?",
+    "polishAgainYes": "Tidy up again",
     "addLanguage": "Add a language",
     "removeLanguage": "Remove {{name}}",
     "pauseRecording": "Pause recording",

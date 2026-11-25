@@ -7,10 +7,13 @@ const meetingSave = vi.fn()
 const meetingRecover = vi.fn()
 const meetingWordTimes = vi.fn()
 const meetingAudioKeep = vi.fn()
+const speakerVoicesKeep = vi.fn()
+const meetingCorrect = vi.fn()
 let packedSoFar: (packed: { id: string; path: string }) => void = () => {}
 let translatingSoFar: (text: string) => void = () => {}
 vi.mock('../../lib/tauri', () => ({
   meetingTranslate: (...args: unknown[]) => meetingTranslate(...args),
+  meetingCorrect: (...args: unknown[]) => meetingCorrect(...args),
   meetingTitle: (...args: unknown[]) => meetingTitle(...args),
   meetingSave: (...args: unknown[]) => meetingSave(...args),
   meetingRecover: (...args: unknown[]) => meetingRecover(...args),
@@ -31,6 +34,7 @@ vi.mock('../../lib/tauri', () => ({
     translatingSoFar = handler
   },
   speakerConfirm: vi.fn(),
+  speakerVoicesKeep: (...args: unknown[]) => speakerVoicesKeep(...args),
 }))
 
 import {
@@ -112,6 +116,82 @@ describe('a piece of the meeting arriving', () => {
   })
 })
 
+describe('words put right while the meeting is recorded', () => {
+  beforeEach(() => {
+    meetingTranslate.mockReset()
+    meetingCorrect.mockReset()
+    useMeetingStore.setState({
+      ...initialMeeting,
+      phase: 'recording',
+      liveFix: true,
+      people: ['Bo Chen'],
+      names: { 2: 'Ann' },
+    })
+  })
+  const settle = () => new Promise((done) => setTimeout(done, 0))
+
+  it('puts right the paragraphs that will not grow, keeping what was heard', async () => {
+    meetingCorrect.mockImplementation(async (pieces: string[]) =>
+      pieces.map((piece) => piece.replace('bow', 'Bo')),
+    )
+    await takeSegment(said(1, 'bow said yes'))
+    await takeSegment(said(2, 'fine'))
+    await takeSegment(said(1, 'then bow left'))
+    // The newest paragraph may still grow, so it waits.
+    expect(meetingCorrect).not.toHaveBeenCalled()
+    await takeSegment(said(2, 'ok'))
+    await settle()
+    expect(meetingCorrect).toHaveBeenCalledWith(
+      ['bow said yes', 'fine', 'then bow left'],
+      ['Bo Chen', 'Ann'],
+      '',
+    )
+    const [first, , third, last] = useMeetingStore.getState().paragraphs
+    expect(first).toMatchObject({ text: 'Bo said yes', heard: 'bow said yes' })
+    expect(third).toMatchObject({ text: 'then Bo left', heard: 'then bow left' })
+    expect(last.heard).toBeUndefined()
+  })
+
+  it('leaves alone a paragraph the user is changing or changed meanwhile', async () => {
+    let answer: (pieces: string[]) => void = () => {}
+    meetingCorrect.mockReturnValue(new Promise((done) => (answer = done)))
+    for (const [speaker, text] of [
+      [1, 'one bow'],
+      [2, 'two bow'],
+      [1, 'three bow'],
+      [2, 'four'],
+    ] as const) {
+      await takeSegment(said(speaker, text))
+    }
+    useMeetingStore.setState(({ paragraphs }) => ({
+      paragraphs: paragraphs.map((paragraph, index) =>
+        index === 1 ? { ...paragraph, text: 'two, typed' } : paragraph,
+      ),
+    }))
+    answer(['one Bo', 'two Bo', 'three Bo'])
+    await settle()
+    expect(useMeetingStore.getState().paragraphs.map((paragraph) => paragraph.text)).toEqual([
+      'one Bo',
+      'two, typed',
+      'three Bo',
+      'four',
+    ])
+  })
+
+  it('sends nothing when it is not asked for', async () => {
+    useMeetingStore.setState({ liveFix: false })
+    for (const [speaker, text] of [
+      [1, 'a'],
+      [2, 'b'],
+      [1, 'c'],
+      [2, 'd'],
+    ] as const) {
+      await takeSegment(said(speaker, text))
+    }
+    expect(meetingCorrect).not.toHaveBeenCalled()
+  })
+})
+
 describe('a meeting that has been recorded', () => {
   const recorded = {
     ...initialMeeting,
@@ -129,6 +209,17 @@ describe('a meeting that has been recorded', () => {
     meetingTitle.mockReset()
     meetingSave.mockReset()
     useMeetingStore.setState({ ...recorded })
+  })
+
+  it('keeps the voices just heard with the meeting, and only those', async () => {
+    speakerVoicesKeep.mockReset()
+    useMeetingStore.setState({ voicesAtHand: true })
+    await persistMeeting('Speaker')
+    expect(speakerVoicesKeep).toHaveBeenCalledWith('m-1')
+    speakerVoicesKeep.mockReset()
+    useMeetingStore.setState({ voicesAtHand: false })
+    await persistMeeting('Speaker')
+    expect(speakerVoicesKeep).not.toHaveBeenCalled()
   })
 
   it('is named again after its minutes, unless the user named it', async () => {

@@ -9,6 +9,22 @@ export interface Notes {
 }
 
 export const WHATS_NEW: Record<string, Notes> = {
+  '1.2.16': {
+    zh: [
+      '往上翻看实时转写时，不再被拉回最新内容，点“回到最新”再跟上。',
+      '整理全文离开会议也会做完，对比和撤销都还在；途中点纪要会等整理完再写；已经整理过的会，再整理前会先问。',
+      '说话人的声纹跟着会议存在本机，重新打开会议后改名字，也能记住这个声音。',
+      '可以填写参会人，整理全文时会把读音相近的各种写法统一成你填的名字。',
+      '录音选项里新增“边录边校正听错的字”（默认关闭）：录音时把听错的字和人名改对，原话保留，可以对比。',
+    ],
+    en: [
+      'Scrolling up in the live transcript no longer pulls you back to the newest words. Jump to the newest catches up.',
+      'Tidying up a transcript finishes even if you leave the meeting, with compare and undo kept. Minutes asked for meanwhile wait for it, and tidying up again asks first.',
+      "Speakers' voices are kept with each meeting on this device, so renaming a speaker after reopening a meeting also teaches the voice.",
+      'You can list the People in a meeting. Tidying up then writes names that sound alike the way you typed them.',
+      'Recording options can put right misheard words and names while recording (off by default), with the original words kept for comparison.',
+    ],
+  },
   '1.2.15': {
     zh: [
       '删除会议、删除录音、剪切会议后，几秒内都能撤销。',

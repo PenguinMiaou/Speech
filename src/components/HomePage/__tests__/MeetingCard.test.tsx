@@ -594,6 +594,24 @@ describe('MeetingCard', () => {
     await waitFor(() => expect(tauri.meetingsList).toHaveBeenCalledTimes(2))
   })
 
+  it('does not tidy up again for the minutes the words of a meeting tidied up before', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue(two)
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      ...record,
+      unpolished: { text: 'frist words' },
+    })
+    vi.mocked(tauri.meetingPolish).mockReset()
+    vi.mocked(tauri.meetingMinutes).mockResolvedValue('the minutes')
+    await ready()
+    await screen.findByText('first words')
+    fireEvent.click(screen.getAllByRole('button', { name: 'meeting.minutes' })[0])
+    const gallery = within(await screen.findByRole('dialog'))
+    fireEvent.click(gallery.getByRole('button', { name: 'meeting.minutes' }))
+    await waitFor(() => expect(tauri.meetingMinutes).toHaveBeenCalled())
+    expect(vi.mocked(tauri.meetingMinutes).mock.calls[0][0]).toBe('first words')
+    expect(tauri.meetingPolish).not.toHaveBeenCalled()
+  })
+
   it('writes the kept sound out anew first where that is left ticked', async () => {
     vi.mocked(tauri.meetingsList).mockResolvedValue(two)
     vi.mocked(tauri.meetingGet).mockResolvedValue(record)
@@ -1295,6 +1313,33 @@ describe('MeetingCard', () => {
     expect(live).toContain('meeting.speakerLabel 2  00:31morning')
   })
 
+  it('stays where the user scrolled up to while more is said, until asked back', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    const log = screen.getByRole('log')
+    let height = 1000
+    Object.defineProperty(log, 'scrollHeight', { configurable: true, get: () => height })
+    Object.defineProperty(log, 'clientHeight', { configurable: true, get: () => 300 })
+    act(() => hear({ speaker: null, start_ms: 0, text: 'first' }))
+    expect(log.scrollTop).toBe(1000)
+    log.scrollTop = 200
+    fireEvent.scroll(log)
+    height = 1400
+    act(() => hear({ speaker: null, start_ms: 9_000, text: 'second' }))
+    expect(log.scrollTop).toBe(200)
+    const back = screen.getByRole('button', { name: 'nav.toNewest' })
+    log.scrollTo = ((options: ScrollToOptions) => {
+      log.scrollTop = options.top ?? 0
+    }) as typeof log.scrollTo
+    fireEvent.click(back)
+    expect(log.scrollTop).toBe(1400)
+    act(() => hear({ speaker: null, start_ms: 12_000, text: 'third' }))
+    expect(screen.queryByRole('button', { name: 'nav.toNewest' })).toBeNull()
+  })
+
   it('keeps the text and the audio when the recording is stopped', async () => {
     vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
     vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 40, volume: 0, waiting: 8 })
@@ -1386,10 +1431,31 @@ describe('MeetingCard', () => {
     const input = await screen.findByLabelText('meeting.speakerLabel 1')
     fireEvent.change(input, { target: { value: 'Ann' } })
     fireEvent.blur(input)
-    expect(tauri.rememberSpeaker).toHaveBeenCalledWith(1, 'Ann')
+    expect(tauri.rememberSpeaker).toHaveBeenCalledWith(1, 'Ann', undefined)
     fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.options' }))
     await screen.findByText('meeting.voices 1')
+  })
+
+  it('learns a name put right in a meeting opened again from the voices kept with it', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'hello talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nhello',
+      notes: '',
+      minutes: '',
+      names: { 1: 'Ann' },
+    })
+    vi.mocked(tauri.rememberSpeaker).mockResolvedValue(['Ann', 'Bo'])
+    await ready()
+    fireEvent.click(await screen.findByText('hello talk'))
+    const input = await screen.findByLabelText('meeting.speakerLabel 1')
+    fireEvent.change(input, { target: { value: 'Bo' } })
+    fireEvent.blur(input)
+    expect(tauri.rememberSpeaker).toHaveBeenCalledWith(1, 'Bo', 'm-1')
   })
 
   it('names a speaker whose voice was remembered, unless the user typed a name', async () => {
@@ -1616,6 +1682,218 @@ describe('MeetingCard', () => {
     await waitFor(() => expect(tauri.meetingDelete).toHaveBeenCalledWith('m-1'))
   })
 
+  describe('a polish left before it ends', () => {
+    const kept = {
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nwe use tori\nmeeting.speakerLabel 2  00:09\nok',
+      notes: '',
+      minutes: '',
+      names: {},
+    }
+    let answer: (lines: string[]) => void = () => {}
+    let saved: tauri.MeetingRecord = { ...kept }
+    const begin = async () => {
+      vi.mocked(tauri.meetingsList).mockResolvedValue([
+        { id: 'm-1', started_at: kept.started_at, preview: 'tori talk', has_minutes: false },
+      ])
+      saved = { ...kept }
+      vi.mocked(tauri.meetingGet).mockImplementation(() => Promise.resolve(saved))
+      vi.mocked(tauri.meetingSave).mockImplementation(async (meeting) => {
+        if (meeting.id === 'm-1') saved = meeting
+      })
+      vi.mocked(tauri.meetingPolish).mockReset()
+      vi.mocked(tauri.meetingSpeakersCheck).mockReset()
+      vi.mocked(tauri.meetingPolish).mockReturnValue(new Promise((done) => (answer = done)))
+      await ready()
+      fireEvent.click(await screen.findByText('tori talk'))
+      fireEvent.click(await screen.findByRole('button', { name: 'meeting.polish' }))
+      await waitFor(() => expect(tauri.meetingPolish).toHaveBeenCalled())
+    }
+    const polished = () => expect(saved.transcript).toContain('We use Tauri.')
+
+    it('is kept when the user went back to the list, with what it changed', async () => {
+      await begin()
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
+      // The list shows how far it has got.
+      expect(screen.getByRole('progressbar', { name: 'meeting.polish' })).toBeTruthy()
+      await act(async () => answer(['We use Tauri.', 'OK.']))
+      await waitFor(polished)
+      fireEvent.click(await screen.findByText('tori talk'))
+      fireEvent.click(await screen.findByRole('button', { name: 'meeting.compare' }))
+      expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toContain(
+        'tori',
+      )
+    })
+
+    it('is kept when the user went back and opened the meeting again', async () => {
+      await begin()
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
+      fireEvent.click(await screen.findByText('tori talk'))
+      await screen.findByRole('progressbar', { name: 'meeting.polish' })
+      await act(async () => answer(['We use Tauri.', 'OK.']))
+      await waitFor(polished)
+      await screen.findByText(/We use Tauri\./)
+      fireEvent.click(await screen.findByRole('button', { name: 'meeting.compare' }))
+      expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toContain(
+        'tori',
+      )
+    })
+
+    it('lets minutes asked for meanwhile wait, and writes them from the tidied words', async () => {
+      vi.mocked(tauri.meetingMinutes).mockResolvedValue('the minutes')
+      await begin()
+      fireEvent.click(screen.getByRole('tab', { name: 'meeting.tabMinutes' }))
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+      await screen.findByRole('button', { name: 'meeting.minutesAfterPolish' })
+      expect(tauri.meetingMinutes).not.toHaveBeenCalled()
+      await act(async () => answer(['We use Tauri.', 'OK.']))
+      await waitFor(() => expect(saved.minutes).toBe('the minutes'))
+      expect(vi.mocked(tauri.meetingMinutes).mock.calls[0][0]).toContain('We use Tauri.')
+      // The words were tidied up once, not again for the minutes.
+      expect(tauri.meetingPolish).toHaveBeenCalledTimes(1)
+    })
+
+    it('asks before tidying up again what was tidied up already', async () => {
+      await begin()
+      await act(async () => answer(['We use Tauri.', 'OK.']))
+      await waitFor(polished)
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+      const asked = await screen.findByRole('alertdialog', { name: 'meeting.polishAgain' })
+      fireEvent.click(within(asked).getByRole('button', { name: 'meeting.cancel' }))
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      expect(tauri.meetingPolish).toHaveBeenCalledTimes(1)
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.polishAgainYes' }))
+      await waitFor(() => expect(tauri.meetingPolish).toHaveBeenCalledTimes(2))
+    })
+
+    it('says so wherever the user is when it fails meanwhile', async () => {
+      await begin()
+      vi.mocked(tauri.meetingPolish).mockReset()
+      fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
+      vi.mocked(toast.error).mockClear()
+      // The polish begun before is still out; it fails now.
+      await act(async () => answer(Promise.reject(new Error('timeout')) as never))
+      await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+      expect(saved.transcript).toBe(kept.transcript)
+    })
+
+    it('is kept when the user went to another page and came back', async () => {
+      await begin()
+      cleanup()
+      await act(async () => answer(['We use Tauri.', 'OK.']))
+      render(<MeetingCard />)
+      await waitFor(polished)
+      await screen.findByText(/We use Tauri\./)
+      fireEvent.click(await screen.findByRole('button', { name: 'meeting.compare' }))
+      expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toContain(
+        'tori',
+      )
+    })
+  })
+
+  it('keeps who took part with the meeting and tells the tidy-up of them', async () => {
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: 1_700_000_000_000, preview: 'budget talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockResolvedValue({
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: 'meeting.speakerLabel 1  00:00\nthe budget',
+      notes: '',
+      minutes: '',
+      names: { 1: 'Ann' },
+      people: ['Bo Chen'],
+    })
+    vi.mocked(tauri.meetingPolish).mockReset()
+    vi.mocked(tauri.meetingPolish).mockResolvedValue(['The budget.'])
+    await ready()
+    fireEvent.click(await screen.findByText('budget talk'))
+    const box = (await screen.findByLabelText('meeting.attendees')) as HTMLInputElement
+    expect(box.value).toBe('Bo Chen')
+    fireEvent.change(box, { target: { value: 'Bo Chen， Cy Park、Bo Chen' } })
+    fireEvent.blur(box)
+    await waitFor(() =>
+      expect(vi.mocked(tauri.meetingSave).mock.lastCall?.[0].people).toEqual([
+        'Bo Chen',
+        'Cy Park',
+      ]),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    await waitFor(() =>
+      expect(vi.mocked(tauri.meetingPolish).mock.lastCall?.[2]).toEqual([
+        'Bo Chen',
+        'Cy Park',
+        'Ann',
+      ]),
+    )
+  })
+
+  it('keeps what was heard of words put right while recording, to compare with', async () => {
+    vi.mocked(tauri.meetingRecordStart).mockResolvedValue()
+    vi.mocked(tauri.meetingRecordLevel).mockResolvedValue({ seconds: 9, volume: 0, waiting: 0 })
+    vi.mocked(tauri.meetingRecordStop).mockResolvedValue(null)
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
+    await screen.findByRole('button', { name: 'meeting.stop' })
+    act(() =>
+      useMeetingStore.setState({
+        paragraphs: [{ speaker: null, startMs: 0, text: 'we use Tauri', heard: 'we use tori' }],
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))
+    await waitFor(() => expect(useMeetingStore.getState().text).toBe('00:00\nwe use Tauri'))
+    expect(useMeetingStore.getState().unpolished).toMatchObject({
+      text: '00:00\nwe use tori',
+      live: true,
+    })
+    fireEvent.click(await screen.findByRole('button', { name: 'meeting.compare' }))
+    expect([...document.querySelectorAll('del')].map((gone) => gone.textContent)).toContain('tori')
+    // Put right as it went, it was not tidied up: tidying up asks nothing, and what it
+    // changed is told against the words as they were first heard.
+    vi.mocked(tauri.meetingPolish).mockReset()
+    vi.mocked(tauri.meetingPolish).mockResolvedValue(['We use Tauri.'])
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.polish' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(useMeetingStore.getState().text).toBe('00:00\nWe use Tauri.'))
+    expect(useMeetingStore.getState().unpolished).toMatchObject({ text: '00:00\nwe use tori' })
+    expect(useMeetingStore.getState().unpolished?.live).toBeUndefined()
+  })
+
+  it('keeps late minutes with their own meeting after the user went back', async () => {
+    const A = {
+      id: 'm-1',
+      started_at: 1_700_000_000_000,
+      transcript: '00:00\nthe budget',
+      notes: '',
+      minutes: '',
+      names: {},
+      unpolished: { text: '00:00\nthe budgit' },
+    }
+    let saved: tauri.MeetingRecord = { ...A }
+    vi.mocked(tauri.meetingsList).mockResolvedValue([
+      { id: 'm-1', started_at: A.started_at, preview: 'budget talk', has_minutes: false },
+    ])
+    vi.mocked(tauri.meetingGet).mockImplementation(() => Promise.resolve(saved))
+    vi.mocked(tauri.meetingSave).mockImplementation(async (meeting) => {
+      saved = meeting
+    })
+    vi.mocked(tauri.meetingPolish).mockReset()
+    let answer: (minutes: string) => void = () => {}
+    vi.mocked(tauri.meetingMinutes).mockReturnValueOnce(new Promise((done) => (answer = done)))
+    await ready()
+    fireEvent.click(await screen.findByText('budget talk'))
+    fireEvent.click(await screen.findByRole('tab', { name: 'meeting.tabMinutes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.minutes' }))
+    await waitFor(() => expect(tauri.meetingMinutes).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'meeting.all' }))
+    await act(async () => answer('the minutes'))
+    await waitFor(() => expect(saved.minutes).toBe('the minutes'))
+    expect(saved.transcript).toBe('00:00\nthe budget')
+    expect(tauri.meetingPolish).not.toHaveBeenCalled()
+  })
+
   it('keeps a late overview with its own meeting, not the one opened since', async () => {
     const A = {
       id: 'm-1',
@@ -1704,6 +1982,11 @@ describe('MeetingCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'meeting.record' }))
     fireEvent.change(await screen.findByLabelText('meeting.notes'), {
       target: { value: 'cut the budget' },
+    })
+    vi.mocked(tauri.meetingGet).mockImplementation(async () => {
+      const saved = vi.mocked(tauri.meetingSave).mock.lastCall?.[0]
+      if (!saved) throw new Error('not kept')
+      return saved
     })
     act(() => hear({ speaker: null, start_ms: 0, text: 'what was said' }))
     fireEvent.click(screen.getByRole('button', { name: 'meeting.stop' }))

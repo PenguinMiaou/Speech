@@ -107,6 +107,9 @@ pub struct Meeting {
     /// The folder the user keeps it in. Empty when it is in none.
     #[serde(default)]
     pub folder: String,
+    /// The people the user said took part, as their names are to be written.
+    #[serde(default)]
+    pub people: Vec<String>,
     /// The questions asked of it and their answers, the newest first.
     #[serde(default)]
     pub answers: Vec<Answer>,
@@ -133,6 +136,9 @@ pub struct Unpolished {
     pub shaped: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub times: Option<Vec<Times>>,
+    /// Whether the words were only put right as the meeting went on, not tidied up.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub live: bool,
 }
 
 /// When the words under one heading were said.

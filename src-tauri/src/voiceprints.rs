@@ -256,24 +256,78 @@ pub fn names() -> HashMap<u32, String> {
     match_names(&read(&store), &heard)
 }
 
-/// Remembers the voice of a speaker of the meeting in hand under `name`.
-pub fn remember(speaker: u32, name: &str) -> Result<Vec<String>, String> {
+/// Where the voices of a kept meeting's speakers stay, beside the voices remembered, so
+/// that a name given or put right when the meeting is opened again still teaches the
+/// voice. None for an id no file may be named after.
+fn voices_file(dir: &Path, meeting: &str) -> Option<PathBuf> {
+    let plain = !meeting.is_empty()
+        && meeting.len() <= 64
+        && meeting
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-');
+    plain.then(|| dir.join("meeting-voices").join(format!("{meeting}.json")))
+}
+
+fn keep_voices_in(
+    dir: &Path,
+    meeting: &str,
+    voices: &HashMap<u32, Vec<f32>>,
+) -> Result<(), String> {
+    let file = voices_file(dir, meeting).ok_or("meeting_id_invalid")?;
+    if let Some(parent) = file.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let raw = serde_json::to_vec(voices).map_err(|error| error.to_string())?;
+    std::fs::write(file, raw).map_err(|error| error.to_string())
+}
+
+fn voices_in(dir: &Path, meeting: &str) -> Option<HashMap<u32, Vec<f32>>> {
+    let raw = std::fs::read(voices_file(dir, meeting)?).ok()?;
+    serde_json::from_slice(&raw).ok()
+}
+
+/// Keeps the voices of the meeting in hand with the meeting `meeting`.
+pub fn keep_voices(meeting: &str) -> Result<(), String> {
+    let dir = DATA_DIR.get().ok_or("voice_store_unavailable")?;
+    let Some(voices) = heard().clone() else {
+        return Ok(());
+    };
+    keep_voices_in(dir, meeting, &voices)
+}
+
+/// Lets go of the voices kept with a meeting that is deleted.
+pub fn forget_voices(meeting: &str) {
+    if let Some(file) = DATA_DIR.get().and_then(|dir| voices_file(dir, meeting)) {
+        let _ = std::fs::remove_file(file);
+    }
+}
+
+/// The voices of the speakers of `meeting` where it is given and they were kept with it,
+/// or else of the meeting in hand.
+fn voices_for(meeting: Option<&str>) -> Option<HashMap<u32, Vec<f32>>> {
+    match meeting {
+        Some(meeting) => DATA_DIR.get().and_then(|dir| voices_in(dir, meeting)),
+        None => heard().clone(),
+    }
+}
+
+/// Remembers the voice of a speaker under `name`: of the meeting `meeting` where it is
+/// given, or else of the meeting in hand.
+pub fn remember(speaker: u32, name: &str, meeting: Option<&str>) -> Result<Vec<String>, String> {
     let name = name.trim();
     let store = store().ok_or("voice_store_unavailable")?;
-    let voice = heard()
-        .as_ref()
-        .and_then(|heard| heard.get(&speaker).cloned());
+    let voice = voices_for(meeting).and_then(|voices| voices.get(&speaker).cloned());
     if let (false, Some(voice)) = (name.is_empty(), voice) {
         remember_in(&store, name, voice)?;
     }
     Ok(remembered())
 }
 
-/// Takes the names the speakers of the meeting in hand ended up with as one more sample
-/// of each of those voices.
-pub fn confirm(names: &HashMap<u32, String>) -> Result<Vec<String>, String> {
+/// Takes the names the speakers of a meeting ended up with as one more sample of each of
+/// those voices.
+pub fn confirm(names: &HashMap<u32, String>, meeting: Option<&str>) -> Result<Vec<String>, String> {
     for (speaker, name) in names {
-        remember(*speaker, name)?;
+        remember(*speaker, name, meeting)?;
     }
     Ok(remembered())
 }
@@ -310,6 +364,19 @@ mod tests {
             std::env::temp_dir().join(format!("ot-voices-{}-{name}.json", std::process::id()));
         let _ = std::fs::remove_file(&store);
         store
+    }
+
+    #[test]
+    fn the_voices_of_a_meeting_are_kept_with_it_and_let_go_with_it() {
+        let dir = std::env::temp_dir().join(format!("ot-meeting-voices-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let voices = HashMap::from([(1, vec![0.1, 0.9, 0.0]), (2, vec![1.0, 0.0, 0.0])]);
+        keep_voices_in(&dir, "m-1", &voices).unwrap();
+        assert_eq!(voices_in(&dir, "m-1"), Some(voices));
+        assert_eq!(voices_in(&dir, "m-2"), None);
+        assert!(keep_voices_in(&dir, "../m-1", &HashMap::new()).is_err());
+        assert_eq!(voices_file(&dir, "a/b"), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

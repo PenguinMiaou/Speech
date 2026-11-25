@@ -177,7 +177,7 @@ pub fn recognize_in(
     if let Some(chosen) = crate::stt::batch::chosen() {
         return chosen
             .hear(pcm, vocabulary)
-            .map(|text| without_loops(&text));
+            .map(|text| without_terms(&without_loops(&text), vocabulary));
     }
     let ask = |language: Option<String>| {
         supervisor
@@ -194,10 +194,14 @@ pub fn recognize_in(
     let (text, heard) = ask(only)?;
     let elsewhere = languages.len() > 1 && heard.is_some_and(|code| !spoken_in(languages, &code));
     if elsewhere && !text.trim().is_empty() {
-        return ask(Some(languages[0].clone()))
-            .map(|(text, _)| without_echo(&without_loops(&text), before));
+        return ask(Some(languages[0].clone())).map(|(text, _)| {
+            without_terms(&without_echo(&without_loops(&text), before), vocabulary)
+        });
     }
-    Ok(without_echo(&without_loops(&text), before))
+    Ok(without_terms(
+        &without_echo(&without_loops(&text), before),
+        vocabulary,
+    ))
 }
 
 /// The longest run of characters looked at as one thing said over and over.
@@ -293,6 +297,79 @@ fn tokens(text: &str) -> Vec<Token> {
         }
     }
     found
+}
+
+/// How many of the words it was told to listen for, one after another, count as the
+/// recognizer reading out that list: three in the order they were given, or four in any.
+const TERMS_IN_ORDER: usize = 3;
+const TERMS_ANY_ORDER: usize = 4;
+
+/// The text without the words it was told to listen for, where it reads them out as a
+/// list. Told of words to expect, a recognizer that hears little or nothing clearly
+/// sometimes writes the list itself down; people name a few of them in passing, but not
+/// several back to back with nothing between.
+pub fn without_terms(text: &str, vocabulary: &[String]) -> String {
+    let terms: Vec<Vec<String>> = vocabulary
+        .iter()
+        .map(|term| tokens(term).into_iter().map(|token| token.reads).collect())
+        .collect::<Vec<Vec<String>>>();
+    if terms.iter().filter(|term| !term.is_empty()).count() < TERMS_IN_ORDER {
+        return text.to_string();
+    }
+    let heard = tokens(text);
+    // Each term found, longest first where two start alike: (first token, end, which).
+    let mut found: Vec<(usize, usize, usize)> = Vec::new();
+    let mut at = 0;
+    while at < heard.len() {
+        let longest = terms
+            .iter()
+            .enumerate()
+            .filter(|(_, term)| {
+                !term.is_empty()
+                    && heard.len() - at >= term.len()
+                    && term.iter().zip(&heard[at..]).all(|(a, b)| *a == b.reads)
+            })
+            .max_by_key(|(_, term)| term.len());
+        match longest {
+            Some((which, term)) => {
+                found.push((at, at + term.len(), which));
+                at += term.len();
+            }
+            None => at += 1,
+        }
+    }
+    // Runs of terms that follow each other with no other word between.
+    let mut spans: Vec<(usize, usize)> = Vec::new();
+    let mut start = 0;
+    while start < found.len() {
+        let mut end = start + 1;
+        while end < found.len() && found[end].0 == found[end - 1].1 {
+            end += 1;
+        }
+        let run = &found[start..end];
+        let mut which: Vec<usize> = run.iter().map(|(_, _, which)| *which).collect();
+        let in_order = which.windows(2).all(|pair| pair[0] < pair[1]);
+        which.sort_unstable();
+        which.dedup();
+        if (in_order && which.len() >= TERMS_IN_ORDER) || which.len() >= TERMS_ANY_ORDER {
+            spans.push((run[0].0, run[run.len() - 1].1));
+        }
+        start = end;
+    }
+    if spans.is_empty() {
+        return text.to_string();
+    }
+    let mut kept = text.to_string();
+    for (from, to) in spans.into_iter().rev() {
+        let end = heard.get(to).map_or(kept.len(), |token| token.from);
+        kept.replace_range(heard[from].from..end, "");
+    }
+    let kept = kept.split_whitespace().collect::<Vec<_>>().join(" ");
+    if kept.chars().any(char::is_alphanumeric) {
+        kept
+    } else {
+        String::new()
+    }
 }
 
 /// The text without what the recognizer was given as having come before. Given the end
@@ -1234,6 +1311,57 @@ mod tests {
             "seconds: {:.1} pieces: {}",
             pcm.len() as f32 / RATE as f32,
             pieces(&pcm).len()
+        );
+    }
+
+    #[test]
+    fn a_list_of_the_words_listened_for_read_out_is_taken_away() {
+        let vocabulary: Vec<String> = ["Tauri", "Zustand", "Vite", "x86", "WebView2"]
+            .iter()
+            .map(|word| word.to_string())
+            .collect();
+        // Read out in the order given, alone or after what was said.
+        assert_eq!(without_terms("Tauri Zustand Vite x86", &vocabulary), "");
+        assert_eq!(
+            without_terms(
+                "How did they do it. Tauri Zustand Vite x86 WebView2",
+                &vocabulary
+            ),
+            "How did they do it."
+        );
+        assert_eq!(
+            without_terms("Tauri Zustand Vite x86 WebView2 Right. Yes.", &vocabulary),
+            "Right. Yes."
+        );
+        // Four of them back to back, in any order.
+        assert_eq!(
+            without_terms("Vite Tauri WebView2 Zustand", &vocabulary),
+            ""
+        );
+        // Named in passing, or with words between, they stay.
+        for said in [
+            "We build it on Tauri and Vite.",
+            "Tauri, then Zustand, then Vite.",
+            "Vite Tauri Zustand is what we use",
+            "the x86 build of WebView2",
+        ] {
+            assert_eq!(without_terms(said, &vocabulary), said);
+        }
+        // Too few words listened for to tell a list from speech.
+        let two = vec!["Tauri".to_string(), "Vite".to_string()];
+        assert_eq!(without_terms("Tauri Vite", &two), "Tauri Vite");
+    }
+
+    #[test]
+    fn a_list_read_out_in_chinese_is_taken_away_too() {
+        let vocabulary: Vec<String> = ["转写", "纪要", "速览"]
+            .iter()
+            .map(|word| word.to_string())
+            .collect();
+        assert_eq!(without_terms("好的。转写纪要速览", &vocabulary), "好的。");
+        assert_eq!(
+            without_terms("先看转写，再看纪要和速览", &vocabulary),
+            "先看转写，再看纪要和速览"
         );
     }
 }
